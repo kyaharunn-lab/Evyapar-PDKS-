@@ -16,7 +16,7 @@
     --secondary-foreground: 212 69% 18%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 0 85% 45%; /* #CC0000 - Premium Red */
+    --accent: 0 84.2% 60.2%; /* Updated to standard red #EF4444 context */
     --accent-foreground: 210 40% 98%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
@@ -24,7 +24,7 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 212 69% 18%;
     --radius: 0.85rem;
-    --sidebar-background: 222 47% 11%; /* Dark for Sidebar */
+    --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 0 85% 45%;
     --sidebar-accent: 212 69% 18%;
@@ -77,4 +77,9 @@
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   @apply bg-white/20;
+}
+
+/* Smooth layout transitions */
+.sidebar-transition {
+  @apply transition-all duration-300 ease-in-out;
 }

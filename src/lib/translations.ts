@@ -35,15 +35,13 @@ export const translations = {
   },
   sidebar: {
     logoSubtitle: "Kurumsal PDKS",
-    mainMenu: "ANA MENÜ",
-    personnelAttendance: "PERSONEL & DEVAM",
-    shiftPlanning: "VARDİYA & PLANLAMA",
-    requests: "TALEPLER",
-    orgStructure: "ŞUBE & ORGANİZASYON",
-    securityControl: "GÜVENLİK & KONTROL",
-    reportsAnalytics: "RAPORLAR",
-    aiSmart: "YAPAY ZEKÂ",
-    systemSettings: "SİSTEM",
+    anaMenu: "Ana Menü",
+    operasyon: "Operasyon",
+    talepler: "Talepler",
+    organizasyon: "Organizasyon",
+    guvenlik: "Güvenlik",
+    analizRapor: "Analiz & Rapor",
+    sistem: "Sistem",
     
     // Alt Menüler
     personnelManagement: "Personel Yönetimi",
@@ -83,7 +81,7 @@ export const translations = {
     anomalyDetection: "Mesai Anomali Tespiti",
     performanceSummaries: "Performans Özetleri",
     
-    notificationSettings: "Bildirim Ayarlar",
+    notificationSettings: "Bildirim Ayarları",
     companyInfo: "Firma Bilgileri",
     licenseInfo: "Paket / Lisans Bilgileri",
     userManagement: "Kullanıcı Yönetimi"
