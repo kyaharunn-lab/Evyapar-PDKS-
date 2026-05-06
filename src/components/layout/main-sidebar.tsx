@@ -28,58 +28,62 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { translations } from "@/lib/translations"
+import { cn } from "@/lib/utils"
+
+const t = translations.common;
 
 const navigation = [
   {
-    title: "Main",
+    title: "YÖNETİM",
     items: [
       {
-        title: "Dashboard",
+        title: t.dashboard,
         url: "/dashboard",
         icon: LayoutDashboard,
       },
       {
-        title: "Personnel",
+        title: t.personnel,
         url: "/personnel",
         icon: Users,
       },
       {
-        title: "Shift Management",
+        title: t.shifts,
         url: "/shifts",
         icon: CalendarDays,
       },
       {
-        title: "Attendance Logs",
+        title: t.attendance,
         url: "/attendance",
         icon: ClipboardList,
       },
     ],
   },
   {
-    title: "Security & AI",
+    title: "GÜVENLİK & ANALİZ",
     items: [
       {
-        title: "AI Insights",
+        title: t.aiInsights,
         url: "/ai-insights",
         icon: BrainCircuit,
       },
       {
-        title: "Access Control",
+        title: t.accessControl,
         url: "/access-control",
         icon: ShieldCheck,
       },
     ],
   },
   {
-    title: "Organization",
+    title: "ORGANİZASYON",
     items: [
       {
-        title: "Branches",
+        title: t.branches,
         url: "/branches",
         icon: Building2,
       },
       {
-        title: "Reports",
+        title: t.reports,
         url: "/reports",
         icon: FileText,
       },
@@ -91,24 +95,29 @@ export function MainSidebar() {
   const pathname = usePathname()
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="h-16 flex items-center justify-center border-b border-sidebar-border">
-        <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
-          <div className="bg-accent p-1.5 rounded-md">
+    <Sidebar collapsible="icon" className="border-r-0 shadow-2xl">
+      <SidebarHeader className="h-20 flex items-center justify-center px-4">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
+          <div className="bg-accent shadow-lg shadow-accent/20 p-2 rounded-xl rotate-3 hover:rotate-0 transition-transform">
             <ShieldCheck className="w-6 h-6 text-white" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-white">VeriTakip</span>
+          <div className="flex flex-col">
+            <span className="font-bold text-xl tracking-tight text-white leading-none">VeriTakip</span>
+            <span className="text-[10px] text-white/40 font-medium tracking-[2px] mt-1">SaaS ERP</span>
+          </div>
         </div>
         <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center">
-          <div className="bg-accent p-1.5 rounded-md">
+          <div className="bg-accent p-1.5 rounded-lg shadow-lg shadow-accent/20">
             <ShieldCheck className="w-5 h-5 text-white" />
           </div>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-3">
         {navigation.map((group) => (
-          <SidebarGroup key={group.title}>
-            <SidebarGroupLabel className="text-white/50">{group.title}</SidebarGroupLabel>
+          <SidebarGroup key={group.title} className="mb-4">
+            <SidebarGroupLabel className="text-white/30 text-[10px] font-bold tracking-[1px] px-2 mb-2">
+              {group.title}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {group.items.map((item) => (
@@ -117,11 +126,16 @@ export function MainSidebar() {
                       asChild
                       isActive={pathname === item.url}
                       tooltip={item.title}
-                      className="hover:bg-sidebar-accent transition-colors"
+                      className={cn(
+                        "rounded-xl h-10 px-3 transition-all duration-300",
+                        pathname === item.url 
+                          ? "bg-accent/10 text-white font-semibold shadow-inner" 
+                          : "text-white/60 hover:text-white hover:bg-white/5"
+                      )}
                     >
                       <Link href={item.url}>
-                        <item.icon />
-                        <span>{item.title}</span>
+                        <item.icon className={cn("w-5 h-5", pathname === item.url ? "text-accent" : "text-inherit")} />
+                        <span className="ml-2">{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -131,18 +145,18 @@ export function MainSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="p-4 bg-black/10">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="hover:bg-sidebar-accent">
+            <SidebarMenuButton className="hover:bg-white/5 text-white/60 hover:text-white rounded-xl">
               <Settings className="w-4 h-4" />
-              <span>Settings</span>
+              <span>{t.settings}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton className="hover:bg-sidebar-accent text-red-400">
+            <SidebarMenuButton className="hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-xl">
               <LogOut className="w-4 h-4" />
-              <span>Logout</span>
+              <span>{t.logout}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
