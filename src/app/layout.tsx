@@ -1,3 +1,4 @@
+
 import type {Metadata} from 'next';
 import './globals.css';
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
@@ -6,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { translations } from "@/lib/translations";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck } from "lucide-react";
+import { FirebaseClientProvider } from "@/firebase";
 
 const h = translations.header;
 
@@ -30,36 +32,38 @@ export default function RootLayout({
         `}</style>
       </head>
       <body className="antialiased">
-        <SidebarProvider>
-          <div className="flex min-h-screen w-full bg-[#F8F9FC]">
-            <MainSidebar />
-            <SidebarInset className="bg-transparent">
-              <header className="glass-header h-20 flex shrink-0 items-center gap-2 px-8">
-                <div className="flex-1">
-                  <h1 className="text-xl font-extrabold text-primary tracking-tight">{h.portalTitle}</h1>
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-sm font-extrabold text-primary leading-tight">{h.role}</p>
-                    <Badge variant="outline" className="mt-1 h-5 text-[9px] uppercase font-bold tracking-widest bg-accent/5 text-accent border-accent/20 border-dashed px-2">
-                      <ShieldCheck className="w-3 h-3 mr-1" />
-                      {h.accessType}
-                    </Badge>
+        <FirebaseClientProvider>
+          <SidebarProvider>
+            <div className="flex min-h-screen w-full bg-[#F8F9FC]">
+              <MainSidebar />
+              <SidebarInset className="bg-transparent">
+                <header className="glass-header h-20 flex shrink-0 items-center gap-2 px-8">
+                  <div className="flex-1">
+                    <h1 className="text-xl font-extrabold text-primary tracking-tight">{h.portalTitle}</h1>
                   </div>
-                  <div className="relative group">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/20 flex items-center justify-center text-white font-extrabold cursor-pointer group-hover:scale-105 transition-all duration-300">
-                      İK
+                  <div className="flex items-center gap-6">
+                    <div className="text-right hidden sm:block">
+                      <p className="text-sm font-extrabold text-primary leading-tight">{h.role}</p>
+                      <Badge variant="outline" className="mt-1 h-5 text-[9px] uppercase font-bold tracking-widest bg-accent/5 text-accent border-accent/20 border-dashed px-2">
+                        <ShieldCheck className="w-3 h-3 mr-1" />
+                        {h.accessType}
+                      </Badge>
                     </div>
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-4 border-[#F8F9FC] rounded-full shadow-sm"></div>
+                    <div className="relative group">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/80 shadow-lg shadow-primary/20 flex items-center justify-center text-white font-extrabold cursor-pointer group-hover:scale-105 transition-all duration-300">
+                        İK
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-4 border-[#F8F9FC] rounded-full shadow-sm"></div>
+                    </div>
                   </div>
-                </div>
-              </header>
-              <main className="flex-1 p-8 max-w-[1600px] mx-auto w-full">
-                {children}
-              </main>
-            </SidebarInset>
-          </div>
-        </SidebarProvider>
+                </header>
+                <main className="flex-1 p-8 max-w-[1600px] mx-auto w-full">
+                  {children}
+                </main>
+              </SidebarInset>
+            </div>
+          </SidebarProvider>
+        </FirebaseClientProvider>
         <Toaster />
       </body>
     </html>

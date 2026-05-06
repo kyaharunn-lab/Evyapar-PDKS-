@@ -1,0 +1,72 @@
+
+{
+  "entities": {
+    "Personnel": {
+      "title": "Personnel",
+      "description": "Employee profile information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "branchId": { "type": "string" },
+        "position": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "HR", "Manager", "Personnel"] },
+        "workType": { "type": "string", "enum": ["Office", "Field", "Remote"] },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "qrId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role", "status"]
+    },
+    "AttendanceLog": {
+      "title": "AttendanceLog",
+      "description": "Daily entry and exit logs",
+      "type": "object",
+      "properties": {
+        "personnelId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "entryTime": { "type": "string", "format": "date-time" },
+        "exitTime": { "type": "string", "format": "date-time" },
+        "location": { "type": "string" },
+        "verificationMethod": { "type": "string" },
+        "status": { "type": "string", "enum": ["OnTime", "Late", "EarlyDeparture"] },
+        "isRemote": { "type": "boolean" },
+        "gps": { "type": "string" }
+      }
+    },
+    "Shift": {
+      "title": "Shift",
+      "description": "Work schedule assignments",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "color": { "type": "string" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["google.com", "password"]
+  },
+  "firestore": {
+    "/personnel/{personnelId}": {
+      "schema": "Personnel",
+      "description": "Individual personnel records"
+    },
+    "/attendance_logs/{logId}": {
+      "schema": "AttendanceLog",
+      "description": "Daily tracking logs"
+    },
+    "/shifts/{shiftId}": {
+      "schema": "Shift",
+      "description": "Shift type definitions"
+    }
+  }
+}
