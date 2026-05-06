@@ -23,6 +23,7 @@ export const translations = {
     active: "Aktif",
     inactive: "Pasif",
     total: "Toplam",
+    online: "Çevrimiçi",
     management: "YÖNETİM",
     securityAnalysis: "GÜVENLİK & ANALİZ",
     organization: "ORGANİZASYON",
@@ -32,6 +33,61 @@ export const translations = {
     role: "İK Yöneticisi",
     accessType: "Yönetici Yetkisi",
   },
+  sidebar: {
+    logoSubtitle: "Kurumsal PDKS",
+    mainMenu: "ANA MENÜ",
+    personnelAttendance: "PERSONEL & DEVAM",
+    shiftPlanning: "VARDİYA & PLANLAMA",
+    requests: "TALEPLER",
+    orgStructure: "ŞUBE & ORGANİZASYON",
+    securityControl: "GÜVENLİK & KONTROL",
+    reportsAnalytics: "RAPORLAR",
+    aiSmart: "YAPAY ZEKÂ",
+    systemSettings: "SİSTEM",
+    
+    // Alt Menüler
+    personnelManagement: "Personel Yönetimi",
+    liveAttendance: "Canlı İçeride Listesi",
+    lateArrivals: "Geç Kalanlar",
+    absenceTracking: "Devamsızlık Takibi",
+    breakRecords: "Mola Kayıtları",
+    
+    weeklyPlan: "Haftalık Plan",
+    shiftAssignment: "Vardiya Atama",
+    shiftChangeRequests: "Vardiya Değişim Talepleri",
+    holidays: "Resmî Tatil / Özel Günler",
+    
+    leaveRequests: "İzin Talepleri",
+    advanceRequests: "Avans Talepleri",
+    pendingApprovals: "Onay Bekleyenler",
+    
+    depts: "Departmanlar",
+    positions: "Pozisyonlar",
+    roles: "Yetki Rolleri",
+    qrPoints: "QR Noktaları",
+    
+    qrManagement: "QR Kod Yönetimi",
+    deviceIdManagement: "Cihaz ID Yönetimi",
+    locationRules: "Konum Kuralları",
+    kvkkConsent: "KVKK Onayları",
+    auditLogs: "Denetim Logları",
+    
+    generalReports: "Genel Raporlar",
+    personnelReport: "Personel Raporu",
+    overtimeReport: "Mesai Raporu",
+    absenceReport: "Devamsızlık Raporu",
+    leaveReport: "İzin Raporu",
+    exportData: "Excel / PDF Dışa Aktarım",
+    
+    riskAlerts: "Riskli Personel Uyarıları",
+    anomalyDetection: "Mesai Anomali Tespiti",
+    performanceSummaries: "Performans Özetleri",
+    
+    notificationSettings: "Bildirim Ayarlar",
+    companyInfo: "Firma Bilgileri",
+    licenseInfo: "Paket / Lisans Bilgileri",
+    userManagement: "Kullanıcı Yönetimi"
+  },
   dashboard: {
     totalStaff: "Toplam Personel",
     activeToday: "Bugün Aktif",
@@ -39,9 +95,6 @@ export const translations = {
     absenteeism: "Devamsızlık",
     weeklyFlow: "Haftalık Devam Akışı",
     branchDist: "Şube Dağılımı",
-    traffic: "Giriş / Çıkış Trafiği",
-    recentField: "Son Saha Kayıtları",
-    performance: "Personel Performansı",
     kpiSummary: "Tüm şubelerdeki personel durumuna genel bakış.",
   },
   personnel: {
@@ -76,6 +129,18 @@ export const translations = {
     sysArch: "Sistem Mimarı",
     hrSpec: "İK Uzmanı",
     siteSuper: "Saha Sorumlusu",
+  },
+  shifts: {
+    dayShift: "Gündüz Vardiyası",
+    eveningShift: "Akşam Vardiyası",
+    nightShift: "Gece Vardiyası",
+    newShift: "Yeni Vardiya",
+    assign: "Personel Ata",
+    weekendReduced: "Hafta Sonu Düzeni",
+    changeRequests: "Değişim Talepleri",
+    approve: "Onayla",
+    decline: "Reddet",
+    coverageAlerts: "Kapsama Uyarıları"
   }
 };
 
