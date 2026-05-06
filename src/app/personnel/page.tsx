@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { translations } from "@/lib/translations"
+import { cn } from "@/lib/utils"
 
 const t = translations.common;
 const p = translations.personnel;
