@@ -6,11 +6,14 @@ import {
   Plus, 
   MoreHorizontal, 
   QrCode, 
-  Mail, 
-  Phone,
   Building,
   Briefcase,
-  Filter
+  Filter,
+  User,
+  Eye,
+  Edit2,
+  Lock,
+  Download
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -34,175 +37,203 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { translations } from "@/lib/translations"
+
+const t = translations.common;
+const p = translations.personnel;
+const d = translations.depts;
+const pos = translations.positions;
 
 const employees = [
   {
     id: "EMP001",
     name: "Ahmet Yılmaz",
     email: "ahmet.y@veritakip.com",
-    phone: "+90 555 123 4567",
-    department: "Logistics",
-    position: "Fleet Manager",
-    branch: "Istanbul",
-    status: "Active",
-    workType: "Office",
+    department: d.logistics,
+    position: pos.fleetManager,
+    branch: "İstanbul",
+    status: t.active,
+    workType: p.office,
     avatar: "https://picsum.photos/seed/emp1/200/200"
   },
   {
     id: "EMP002",
     name: "Selin Demir",
     email: "selin.d@veritakip.com",
-    phone: "+90 555 987 6543",
-    department: "Sales",
-    position: "Senior Executive",
+    department: d.sales,
+    position: pos.seniorExec,
     branch: "Ankara",
-    status: "Active",
-    workType: "Field",
+    status: t.active,
+    workType: p.field,
     avatar: "https://picsum.photos/seed/emp2/200/200"
   },
   {
     id: "EMP003",
     name: "Mehmet Aksoy",
     email: "mehmet.a@veritakip.com",
-    phone: "+90 555 111 2233",
-    department: "IT",
-    position: "Systems Architect",
-    branch: "Istanbul",
-    status: "Active",
-    workType: "Remote",
+    department: d.it,
+    position: pos.sysArch,
+    branch: "İstanbul",
+    status: t.active,
+    workType: p.remote,
     avatar: "https://picsum.photos/seed/emp3/200/200"
   },
   {
     id: "EMP004",
     name: "Ayşe Kaya",
     email: "ayse.k@veritakip.com",
-    phone: "+90 555 444 5566",
-    department: "Human Resources",
-    position: "HR Specialist",
-    branch: "Izmir",
-    status: "Inactive",
-    workType: "Office",
+    department: d.hr,
+    position: pos.hrSpec,
+    branch: "İzmir",
+    status: t.inactive,
+    workType: p.office,
     avatar: "https://picsum.photos/seed/emp4/200/200"
   },
   {
     id: "EMP005",
     name: "Caner Aydın",
     email: "caner.a@veritakip.com",
-    phone: "+90 555 777 8899",
-    department: "Operations",
-    position: "Site Supervisor",
+    department: d.ops,
+    position: pos.siteSuper,
     branch: "Bursa",
-    status: "Active",
-    workType: "Field",
+    status: t.active,
+    workType: p.field,
     avatar: "https://picsum.photos/seed/emp5/200/200"
   }
 ]
 
 export default function PersonnelPage() {
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-8 animate-fade-in">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-primary">Personnel Management</h2>
-          <p className="text-muted-foreground">Manage organization structure, employee profiles and roles.</p>
+          <h2 className="text-3xl font-extrabold tracking-tight text-primary">{p.title}</h2>
+          <p className="text-muted-foreground mt-1 text-base">{p.description}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="h-10">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" className="h-11 px-5 border-slate-200 hover:bg-slate-50 transition-colors">
             <QrCode className="mr-2 h-4 w-4" />
-            Generate IDs
+            {p.generateIds}
           </Button>
-          <Button className="h-10 bg-accent hover:bg-accent/90">
+          <Button className="h-11 px-6 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20 transition-all">
             <Plus className="mr-2 h-4 w-4" />
-            Add Employee
+            {p.addEmployee}
           </Button>
         </div>
       </div>
 
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3 border-b">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="relative w-full sm:w-96">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search name, ID or department..." className="pl-10" />
+      <Card className="premium-card overflow-hidden">
+        <CardHeader className="pb-6 border-b bg-slate-50/30">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+            <div className="relative w-full lg:w-[450px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input placeholder={t.search} className="pl-11 h-11 bg-white border-slate-200 focus:ring-primary/20 transition-all" />
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button variant="outline" size="sm" className="h-9">
+            <div className="flex items-center gap-3 w-full lg:w-auto">
+              <Button variant="outline" size="sm" className="h-11 px-5 border-slate-200">
                 <Filter className="mr-2 h-4 w-4" />
-                Filter
+                {t.filter}
               </Button>
-              <Badge variant="secondary" className="h-9 px-3 rounded-md text-xs">
-                Total: 142 Personnel
+              <Badge variant="secondary" className="h-11 px-4 rounded-xl text-xs font-bold bg-white border border-slate-200 shadow-sm text-primary">
+                {p.totalCount.replace('{count}', '142')}
               </Badge>
+              <Button variant="ghost" size="icon" className="h-11 w-11 hover:bg-slate-100">
+                <Download className="h-5 w-5 text-slate-500" />
+              </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent bg-secondary/30">
-                <TableHead className="w-[80px]">Avatar</TableHead>
-                <TableHead>Employee Name</TableHead>
-                <TableHead>Dept / Position</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Work Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+            <TableHeader className="enterprise-table-header">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[80px] pl-6">{p.avatar}</TableHead>
+                <TableHead className="font-bold">{p.name}</TableHead>
+                <TableHead className="font-bold">{p.deptPos}</TableHead>
+                <TableHead className="font-bold">{p.location}</TableHead>
+                <TableHead className="font-bold">{p.workType}</TableHead>
+                <TableHead className="font-bold">{t.status}</TableHead>
+                <TableHead className="text-right pr-6 font-bold">{t.actions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {employees.map((emp) => (
-                <TableRow key={emp.id} className="group transition-colors">
-                  <TableCell>
-                    <Avatar className="border-2 border-white shadow-sm h-10 w-10">
-                      <AvatarImage src={emp.avatar} alt={emp.name} />
-                      <AvatarFallback>{emp.name.charAt(0)}</AvatarFallback>
+                <TableRow key={emp.id} className="group hover:bg-slate-50/80 transition-all cursor-pointer">
+                  <TableCell className="pl-6">
+                    <Avatar className="h-12 w-12 border-2 border-white shadow-md transition-transform group-hover:scale-105">
+                      <AvatarImage src={emp.avatar} alt={emp.name} className="object-cover" />
+                      <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">{emp.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-semibold text-primary">{emp.name}</span>
-                      <span className="text-xs text-muted-foreground">{emp.id}</span>
+                      <span className="font-bold text-primary text-base group-hover:text-accent transition-colors">{emp.name}</span>
+                      <span className="text-[11px] font-mono font-medium text-slate-400 mt-0.5">{emp.id}</span>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-col">
-                      <div className="flex items-center text-sm">
-                        <Building className="mr-1.5 h-3 w-3 text-muted-foreground" />
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center text-sm font-semibold text-slate-700">
+                        <Building className="mr-2 h-3.5 w-3.5 text-slate-400" />
                         {emp.department}
                       </div>
-                      <div className="flex items-center text-xs text-muted-foreground">
-                        <Briefcase className="mr-1.5 h-3 w-3" />
+                      <div className="flex items-center text-[12px] font-medium text-slate-500">
+                        <Briefcase className="mr-2 h-3.5 w-3.5 text-slate-400" />
                         {emp.position}
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm font-medium">{emp.branch}</TableCell>
+                  <TableCell className="text-sm font-bold text-slate-600">
+                    <div className="flex items-center">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2.5"></span>
+                      {emp.branch}
+                    </div>
+                  </TableCell>
                   <TableCell>
-                    <Badge variant={emp.workType === 'Office' ? 'secondary' : 'outline'} className="text-[10px] uppercase">
+                    <Badge variant="outline" className={cn(
+                      "text-[10px] uppercase font-bold px-3 py-1 tracking-wider border-slate-200",
+                      emp.workType === p.office ? "bg-blue-50 text-blue-700" : 
+                      emp.workType === p.field ? "bg-orange-50 text-orange-700" : "bg-purple-50 text-purple-700"
+                    )}>
                       {emp.workType}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge 
-                      className={emp.status === 'Active' ? 'bg-green-100 text-green-700 hover:bg-green-100 border-green-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200'}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-[10px] font-bold tracking-wider",
+                        emp.status === t.active ? "badge-aktif" : "badge-pasif"
+                      )}
                     >
                       {emp.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right pr-6">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-slate-200 transition-colors">
+                          <MoreHorizontal className="h-5 w-5 text-slate-500" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>View Profile</DropdownMenuItem>
-                        <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                        <DropdownMenuItem>Generate QR ID</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-accent">Deactivate Account</DropdownMenuItem>
+                      <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl shadow-2xl border-slate-100">
+                        <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-1">{t.actions}</DropdownMenuLabel>
+                        <DropdownMenuItem className="rounded-lg py-2.5 cursor-pointer">
+                          <Eye className="mr-3 h-4 w-4 text-slate-400" />
+                          <span className="font-semibold text-slate-700">{p.viewProfile}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="rounded-lg py-2.5 cursor-pointer">
+                          <Edit2 className="mr-3 h-4 w-4 text-slate-400" />
+                          <span className="font-semibold text-slate-700">{p.editDetails}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="rounded-lg py-2.5 cursor-pointer">
+                          <QrCode className="mr-3 h-4 w-4 text-slate-400" />
+                          <span className="font-semibold text-slate-700">{p.generateQr}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="my-1.5" />
+                        <DropdownMenuItem className="rounded-lg py-2.5 cursor-pointer text-accent focus:text-accent focus:bg-accent/5">
+                          <Lock className="mr-3 h-4 w-4" />
+                          <span className="font-bold">{p.deactivate}</span>
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
