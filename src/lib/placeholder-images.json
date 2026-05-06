@@ -1,3 +1,22 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "employee-1",
+      "description": "Female professional portrait",
+      "imageUrl": "https://picsum.photos/seed/emp1/200/200",
+      "imageHint": "professional woman"
+    },
+    {
+      "id": "employee-2",
+      "description": "Male professional portrait",
+      "imageUrl": "https://picsum.photos/seed/emp2/200/200",
+      "imageHint": "professional man"
+    },
+    {
+      "id": "employee-3",
+      "description": "Corporate executive portrait",
+      "imageUrl": "https://picsum.photos/seed/emp3/200/200",
+      "imageHint": "business person"
+    }
+  ]
 }
