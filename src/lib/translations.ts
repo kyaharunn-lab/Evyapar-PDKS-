@@ -28,7 +28,11 @@ export const translations = {
     management: "YÖNETİM",
     securityAnalysis: "GÜVENLİK & ANALİZ",
     organization: "ORGANİZASYON",
-    empty: "Henüz kayıt bulunmuyor."
+    empty: "Henüz kayıt bulunmuyor.",
+    approve: "Onayla",
+    decline: "Reddet",
+    paid: "Ödendi İşaretle",
+    paymentDate: "Ödeme Tarihi"
   },
   header: {
     portalTitle: "Evyapar PDKS Sistemi",
@@ -157,7 +161,7 @@ export const translations = {
     newShift: "Yeni Vardiya",
     assign: "Personel Ata",
     weekendReduced: "Hafta Sonu Düzeni",
-    changeRequests: "Değişim Talepleri",
+    changeRequests: "Vardiya Değişim Talepleri",
     approve: "Onayla",
     decline: "Reddet",
     coverageAlerts: "Kapsama Uyarıları",
@@ -228,6 +232,31 @@ export const translations = {
     rejectionReasonPlaceholder: "Red sebebini belirtin (zorunlu)...",
     confirmRejection: "Red İşlemini Onayla",
     confirmApproval: "İzni Onayla"
+  },
+  advances: {
+    title: "Avans Talepleri",
+    description: "Personel avans taleplerini, onay süreçlerini ve ödeme durumlarını yönetin.",
+    newRequest: "Yeni Avans Talebi",
+    pendingRequests: "Bekleyen Talepler",
+    approvedAdvances: "Onaylanan Avanslar",
+    rejectedAdvances: "Reddedilen Talepler",
+    paidThisMonth: "Bu Ay Ödenen Toplam",
+    amount: "Talep Tutarı",
+    reason: "Talep Nedeni",
+    paymentDate: "Ödeme Tarihi",
+    limit: "Avans Limiti",
+    status: {
+      Pending: "Bekliyor",
+      Approved: "Onaylandı",
+      Rejected: "Reddedildi",
+      Paid: "Ödendi",
+      Cancelled: "İptal Edildi"
+    },
+    empty: "Henüz avans talebi bulunmuyor.",
+    emptySub: "Personeller avans talebi oluşturduğunda burada görüntülenecektir.",
+    confirmPayment: "Ödemeyi Onayla",
+    rejectionReason: "Red Sebebi",
+    paymentNote: "Ödeme Notu"
   }
 };
 
