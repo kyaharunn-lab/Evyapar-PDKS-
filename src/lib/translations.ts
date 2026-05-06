@@ -257,6 +257,31 @@ export const translations = {
     confirmPayment: "Ödemeyi Onayla",
     rejectionReason: "Red Sebebi",
     paymentNote: "Ödeme Notu"
+  },
+  approvals: {
+    title: "Onay Bekleyenler",
+    description: "Sistemde bekleyen tüm talepleri merkezi olarak yönetin ve onay süreçlerini takip edin.",
+    totalPending: "Toplam Bekleyen",
+    criticalRequests: "Kritik Talepler",
+    todayRequests: "Bugün Gelenler",
+    lateRequests: "Geciken Onaylar",
+    types: {
+      Leave: "İzin Talebi",
+      Advance: "Avans Talebi",
+      ShiftChange: "Vardiya Değişimi",
+      Overtime: "Fazla Mesai",
+      ManualExit: "Manuel Çıkış"
+    },
+    priority: {
+      Critical: "Kritik",
+      High: "Yüksek",
+      Normal: "Normal",
+      Low: "Düşük"
+    },
+    empty: "Bekleyen onay bulunmuyor.",
+    emptySub: "Yeni talepler geldiğinde burada görüntülenecektir.",
+    waitingTime: "Bekleme Süresi",
+    summary: "Talep Özeti"
   }
 };
 
