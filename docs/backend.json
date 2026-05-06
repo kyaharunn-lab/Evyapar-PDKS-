@@ -17,13 +17,26 @@
         "email": { "type": "string", "format": "email" },
         "address": { "type": "string" },
         "personnelCode": { "type": "string" },
+        "registryNo": { "type": "string", "description": "Unique employee registry number" },
         "branchId": { "type": "string" },
         "departmentId": { "type": "string" },
         "position": { "type": "string" },
         "workType": { "type": "string", "enum": ["Office", "Field", "Remote", "Hybrid"] },
         "startDate": { "type": "string" },
         "status": { "type": "string", "enum": ["Active", "Inactive", "Probation"] },
-        "salaryType": { "type": "string", "enum": ["Monthly", "Daily", "Hourly"] },
+        "salary": {
+          "type": "object",
+          "properties": {
+            "amount": { "type": "number" },
+            "type": { "type": "string", "enum": ["Monthly", "Daily", "Hourly"] },
+            "currency": { "type": "string", "enum": ["TRY", "EUR", "USD"] },
+            "iban": { "type": "string" },
+            "bankName": { "type": "string" },
+            "paymentDay": { "type": "number" },
+            "advanceLimit": { "type": "number" },
+            "overtimeMultiplier": { "type": "number" }
+          }
+        },
         "role": { "type": "string", "enum": ["Personnel", "Manager", "HR", "Accountant", "Admin"] },
         "hasAdminAccess": { "type": "boolean" },
         "hasMobileAccess": { "type": "boolean" },

@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -9,17 +10,16 @@ import {
   Briefcase, 
   ShieldCheck, 
   Fingerprint, 
-  Clock, 
-  FileText, 
+  Wallet,
   PhoneCall, 
-  StickyNote, 
   QrCode, 
   Camera,
   Loader2,
-  X,
-  Plus
+  Plus,
+  Building,
+  Info
 } from "lucide-react"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -40,19 +40,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { Textarea } from "@/components/ui/textarea"
 import { useFirestore } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 
 const personnelSchema = z.object({
   name: z.string().min(2, "Ad en az 2 karakter olmalıdır"),
   surname: z.string().min(2, "Soyad en az 2 karakter olmalıdır"),
   tcId: z.string().length(11, "TC Kimlik No 11 hane olmalıdır"),
+  registryNo: z.string().optional(),
   birthDate: z.string().optional(),
   gender: z.string().optional(),
   phone: z.string().min(10, "Geçerli bir telefon numarası girin"),
@@ -64,7 +63,6 @@ const personnelSchema = z.object({
   workType: z.enum(["Office", "Field", "Remote", "Hybrid"]),
   startDate: z.string().optional(),
   status: z.enum(["Active", "Inactive", "Probation"]),
-  salaryType: z.string().optional(),
   role: z.enum(["Personnel", "Manager", "HR", "Accountant", "Admin"]),
   hasAdminAccess: z.boolean().default(false),
   hasMobileAccess: z.boolean().default(true),
@@ -77,6 +75,14 @@ const personnelSchema = z.object({
   defaultShiftId: z.string().optional(),
   weeklyHours: z.string().optional(),
   overtimeAllowed: z.boolean().default(true),
+  salaryAmount: z.string().optional(),
+  salaryType: z.enum(["Monthly", "Daily", "Hourly"]),
+  salaryCurrency: z.enum(["TRY", "EUR", "USD"]),
+  salaryIban: z.string().optional(),
+  salaryBankName: z.string().optional(),
+  salaryPaymentDay: z.string().optional(),
+  salaryAdvanceLimit: z.string().optional(),
+  salaryOvertimeMultiplier: z.string().optional(),
   emergencyContactName: z.string().optional(),
   emergencyContactRelation: z.string().optional(),
   emergencyContactPhone: z.string().optional(),
@@ -102,6 +108,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
       name: "",
       surname: "",
       tcId: "",
+      registryNo: "",
       birthDate: "",
       gender: "",
       phone: "",
@@ -113,7 +120,6 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
       workType: "Office",
       startDate: "",
       status: "Active",
-      salaryType: "",
       role: "Personnel",
       hasAdminAccess: false,
       hasMobileAccess: true,
@@ -126,6 +132,14 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
       defaultShiftId: "",
       weeklyHours: "",
       overtimeAllowed: true,
+      salaryAmount: "",
+      salaryType: "Monthly",
+      salaryCurrency: "TRY",
+      salaryIban: "",
+      salaryBankName: "",
+      salaryPaymentDay: "1",
+      salaryAdvanceLimit: "",
+      salaryOvertimeMultiplier: "1.5",
       emergencyContactName: "",
       emergencyContactRelation: "",
       emergencyContactPhone: "",
@@ -137,16 +151,39 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
     if (!db) return
     setIsSubmitting(true)
     try {
+      // Sicil No Kontrolü
+      if (values.registryNo) {
+        const q = query(collection(db, "personnel"), where("registryNo", "==", values.registryNo));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          form.setError("registryNo", { message: "Bu sicil numarası zaten kullanımda" });
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      const registryNo = values.registryNo || `SICIL-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
       const qrId = values.qrId || `QR-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
       const personnelCode = `EMP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
 
       await addDoc(collection(db, "personnel"), {
         ...values,
+        registryNo,
         fullName: `${values.name} ${values.surname}`,
         qrId,
         personnelCode,
         avatarUrl: avatarPreview || "",
         isDeleted: false,
+        salary: {
+          amount: parseFloat(values.salaryAmount || "0"),
+          type: values.salaryType,
+          currency: values.salaryCurrency,
+          iban: values.salaryIban,
+          bankName: values.salaryBankName,
+          paymentDay: parseInt(values.salaryPaymentDay || "1"),
+          advanceLimit: parseFloat(values.salaryAdvanceLimit || "0"),
+          overtimeMultiplier: parseFloat(values.salaryOvertimeMultiplier || "1.5")
+        },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
@@ -167,15 +204,10 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
     }
   }
 
-  const generateCodes = () => {
-    form.setValue("qrId", `QR-${Math.random().toString(36).substr(2, 9).toUpperCase()}`)
-  }
-
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-20">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column: Preview and Sections */}
           <div className="lg:col-span-2 space-y-8">
             {/* 1. Profil Bilgileri */}
             <Card className="border-none shadow-sm bg-slate-50/50">
@@ -220,6 +252,18 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                   />
                   <FormField
                     control={form.control}
+                    name="registryNo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Sicil No</FormLabel>
+                        <FormControl><Input placeholder="Boş bırakılırsa üretilir" {...field} /></FormControl>
+                        <FormDescription>Benzersiz personel sicil numarası.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
                     name="email"
                     render={({ field }) => (
                       <FormItem>
@@ -237,25 +281,6 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                         <FormLabel>Telefon <span className="text-red-500">*</span></FormLabel>
                         <FormControl><Input placeholder="05xx xxx xx xx" {...field} /></FormControl>
                         <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="gender"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cinsiyet</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Seçiniz" /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Male">Erkek</SelectItem>
-                            <SelectItem value="Female">Kadın</SelectItem>
-                            <SelectItem value="Other">Diğer</SelectItem>
-                          </SelectContent>
-                        </Select>
                       </FormItem>
                     )}
                   />
@@ -282,9 +307,9 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                             <SelectTrigger><SelectValue placeholder="Şube seçin" /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="merkez">Merkez Ofis</SelectItem>
-                            <SelectItem value="istanbul">İstanbul Şube</SelectItem>
-                            <SelectItem value="ankara">Ankara Bölge</SelectItem>
+                            <SelectItem value="Merkez Ofis">Merkez Ofis</SelectItem>
+                            <SelectItem value="İstanbul Şube">İstanbul Şube</SelectItem>
+                            <SelectItem value="Ankara Bölge">Ankara Bölge</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -302,10 +327,10 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                             <SelectTrigger><SelectValue placeholder="Departman seçin" /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="it">Bilgi Teknolojileri</SelectItem>
-                            <SelectItem value="hr">İnsan Kaynakları</SelectItem>
-                            <SelectItem value="ops">Operasyon</SelectItem>
-                            <SelectItem value="sales">Satış</SelectItem>
+                            <SelectItem value="Bilgi Teknolojileri">Bilgi Teknolojileri</SelectItem>
+                            <SelectItem value="İnsan Kaynakları">İnsan Kaynakları</SelectItem>
+                            <SelectItem value="Operasyon">Operasyon</SelectItem>
+                            <SelectItem value="Satış">Satış</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -334,96 +359,126 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                   />
                   <FormField
                     control={form.control}
-                    name="status"
+                    name="role"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Durum</FormLabel>
+                        <FormLabel>Yetki Rolü <span className="text-red-500">*</span></FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Rol seçin" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Personnel">Personel</SelectItem>
+                            <SelectItem value="Manager">Şube Müdürü</SelectItem>
+                            <SelectItem value="HR">İK</SelectItem>
+                            <SelectItem value="Accountant">Muhasebe</SelectItem>
+                            <SelectItem value="Admin">Süper Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 3. Maaş Bilgileri */}
+            <Card className="border-none shadow-sm bg-slate-50/50">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-6 text-primary">
+                  <Wallet className="h-5 w-5" />
+                  <h3 className="font-bold">Maaş Bilgileri</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="salaryAmount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Maaş Tutarı</FormLabel>
+                        <FormControl><Input type="number" placeholder="0.00" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="salaryCurrency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Para Birimi</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger><SelectValue placeholder="Seçiniz" /></SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="Active">Aktif</SelectItem>
-                            <SelectItem value="Inactive">Pasif</SelectItem>
-                            <SelectItem value="Probation">Deneme Sürecinde</SelectItem>
+                            <SelectItem value="TRY">TRY (₺)</SelectItem>
+                            <SelectItem value="EUR">EUR (€)</SelectItem>
+                            <SelectItem value="USD">USD ($)</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormItem>
                     )}
                   />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 3. PDKS Doğrulama */}
-            <Card className="border-none shadow-sm bg-slate-50/50">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-6 text-primary">
-                  <Fingerprint className="h-5 w-5" />
-                  <h3 className="font-bold">PDKS Doğrulama Bilgileri</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
-                    name="qrId"
+                    name="salaryType"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="flex justify-between">
-                          QR ID
-                          <Button 
-                            type="button" 
-                            variant="link" 
-                            className="h-auto p-0 text-accent text-xs"
-                            onClick={generateCodes}
-                          >
-                            Otomatik Üret
-                          </Button>
-                        </FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <QrCode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input className="pl-9" {...field} />
-                          </div>
-                        </FormControl>
+                        <FormLabel>Maaş Tipi</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Seçiniz" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Monthly">Aylık</SelectItem>
+                            <SelectItem value="Daily">Günlük</SelectItem>
+                            <SelectItem value="Hourly">Saatlik</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </FormItem>
                     )}
                   />
-                  <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="locationVerification"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-sm">Konum Doğrulama</FormLabel>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="faceVerification"
-                      render={({ field }) => (
-                        <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                          <div className="space-y-0.5">
-                            <FormLabel className="text-sm">Yüz Doğrulama</FormLabel>
-                          </div>
-                          <FormControl>
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                          </FormControl>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="salaryIban"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>IBAN</FormLabel>
+                        <FormControl><Input placeholder="TRXX XXXX XXXX..." {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="salaryBankName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Banka Adı</FormLabel>
+                        <FormControl><Input placeholder="Örn: Garanti BBVA" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="salaryPaymentDay"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ödeme Günü</FormLabel>
+                        <FormControl><Input type="number" min="1" max="31" {...field} /></FormControl>
+                        <FormDescription>Ayın hangi günü ödeme yapılacak?</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Right Column: Preview and Actions */}
           <div className="space-y-6">
             <Card className="sticky top-0 border-primary/10 shadow-lg overflow-hidden">
               <div className="bg-primary p-6 text-white text-center">
@@ -445,8 +500,8 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                 <h4 className="mt-4 text-lg font-bold truncate">
                   {form.watch("name") || "Ad"} {form.watch("surname") || "Soyad"}
                 </h4>
-                <p className="text-white/60 text-xs font-medium uppercase tracking-widest mt-1">
-                  {form.watch("position") || "Pozisyon Belirtilmedi"}
+                <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest mt-1">
+                  {form.watch("registryNo") ? `SİCİL: ${form.watch("registryNo")}` : "SİCİL NO BEKLENİYOR"}
                 </p>
               </div>
               <CardContent className="p-6 space-y-4">
@@ -455,30 +510,26 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                   <span className="font-semibold text-primary">{form.watch("departmentId") || "-"}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Şube</span>
-                  <span className="font-semibold text-primary">{form.watch("branchId") || "-"}</span>
+                  <span className="text-muted-foreground">Maaş</span>
+                  <span className="font-bold text-accent">
+                    {form.watch("salaryAmount") ? `${form.watch("salaryAmount")} ${form.watch("salaryCurrency")}` : "-"}
+                  </span>
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Yetki Rolü</span>
                   <Badge variant="outline" className="font-bold border-primary/20">{form.watch("role")}</Badge>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Durum</span>
-                  <Badge className={form.watch("status") === "Active" ? "bg-green-500" : "bg-slate-400"}>
-                    {form.watch("status")}
-                  </Badge>
-                </div>
               </CardContent>
             </Card>
 
             <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
               <div className="flex gap-3">
-                <ShieldCheck className="h-5 w-5 text-amber-600 shrink-0" />
+                <Info className="h-5 w-5 text-amber-600 shrink-0" />
                 <div className="space-y-1">
-                  <p className="text-xs font-bold text-amber-900">Yetki Notu</p>
+                  <p className="text-xs font-bold text-amber-900">Maaş Gizliliği</p>
                   <p className="text-[10px] text-amber-800 leading-relaxed">
-                    Seçilen rol personelin sistemdeki tüm yetkilerini (panel erişimi, mobil izinler vb.) belirler. İK onayı olmadan değiştirilemez.
+                    Maaş ve banka bilgileri KVKK gereği sadece İK, Muhasebe ve Admin yetkisine sahip kullanıcılar tarafından görüntülenebilir.
                   </p>
                 </div>
               </div>
@@ -486,7 +537,6 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
           </div>
         </div>
 
-        {/* Action Bar */}
         <div className="fixed bottom-0 left-0 right-0 lg:left-[260px] bg-white border-t p-4 px-8 flex justify-between items-center z-50">
           <Button type="button" variant="ghost" onClick={onCancel}>Vazgeç</Button>
           <div className="flex gap-3">
