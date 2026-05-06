@@ -161,6 +161,35 @@ export const translations = {
     decline: "Reddet",
     coverageAlerts: "Kapsama Uyarıları",
     empty: "Henüz vardiya planı oluşturulmadı."
+  },
+  breaks: {
+    title: "Mola Kayıtları",
+    description: "Personellerin mola süreçlerini gerçek zamanlı takip edin ve yönetin.",
+    onBreak: "Şu Anda Molada",
+    totalToday: "Bugünkü Toplam Mola",
+    avgDuration: "Ortalama Mola Süresi",
+    exceeded: "Süreyi Aşanlar",
+    manualStart: "Manuel Mola Başlat",
+    manualEnd: "Mola Bitir",
+    breakType: "Mola Türü",
+    startTime: "Başlangıç Saati",
+    elapsed: "Geçen Süre",
+    limit: "Limit",
+    types: {
+      lunch: "Yemek Molası",
+      tea: "Çay Molası",
+      smoke: "Sigara Molası",
+      rest: "Dinlenme",
+      tech: "Teknik Ara",
+      personal: "Kişisel İhtiyaç"
+    },
+    status: {
+      active: "Aktif Molada",
+      completed: "Tamamlandı",
+      exceeded: "Süre Aşıldı"
+    },
+    empty: "Henüz mola kaydı bulunmuyor.",
+    emptySub: "Personeller mola başlattığında burada görüntülenecektir."
   }
 };
 
