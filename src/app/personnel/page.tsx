@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -14,7 +15,8 @@ import {
   Edit2,
   Lock,
   Download,
-  Users
+  Users,
+  X
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -35,6 +37,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,26 +52,32 @@ import { cn } from "@/lib/utils"
 import { useFirestore, useCollection } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 import { Skeleton } from "@/components/ui/skeleton"
+import { AddPersonnelForm } from "@/components/personnel/add-personnel-form"
 
 const t = translations.common;
 const p = translations.personnel;
 
 export default function PersonnelPage() {
   const db = useFirestore();
+  const [isAddOpen, setIsAddOpen] = React.useState(false)
+  const [searchTerm, setSearchTerm] = React.useState("");
+
   const personnelQuery = React.useMemo(() => {
     if (!db) return null;
-    return query(collection(db, "personnel"), orderBy("name", "asc"));
+    return query(collection(db, "personnel"), orderBy("createdAt", "desc"));
   }, [db]);
 
   const { data: employees, loading } = useCollection(personnelQuery);
-  const [searchTerm, setSearchTerm] = React.useState("");
 
   const filteredEmployees = React.useMemo(() => {
     if (!employees) return [];
-    return employees.filter(emp => 
-      emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.departmentId?.toLowerCase().includes(searchTerm.toLowerCase())
+    return employees.filter((emp: any) => 
+      !emp.isDeleted && (
+        emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        emp.departmentId?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     );
   }, [employees, searchTerm]);
 
@@ -78,7 +93,10 @@ export default function PersonnelPage() {
             <QrCode className="mr-2 h-4 w-4" />
             {p.generateIds}
           </Button>
-          <Button className="h-11 px-6 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20 transition-all">
+          <Button 
+            onClick={() => setIsAddOpen(true)}
+            className="h-11 px-6 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20 transition-all"
+          >
             <Plus className="mr-2 h-4 w-4" />
             {p.addEmployee}
           </Button>
@@ -103,7 +121,7 @@ export default function PersonnelPage() {
                 {t.filter}
               </Button>
               <Badge variant="secondary" className="h-11 px-4 rounded-xl text-xs font-bold bg-white border border-slate-200 shadow-sm text-primary">
-                {p.totalCount.replace('{count}', (employees?.length || 0).toString())}
+                {p.totalCount.replace('{count}', (filteredEmployees?.length || 0).toString())}
               </Badge>
               <Button variant="ghost" size="icon" className="h-11 w-11 hover:bg-slate-100">
                 <Download className="h-5 w-5 text-slate-500" />
@@ -128,7 +146,7 @@ export default function PersonnelPage() {
                 {searchTerm ? "Farklı bir arama terimi deneyin." : p.emptySub}
               </p>
               {!searchTerm && (
-                <Button className="bg-primary hover:bg-primary/90">
+                <Button onClick={() => setIsAddOpen(true)} className="bg-primary hover:bg-primary/90">
                   <Plus className="mr-2 h-4 w-4" />
                   {p.addEmployee}
                 </Button>
@@ -153,13 +171,15 @@ export default function PersonnelPage() {
                     <TableCell className="pl-6">
                       <Avatar className="h-12 w-12 border-2 border-white shadow-md transition-transform group-hover:scale-105">
                         <AvatarImage src={emp.avatarUrl} alt={emp.name} className="object-cover" />
-                        <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">{emp.name?.charAt(0)}</AvatarFallback>
+                        <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
+                          {emp.name?.charAt(0)}{emp.surname?.charAt(0)}
+                        </AvatarFallback>
                       </Avatar>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="font-bold text-primary text-base group-hover:text-accent transition-colors">{emp.name}</span>
-                        <span className="text-[11px] font-mono font-medium text-slate-400 mt-0.5">{emp.id}</span>
+                        <span className="font-bold text-primary text-base group-hover:text-accent transition-colors">{emp.name} {emp.surname}</span>
+                        <span className="text-[11px] font-mono font-medium text-slate-400 mt-0.5">{emp.personnelCode || emp.id}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -235,6 +255,30 @@ export default function PersonnelPage() {
           )}
         </CardContent>
       </Card>
+
+      <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[900px] p-0 border-none">
+          <div className="h-full flex flex-col">
+            <header className="p-8 pb-4 flex justify-between items-start bg-white border-b">
+              <div className="space-y-1">
+                <SheetTitle className="text-2xl font-extrabold text-primary">Yeni Personel Ekle</SheetTitle>
+                <SheetDescription>
+                  Personel bilgilerini eksiksiz girerek sisteme yeni çalışan kaydı oluşturun.
+                </SheetDescription>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setIsAddOpen(false)} className="rounded-full">
+                <X className="h-5 w-5" />
+              </Button>
+            </header>
+            <ScrollArea className="flex-1 p-8">
+              <AddPersonnelForm 
+                onSuccess={() => setIsAddOpen(false)} 
+                onCancel={() => setIsAddOpen(false)} 
+              />
+            </ScrollArea>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
