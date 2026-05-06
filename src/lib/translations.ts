@@ -27,6 +27,7 @@ export const translations = {
     management: "YÖNETİM",
     securityAnalysis: "GÜVENLİK & ANALİZ",
     organization: "ORGANİZASYON",
+    empty: "Henüz kayıt bulunmuyor."
   },
   header: {
     portalTitle: "Evyapar PDKS Sistemi",
@@ -94,6 +95,7 @@ export const translations = {
     weeklyFlow: "Haftalık Devam Akışı",
     branchDist: "Şube Dağılımı",
     kpiSummary: "Tüm şubelerdeki personel durumuna genel bakış.",
+    emptyLogs: "Henüz giriş/çıkış kaydı yok.",
   },
   personnel: {
     title: "Personel Yönetimi",
@@ -113,6 +115,8 @@ export const translations = {
     editDetails: "Detayları Düzenle",
     generateQr: "QR Kimlik Oluştur",
     deactivate: "Hesabı Askıya Al",
+    empty: "Henüz personel kaydı yok.",
+    emptySub: "Personel ekleyerek sistemi kullanmaya başlayabilirsiniz.",
   },
   depts: {
     hr: "İnsan Kaynakları",
@@ -138,7 +142,8 @@ export const translations = {
     changeRequests: "Değişim Talepleri",
     approve: "Onayla",
     decline: "Reddet",
-    coverageAlerts: "Kapsama Uyarıları"
+    coverageAlerts: "Kapsama Uyarıları",
+    empty: "Henüz vardiya planı oluşturulmadı."
   }
 };
 
