@@ -86,6 +86,27 @@
         "endTime": { "type": "string" },
         "color": { "type": "string" }
       }
+    },
+    "LeaveRequest": {
+      "title": "LeaveRequest",
+      "description": "Employee leave request records",
+      "type": "object",
+      "properties": {
+        "personnelId": { "type": "string" },
+        "branchId": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "leaveType": { "type": "string", "enum": ["Annual", "Sick", "Unpaid", "Excused", "Maternity", "Paternity", "Public", "Hourly"] },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "totalDays": { "type": "number" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected", "Cancelled"] },
+        "approvedBy": { "type": "string" },
+        "rejectionReason": { "type": "string" },
+        "attachments": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      }
     }
   },
   "auth": {
@@ -103,6 +124,10 @@
     "/shifts/{shiftId}": {
       "schema": "Shift",
       "description": "Shift type definitions"
+    },
+    "/leave_requests/{requestId}": {
+      "schema": "LeaveRequest",
+      "description": "Leave request records"
     }
   }
 }

@@ -1,3 +1,4 @@
+
 export const translations = {
   common: {
     dashboard: "Ana Panel",
@@ -190,6 +191,43 @@ export const translations = {
     },
     empty: "Henüz mola kaydı bulunmuyor.",
     emptySub: "Personeller mola başlattığında burada görüntülenecektir."
+  },
+  leaves: {
+    title: "İzin Talepleri",
+    description: "Personellerin izin süreçlerini yönetin, onaylayın ve takip edin.",
+    newRequest: "Yeni İzin Talebi",
+    pendingRequests: "Bekleyen Talepler",
+    approvedLeaves: "Onaylanan İzinler",
+    rejectedLeaves: "Reddedilen Talepler",
+    onLeaveToday: "Bugün İzinli Olanlar",
+    leaveType: "İzin Türü",
+    startDate: "Başlangıç Tarihi",
+    endDate: "Bitiş Tarihi",
+    totalDays: "Toplam Gün",
+    requestDate: "Talep Tarihi",
+    approver: "Onaylayan",
+    types: {
+      Annual: "Yıllık İzin",
+      Sick: "Hastalık İzni",
+      Unpaid: "Ücretsiz İzin",
+      Excused: "Mazeret İzni",
+      Maternity: "Doğum İzni",
+      Paternity: "Babalık İzni",
+      Public: "Resmî İzin",
+      Hourly: "Saatlik İzin"
+    },
+    status: {
+      Pending: "Bekliyor",
+      Approved: "Onaylandı",
+      Rejected: "Reddedildi",
+      Cancelled: "İptal Edildi"
+    },
+    empty: "Henüz izin talebi bulunmuyor.",
+    emptySub: "Personeller izin talebi oluşturduğunda burada görüntülenecektir.",
+    rejectionReason: "Red Sebebi",
+    rejectionReasonPlaceholder: "Red sebebini belirtin (zorunlu)...",
+    confirmRejection: "Red İşlemini Onayla",
+    confirmApproval: "İzni Onayla"
   }
 };
 
