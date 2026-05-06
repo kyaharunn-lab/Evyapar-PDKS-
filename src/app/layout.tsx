@@ -10,7 +10,7 @@ import { ShieldCheck } from "lucide-react";
 const h = translations.header;
 
 export const metadata: Metadata = {
-  title: 'VeriTakip | Profesyonel Personel Devam Yönetimi',
+  title: 'Evyapar PDKS | Profesyonel Personel Devam Yönetimi',
   description: 'Kurumsal düzeyde personel devam kontrol ve vardiya yönetim sistemi.',
 };
 

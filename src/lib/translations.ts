@@ -29,12 +29,12 @@ export const translations = {
     organization: "ORGANİZASYON",
   },
   header: {
-    portalTitle: "Personel Devam Kontrol Sistemi",
+    portalTitle: "Evyapar PDKS Sistemi",
     role: "İK Yöneticisi",
     accessType: "Yönetici Yetkisi",
   },
   sidebar: {
-    logoSubtitle: "Kurumsal PDKS",
+    logoSubtitle: "PDKS SİSTEMİ",
     anaMenu: "Ana Menü",
     operasyon: "Operasyon",
     talepler: "Talepler",
