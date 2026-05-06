@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -47,6 +46,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useFirestore, useCollection } from "@/firebase"
