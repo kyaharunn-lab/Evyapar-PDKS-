@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as React from "react"
@@ -103,17 +102,34 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
       name: "",
       surname: "",
       tcId: "",
+      birthDate: "",
+      gender: "",
       phone: "",
       email: "",
+      address: "",
+      branchId: "",
+      departmentId: "",
+      position: "",
       workType: "Office",
+      startDate: "",
       status: "Active",
+      salaryType: "",
       role: "Personnel",
       hasAdminAccess: false,
       hasMobileAccess: true,
+      qrId: "",
+      deviceId: "",
+      cardId: "",
       faceVerification: false,
       locationVerification: true,
       offlineAccess: false,
+      defaultShiftId: "",
+      weeklyHours: "",
       overtimeAllowed: true,
+      emergencyContactName: "",
+      emergencyContactRelation: "",
+      emergencyContactPhone: "",
+      notes: "",
     },
   })
 
