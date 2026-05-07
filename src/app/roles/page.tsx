@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { ShieldCheck, Plus, Filter, Users, X, Info } from "lucide-react"
+import { ShieldCheck, Plus, Filter, Users, X, Info, MoreHorizontal, Edit2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Sheet,
   SheetContent,
@@ -15,10 +15,28 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
 export default function RolesPage() {
   const [isAddOpen, setIsAddOpen] = React.useState(false)
+  const [roles, setRoles] = React.useState<any[]>([])
   
   // Form States
   const [roleName, setRoleName] = React.useState("")
@@ -26,17 +44,24 @@ export default function RolesPage() {
   const [roleDescription, setRoleDescription] = React.useState("")
 
   const handleCreateRole = () => {
-    console.log("Yeni Rol Verileri:", {
-      roleName,
-      roleCode,
-      roleDescription
-    });
+    if (!roleName || !roleCode) return;
+
+    const newRole = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: roleName,
+      code: roleCode,
+      description: roleDescription,
+      status: "Active",
+      personnelCount: 0
+    };
+
+    setRoles(prev => [newRole, ...prev]);
     
-    // İşlem sonrası formu temizle ve kapat (isteğe bağlı)
-    // setRoleName("");
-    // setRoleCode("");
-    // setRoleDescription("");
-    // setIsAddOpen(false);
+    // Reset and close
+    setRoleName("");
+    setRoleCode("");
+    setRoleDescription("");
+    setIsAddOpen(false);
   }
 
   return (
@@ -67,26 +92,83 @@ export default function RolesPage() {
 
       {/* KPI Kartları */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard title="Toplam Rol" value="0" icon={ShieldCheck} color="text-primary" bg="bg-primary/5" />
-        <KPICard title="Aktif Rol" value="0" icon={ShieldCheck} color="text-green-600" bg="bg-green-50" />
+        <KPICard title="Toplam Rol" value={roles.length.toString()} icon={ShieldCheck} color="text-primary" bg="bg-primary/5" />
+        <KPICard title="Aktif Rol" value={roles.filter(r => r.status === "Active").length.toString()} icon={ShieldCheck} color="text-green-600" bg="bg-green-50" />
         <KPICard title="Atanan Personel" value="0" icon={Users} color="text-blue-600" bg="bg-blue-50" />
       </div>
 
-      {/* Empty State */}
-      <div className="flex flex-col items-center justify-center p-20 text-center bg-white rounded-2xl border-2 border-dashed border-slate-100 min-h-[400px]">
-        <div className="bg-secondary/50 p-6 rounded-full mb-6">
-          <ShieldCheck className="h-12 w-12 text-muted-foreground" />
+      {/* Liste veya Empty State */}
+      {roles.length === 0 ? (
+        <div className="flex flex-col items-center justify-center p-20 text-center bg-white rounded-2xl border-2 border-dashed border-slate-100 min-h-[400px]">
+          <div className="bg-secondary/50 p-6 rounded-full mb-6">
+            <ShieldCheck className="h-12 w-12 text-muted-foreground" />
+          </div>
+          <h3 className="text-xl font-bold text-primary mb-2">Henüz rol kaydı bulunmuyor.</h3>
+          <p className="text-muted-foreground max-w-xs mb-6">Sisteme yetki rolleri ekleyerek erişim kontrolünü yapılandırabilirsiniz.</p>
+          <Button 
+            variant="outline" 
+            className="border-primary text-primary hover:bg-primary/5"
+            onClick={() => setIsAddOpen(true)}
+          >
+            İlk Rolü Tanımla
+          </Button>
         </div>
-        <h3 className="text-xl font-bold text-primary mb-2">Henüz rol kaydı bulunmuyor.</h3>
-        <p className="text-muted-foreground max-w-xs mb-6">Sisteme yetki rolleri ekleyerek erişim kontrolünü yapılandırabilirsiniz.</p>
-        <Button 
-          variant="outline" 
-          className="border-primary text-primary hover:bg-primary/5"
-          onClick={() => setIsAddOpen(true)}
-        >
-          İlk Rolü Tanımla
-        </Button>
-      </div>
+      ) : (
+        <Card className="premium-card overflow-hidden">
+          <CardHeader className="pb-6 border-b bg-slate-50/30">
+            <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Rol Listesi</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader className="enterprise-table-header">
+                <TableRow>
+                  <TableHead className="pl-6">Rol Adı</TableHead>
+                  <TableHead>Rol Kodu</TableHead>
+                  <TableHead>Açıklama</TableHead>
+                  <TableHead>Personel Sayısı</TableHead>
+                  <TableHead>Durum</TableHead>
+                  <TableHead className="text-right pr-6">İşlemler</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {roles.map((role) => (
+                  <TableRow key={role.id} className="group hover:bg-slate-50/80 transition-all">
+                    <TableCell className="pl-6 font-bold text-primary">{role.name}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-500">{role.code}</TableCell>
+                    <TableCell className="text-xs text-slate-600 max-w-[200px] truncate">{role.description || "-"}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-700">{role.personnelCount}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className="bg-green-50 text-green-700 border-green-100 font-bold">Aktif</Badge>
+                    </TableCell>
+                    <TableCell className="text-right pr-6">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem>
+                            <Edit2 className="mr-2 h-4 w-4 text-slate-400" />
+                            Düzenle
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-accent" onClick={() => setRoles(roles.filter(r => r.id !== role.id))}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Sil
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Yeni Rol Paneli */}
       <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -175,6 +257,7 @@ export default function RolesPage() {
               <Button 
                 className="flex-[2] h-12 rounded-2xl bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 font-bold text-white transition-all active:scale-95"
                 onClick={handleCreateRole}
+                disabled={!roleName || !roleCode}
               >
                 Rolü Oluştur
               </Button>
