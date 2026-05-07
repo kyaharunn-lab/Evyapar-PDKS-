@@ -15,10 +15,14 @@ import {
   Clock,
   Settings2,
   Info,
-  Map as MapIcon
+  Map as MapIcon,
+  Loader2,
+  MoreHorizontal,
+  Eye,
+  Trash2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Sheet,
   SheetContent,
@@ -37,17 +41,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { useFirestore, useCollection } from "@/firebase"
-import { collection, query, where } from "firebase/firestore"
+import { collection, query, where, addDoc, serverTimestamp, orderBy } from "firebase/firestore"
+import { useToast } from "@/hooks/use-toast"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function BranchesPage() {
-  const [isAddOpen, setIsAddOpen] = React.useState(false)
   const db = useFirestore()
+  const { toast } = useToast()
+  
+  const [isAddOpen, setIsAddOpen] = React.useState(false)
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
 
-  // Sadece yönetici rollerine sahip personelleri çek
+  // Form States
+  const [formData, setFormData] = React.useState({
+    branchName: "",
+    branchCode: "",
+    managerId: "",
+    email: "",
+    city: "",
+    district: "",
+    zipCode: "",
+    phone: "",
+    address: "",
+    latitude: "",
+    longitude: "",
+    radius: "100",
+    status: "Active"
+  })
+
+  // Real-time Queries
+  const branchesQuery = React.useMemo(() => {
+    if (!db) return null;
+    return query(collection(db, "branches"), orderBy("createdAt", "desc"));
+  }, [db]);
+
   const managersQuery = React.useMemo(() => {
     if (!db) return null;
     return query(
@@ -56,7 +104,61 @@ export default function BranchesPage() {
     );
   }, [db]);
 
+  const { data: branches, loading: loadingBranches } = useCollection(branchesQuery);
   const { data: managers, loading: loadingManagers } = useCollection(managersQuery);
+
+  const handleSave = async () => {
+    if (!db) return;
+    if (!formData.branchName || !formData.branchCode) {
+      toast({
+        variant: "destructive",
+        title: "Hata",
+        description: "Şube adı ve kodu zorunludur.",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await addDoc(collection(db, "branches"), {
+        ...formData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      toast({
+        title: "Başarılı",
+        description: "Şube kaydı oluşturuldu.",
+      });
+
+      // Reset form and close
+      setFormData({
+        branchName: "",
+        branchCode: "",
+        managerId: "",
+        email: "",
+        city: "",
+        district: "",
+        zipCode: "",
+        phone: "",
+        address: "",
+        latitude: "",
+        longitude: "",
+        radius: "100",
+        status: "Active"
+      });
+      setIsAddOpen(false);
+    } catch (error) {
+      console.error("Save error:", error);
+      toast({
+        variant: "destructive",
+        title: "Hata",
+        description: "Şube kaydedilirken bir hata oluştu.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -90,27 +192,90 @@ export default function BranchesPage() {
 
       {/* KPI Kartları */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard title="Toplam Şube" value="0" icon={Building2} color="text-primary" bg="bg-primary/5" />
-        <KPICard title="Aktif Şube" value="0" icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
+        <KPICard title="Toplam Şube" value={branches?.length || "0"} icon={Building2} color="text-primary" bg="bg-primary/5" />
+        <KPICard title="Aktif Şube" value={branches?.filter(b => b.status === "Active").length || "0"} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
         <KPICard title="Toplam Personel" value="0" icon={Users} color="text-blue-600" bg="bg-blue-50" />
         <KPICard title="QR Aktif" value="0" icon={QrCode} color="text-orange-600" bg="bg-orange-50" />
       </div>
 
-      {/* Empty State */}
-      <div className="flex flex-col items-center justify-center p-20 text-center bg-white rounded-2xl border-2 border-dashed border-slate-100 min-h-[400px]">
-        <div className="bg-secondary/50 p-6 rounded-full mb-6">
-          <Building2 className="h-12 w-12 text-muted-foreground" />
-        </div>
-        <h3 className="text-xl font-bold text-primary mb-2">Henüz şube kaydı bulunmuyor.</h3>
-        <p className="text-muted-foreground max-w-xs mb-6">Sisteme şube ekleyerek organizasyon yapısını oluşturmaya başlayabilirsiniz.</p>
-        <Button 
-          variant="outline" 
-          className="border-primary text-primary hover:bg-primary/5"
-          onClick={() => setIsAddOpen(true)}
-        >
-          İlk Şubeyi Tanımla
-        </Button>
-      </div>
+      {/* Liste Görünümü */}
+      <Card className="premium-card overflow-hidden">
+        <CardContent className="p-0">
+          {loadingBranches ? (
+            <div className="p-6 space-y-4">
+              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+            </div>
+          ) : !branches || branches.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-20 text-center min-h-[400px]">
+              <div className="bg-secondary/50 p-6 rounded-full mb-6">
+                <Building2 className="h-12 w-12 text-muted-foreground" />
+              </div>
+              <h3 className="text-xl font-bold text-primary mb-2">Henüz şube kaydı bulunmuyor.</h3>
+              <p className="text-muted-foreground max-w-xs mb-6">Sisteme şube ekleyerek organizasyon yapısını oluşturmaya başlayabilirsiniz.</p>
+              <Button 
+                variant="outline" 
+                className="border-primary text-primary hover:bg-primary/5"
+                onClick={() => setIsAddOpen(true)}
+              >
+                İlk Şubeyi Tanımla
+              </Button>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader className="enterprise-table-header">
+                <TableRow>
+                  <TableHead className="pl-6">Şube Adı</TableHead>
+                  <TableHead>Kod</TableHead>
+                  <TableHead>Şehir / İlçe</TableHead>
+                  <TableHead>Yetkili</TableHead>
+                  <TableHead>Durum</TableHead>
+                  <TableHead className="text-right pr-6">İşlemler</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {branches.map((branch) => (
+                  <TableRow key={branch.id} className="group hover:bg-slate-50/80 transition-all">
+                    <TableCell className="pl-6 font-bold text-primary">{branch.branchName}</TableCell>
+                    <TableCell className="font-mono text-xs">{branch.branchCode}</TableCell>
+                    <TableCell className="text-sm text-slate-600">{branch.city} / {branch.district || "-"}</TableCell>
+                    <TableCell className="text-sm">
+                      {managers?.find(m => m.id === branch.managerId)?.name || "Atanmadı"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={cn(
+                        "font-bold",
+                        branch.status === "Active" ? "bg-green-50 text-green-700 border-green-100" : "bg-slate-50 text-slate-600 border-slate-200"
+                      )}>
+                        {branch.status === "Active" ? "Aktif" : "Pasif"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right pr-6">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem>
+                            <Eye className="mr-2 h-4 w-4 text-slate-400" />
+                            Detaylar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-accent">
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Sil
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Yeni Şube Paneli */}
       <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -147,20 +312,30 @@ export default function BranchesPage() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-name" className="text-[11px] font-bold text-slate-500 uppercase">Şube Adı</Label>
-                      <Input id="branch-name" placeholder="Örn: Merkez Ofis" className="rounded-xl border-slate-200 h-10 text-sm" />
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">Şube Adı</Label>
+                      <Input 
+                        placeholder="Örn: Merkez Ofis" 
+                        className="rounded-xl border-slate-200 h-10 text-sm" 
+                        value={formData.branchName}
+                        onChange={(e) => setFormData({...formData, branchName: e.target.value})}
+                      />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-code" className="text-[11px] font-bold text-slate-500 uppercase">Şube Kodu</Label>
-                      <Input id="branch-code" placeholder="BR-001" className="rounded-xl border-slate-200 h-10 text-sm" />
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">Şube Kodu</Label>
+                      <Input 
+                        placeholder="BR-001" 
+                        className="rounded-xl border-slate-200 h-10 text-sm" 
+                        value={formData.branchCode}
+                        onChange={(e) => setFormData({...formData, branchCode: e.target.value})}
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-manager" className="text-[11px] font-bold text-slate-500 uppercase">Yetkili Müdür</Label>
-                      <Select>
-                        <SelectTrigger id="branch-manager" className="rounded-xl border-slate-200 h-10 text-sm bg-white">
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">Yetkili Müdür</Label>
+                      <Select onValueChange={(val) => setFormData({...formData, managerId: val})}>
+                        <SelectTrigger className="rounded-xl border-slate-200 h-10 text-sm bg-white">
                           <div className="flex items-center gap-2">
                             <User className="h-3.5 w-3.5 text-slate-400" />
                             <SelectValue placeholder={loadingManagers ? "Yükleniyor..." : "Yönetici Seçin"} />
@@ -183,56 +358,99 @@ export default function BranchesPage() {
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-email" className="text-[11px] font-bold text-slate-500 uppercase">E-posta</Label>
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">E-posta</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                        <Input id="branch-email" type="email" placeholder="sube@evyapar.com" className="pl-9 rounded-xl border-slate-200 h-10 text-sm" />
+                        <Input 
+                          type="email" 
+                          placeholder="sube@evyapar.com" 
+                          className="pl-9 rounded-xl border-slate-200 h-10 text-sm" 
+                          value={formData.email}
+                          onChange={(e) => setFormData({...formData, email: e.target.value})}
+                        />
                       </div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-city" className="text-[11px] font-bold text-slate-500 uppercase">Şehir</Label>
-                      <Input id="branch-city" placeholder="İstanbul" className="rounded-xl border-slate-200 h-10 text-sm" />
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">Şehir</Label>
+                      <Input 
+                        placeholder="İstanbul" 
+                        className="rounded-xl border-slate-200 h-10 text-sm" 
+                        value={formData.city}
+                        onChange={(e) => setFormData({...formData, city: e.target.value})}
+                      />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-district" className="text-[11px] font-bold text-slate-500 uppercase">İlçe</Label>
-                      <Input id="branch-district" placeholder="Kadıköy" className="rounded-xl border-slate-200 h-10 text-sm" />
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">İlçe</Label>
+                      <Input 
+                        placeholder="Kadıköy" 
+                        className="rounded-xl border-slate-200 h-10 text-sm" 
+                        value={formData.district}
+                        onChange={(e) => setFormData({...formData, district: e.target.value})}
+                      />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-zip" className="text-[11px] font-bold text-slate-500 uppercase">Posta Kodu</Label>
-                      <Input id="branch-zip" placeholder="34000" className="rounded-xl border-slate-200 h-10 text-sm" />
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">Posta Kodu</Label>
+                      <Input 
+                        placeholder="34000" 
+                        className="rounded-xl border-slate-200 h-10 text-sm" 
+                        value={formData.zipCode}
+                        onChange={(e) => setFormData({...formData, zipCode: e.target.value})}
+                      />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="branch-phone" className="text-[11px] font-bold text-slate-500 uppercase">Telefon</Label>
-                    <Input id="branch-phone" placeholder="0212 XXX XX XX" className="rounded-xl border-slate-200 h-10 text-sm" />
+                    <Label className="text-[11px] font-bold text-slate-500 uppercase">Telefon</Label>
+                    <Input 
+                      placeholder="0212 XXX XX XX" 
+                      className="rounded-xl border-slate-200 h-10 text-sm" 
+                      value={formData.phone}
+                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    />
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="branch-address" className="text-[11px] font-bold text-slate-500 uppercase">Açık Adres</Label>
+                    <Label className="text-[11px] font-bold text-slate-500 uppercase">Açık Adres</Label>
                     <Textarea 
-                      id="branch-address" 
                       placeholder="Şube tam adresi..." 
                       className="rounded-xl border-slate-200 min-h-[80px] text-sm resize-none" 
+                      value={formData.address}
+                      onChange={(e) => setFormData({...formData, address: e.target.value})}
                     />
                   </div>
 
                   {/* Konum Koordinat Alanları */}
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-lat" className="text-[11px] font-bold text-slate-500 uppercase">Enlem (Lat)</Label>
-                      <Input id="branch-lat" placeholder="41.0082" className="rounded-xl border-slate-200 h-10 text-sm" />
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">Enlem (Lat)</Label>
+                      <Input 
+                        placeholder="41.0082" 
+                        className="rounded-xl border-slate-200 h-10 text-sm" 
+                        value={formData.latitude}
+                        onChange={(e) => setFormData({...formData, latitude: e.target.value})}
+                      />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-lng" className="text-[11px] font-bold text-slate-500 uppercase">Boylam (Lng)</Label>
-                      <Input id="branch-lng" placeholder="28.9784" className="rounded-xl border-slate-200 h-10 text-sm" />
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">Boylam (Lng)</Label>
+                      <Input 
+                        placeholder="28.9784" 
+                        className="rounded-xl border-slate-200 h-10 text-sm" 
+                        value={formData.longitude}
+                        onChange={(e) => setFormData({...formData, longitude: e.target.value})}
+                      />
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="branch-radius" className="text-[11px] font-bold text-slate-500 uppercase">Konum Radiusu (m)</Label>
-                      <Input id="branch-radius" placeholder="100" type="number" className="rounded-xl border-slate-200 h-10 text-sm" />
+                      <Label className="text-[11px] font-bold text-slate-500 uppercase">Konum Radiusu (m)</Label>
+                      <Input 
+                        placeholder="100" 
+                        type="number" 
+                        className="rounded-xl border-slate-200 h-10 text-sm" 
+                        value={formData.radius}
+                        onChange={(e) => setFormData({...formData, radius: e.target.value})}
+                      />
                     </div>
                   </div>
 
@@ -317,13 +535,13 @@ export default function BranchesPage() {
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <Label className="text-[11px] font-bold text-slate-500 uppercase">Şube Durumu</Label>
-                    <Select defaultValue="active">
+                    <Select defaultValue="Active" onValueChange={(val) => setFormData({...formData, status: val})}>
                       <SelectTrigger className="rounded-xl border-slate-200 h-11 bg-white">
                         <SelectValue placeholder="Durum seçin" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="active" className="text-green-600 font-bold">● Aktif</SelectItem>
-                        <SelectItem value="passive" className="text-slate-500 font-bold">○ Pasif</SelectItem>
+                        <SelectItem value="Active" className="text-green-600 font-bold">● Aktif</SelectItem>
+                        <SelectItem value="Passive" className="text-slate-500 font-bold">○ Pasif</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -337,13 +555,16 @@ export default function BranchesPage() {
                 variant="outline" 
                 className="flex-1 h-12 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-colors"
                 onClick={() => setIsAddOpen(false)}
+                disabled={isSubmitting}
               >
                 İptal
               </Button>
               <Button 
                 className="flex-[2] h-12 rounded-2xl bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 font-bold text-white transition-all active:scale-95"
+                onClick={handleSave}
+                disabled={isSubmitting}
               >
-                Şubeyi Kaydet
+                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Şubeyi Kaydet"}
               </Button>
             </div>
           </div>
