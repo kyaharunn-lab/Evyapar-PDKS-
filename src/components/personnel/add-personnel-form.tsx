@@ -40,7 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useFirestore } from "@/firebase"
+import { useFirestore, useCollection } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
@@ -63,7 +63,7 @@ const personnelSchema = z.object({
   workType: z.enum(["Office", "Field", "Remote", "Hybrid"]),
   startDate: z.string().optional(),
   status: z.enum(["Active", "Inactive", "Probation"]),
-  role: z.enum(["Personnel", "Manager", "HR", "Accountant", "Admin"]),
+  role: z.string().min(1, "Rol seçimi zorunludur"),
   hasAdminAccess: z.boolean().default(false),
   hasMobileAccess: z.boolean().default(true),
   qrId: z.string().optional(),
@@ -102,6 +102,11 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null)
 
+  // Real-time collection data
+  const { data: branches, loading: loadingBranches } = useCollection(db ? collection(db, "branches") : null);
+  const { data: departments, loading: loadingDepts } = useCollection(db ? collection(db, "departments") : null);
+  const { data: roles, loading: loadingRoles } = useCollection(db ? collection(db, "roles") : null);
+
   const form = useForm<PersonnelFormValues>({
     resolver: zodResolver(personnelSchema),
     defaultValues: {
@@ -118,9 +123,8 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
       departmentId: "",
       position: "",
       workType: "Office",
-      startDate: "",
       status: "Active",
-      role: "Personnel",
+      role: "",
       hasAdminAccess: false,
       hasMobileAccess: true,
       qrId: "",
@@ -302,14 +306,20 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Şube <span className="text-red-500">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Şube seçin" /></SelectTrigger>
+                            <SelectTrigger>
+                              <SelectValue placeholder={loadingBranches ? "Yükleniyor..." : "Şube seçin"} />
+                            </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="Merkez Ofis">Merkez Ofis</SelectItem>
-                            <SelectItem value="İstanbul Şube">İstanbul Şube</SelectItem>
-                            <SelectItem value="Ankara Bölge">Ankara Bölge</SelectItem>
+                            {branches?.length > 0 ? (
+                              branches.map((b: any) => (
+                                <SelectItem key={b.id} value={b.name || b.id}>{b.name}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>Kayıtlı şube yok</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -322,15 +332,20 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Departman <span className="text-red-500">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Departman seçin" /></SelectTrigger>
+                            <SelectTrigger>
+                              <SelectValue placeholder={loadingDepts ? "Yükleniyor..." : "Departman seçin"} />
+                            </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="Bilgi Teknolojileri">Bilgi Teknolojileri</SelectItem>
-                            <SelectItem value="İnsan Kaynakları">İnsan Kaynakları</SelectItem>
-                            <SelectItem value="Operasyon">Operasyon</SelectItem>
-                            <SelectItem value="Satış">Satış</SelectItem>
+                            {departments?.length > 0 ? (
+                              departments.map((d: any) => (
+                                <SelectItem key={d.id} value={d.name || d.id}>{d.name}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>Kayıtlı departman yok</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -363,16 +378,20 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Yetki Rolü <span className="text-red-500">*</span></FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger><SelectValue placeholder="Rol seçin" /></SelectTrigger>
+                            <SelectTrigger>
+                              <SelectValue placeholder={loadingRoles ? "Yükleniyor..." : "Rol seçin"} />
+                            </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="Personnel">Personel</SelectItem>
-                            <SelectItem value="Manager">Şube Müdürü</SelectItem>
-                            <SelectItem value="HR">İK</SelectItem>
-                            <SelectItem value="Accountant">Muhasebe</SelectItem>
-                            <SelectItem value="Admin">Süper Admin</SelectItem>
+                            {roles?.length > 0 ? (
+                              roles.map((r: any) => (
+                                <SelectItem key={r.id} value={r.name || r.id}>{r.name}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="none" disabled>Kayıtlı rol yok</SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -518,7 +537,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                 <Separator />
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Yetki Rolü</span>
-                  <Badge variant="outline" className="font-bold border-primary/20">{form.watch("role")}</Badge>
+                  <Badge variant="outline" className="font-bold border-primary/20">{form.watch("role") || "-"}</Badge>
                 </div>
               </CardContent>
             </Card>
