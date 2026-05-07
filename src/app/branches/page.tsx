@@ -35,7 +35,7 @@ export default function BranchesPage() {
             <MapPin className="mr-2 h-4 w-4" />
             Harita
           </Button>
-          <Button className="h-10 rounded-xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20">
+          <Button className="h-10 rounded-xl bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
             <Plus className="mr-2 h-4 w-4" />
             Yeni Şube
           </Button>
