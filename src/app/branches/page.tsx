@@ -186,6 +186,22 @@ export default function BranchesPage() {
                       className="rounded-xl border-slate-200 min-h-[80px] text-sm resize-none" 
                     />
                   </div>
+
+                  {/* Konum Koordinat Alanları */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="branch-lat" className="text-[11px] font-bold text-slate-500 uppercase">Enlem (Lat)</Label>
+                      <Input id="branch-lat" placeholder="41.0082" className="rounded-xl border-slate-200 h-10 text-sm" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="branch-lng" className="text-[11px] font-bold text-slate-500 uppercase">Boylam (Lng)</Label>
+                      <Input id="branch-lng" placeholder="28.9784" className="rounded-xl border-slate-200 h-10 text-sm" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="branch-radius" className="text-[11px] font-bold text-slate-500 uppercase">Konum Radiusu (m)</Label>
+                      <Input id="branch-radius" placeholder="100" type="number" className="rounded-xl border-slate-200 h-10 text-sm" />
+                    </div>
+                  </div>
                 </div>
 
                 <Separator className="bg-slate-100" />
