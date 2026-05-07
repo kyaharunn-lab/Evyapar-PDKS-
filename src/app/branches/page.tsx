@@ -40,9 +40,23 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
+import { useFirestore, useCollection } from "@/firebase"
+import { collection, query, where } from "firebase/firestore"
 
 export default function BranchesPage() {
   const [isAddOpen, setIsAddOpen] = React.useState(false)
+  const db = useFirestore()
+
+  // Sadece yönetici rollerine sahip personelleri çek
+  const managersQuery = React.useMemo(() => {
+    if (!db) return null;
+    return query(
+      collection(db, "personnel"),
+      where("role", "in", ["Manager", "Admin"])
+    );
+  }, [db]);
+
+  const { data: managers, loading: loadingManagers } = useCollection(managersQuery);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -145,10 +159,28 @@ export default function BranchesPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label htmlFor="branch-manager" className="text-[11px] font-bold text-slate-500 uppercase">Yetkili Müdür</Label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                        <Input id="branch-manager" placeholder="Ad Soyad" className="pl-9 rounded-xl border-slate-200 h-10 text-sm" />
-                      </div>
+                      <Select>
+                        <SelectTrigger id="branch-manager" className="rounded-xl border-slate-200 h-10 text-sm bg-white">
+                          <div className="flex items-center gap-2">
+                            <User className="h-3.5 w-3.5 text-slate-400" />
+                            <SelectValue placeholder={loadingManagers ? "Yükleniyor..." : "Yönetici Seçin"} />
+                          </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {managers && managers.length > 0 ? (
+                            managers.map((m: any) => (
+                              <SelectItem key={m.id} value={m.id}>
+                                <div className="flex flex-col text-left py-0.5">
+                                  <span className="font-bold text-slate-700 leading-tight">{m.name} {m.surname}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono mt-0.5">{m.registryNo || m.id}</span>
+                                </div>
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="none" disabled>Uygun yönetici bulunamadı</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="branch-email" className="text-[11px] font-bold text-slate-500 uppercase">E-posta</Label>
