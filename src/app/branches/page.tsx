@@ -8,13 +8,26 @@ import {
   Filter, 
   CheckCircle2, 
   Users, 
-  QrCode 
+  QrCode,
+  X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 export default function BranchesPage() {
+  const [isAddOpen, setIsAddOpen] = React.useState(false)
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Üst Alan */}
@@ -35,7 +48,10 @@ export default function BranchesPage() {
             <MapPin className="mr-2 h-4 w-4" />
             Harita
           </Button>
-          <Button className="h-10 rounded-xl bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
+          <Button 
+            onClick={() => setIsAddOpen(true)}
+            className="h-10 rounded-xl bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+          >
             <Plus className="mr-2 h-4 w-4" />
             Yeni Şube
           </Button>
@@ -57,10 +73,77 @@ export default function BranchesPage() {
         </div>
         <h3 className="text-xl font-bold text-primary mb-2">Henüz şube kaydı bulunmuyor.</h3>
         <p className="text-muted-foreground max-w-xs mb-6">Sisteme şube ekleyerek organizasyon yapısını oluşturmaya başlayabilirsiniz.</p>
-        <Button variant="outline" className="border-primary text-primary hover:bg-primary/5">
+        <Button 
+          variant="outline" 
+          className="border-primary text-primary hover:bg-primary/5"
+          onClick={() => setIsAddOpen(true)}
+        >
           İlk Şubeyi Tanımla
         </Button>
       </div>
+
+      {/* Yeni Şube Paneli */}
+      <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[450px] p-0 border-none">
+          <div className="h-full flex flex-col">
+            <SheetHeader className="p-8 pb-6 border-b bg-white">
+              <div className="flex items-center justify-between">
+                <SheetTitle className="text-2xl font-extrabold text-primary">Yeni Şube Ekle</SheetTitle>
+                <Button variant="ghost" size="icon" onClick={() => setIsAddOpen(false)} className="rounded-full">
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              <SheetDescription>Şirket bünyesine yeni bir çalışma lokasyonu tanımlayın.</SheetDescription>
+            </SheetHeader>
+
+            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="branch-name" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Şube Adı</Label>
+                <Input id="branch-name" placeholder="Örn: Merkez Ofis" className="rounded-xl border-slate-200 h-11" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="branch-code" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Şube Kodu</Label>
+                <Input id="branch-code" placeholder="Örn: BR-001" className="rounded-xl border-slate-200 h-11" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="branch-phone" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Telefon</Label>
+                <Input id="branch-phone" placeholder="0212 XXX XX XX" className="rounded-xl border-slate-200 h-11" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="branch-city" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Şehir</Label>
+                <Input id="branch-city" placeholder="Örn: İstanbul" className="rounded-xl border-slate-200 h-11" />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="branch-address" className="text-xs font-bold text-slate-500 uppercase tracking-wider">Adres</Label>
+                <Textarea 
+                  id="branch-address" 
+                  placeholder="Şube açık adresi..." 
+                  className="rounded-xl border-slate-200 min-h-[100px] resize-none" 
+                />
+              </div>
+            </div>
+
+            <div className="p-8 border-t bg-slate-50/50 flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1 h-12 rounded-2xl font-bold"
+                onClick={() => setIsAddOpen(false)}
+              >
+                İptal
+              </Button>
+              <Button 
+                className="flex-[2] h-12 rounded-2xl bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 font-bold"
+              >
+                Kaydet
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }
