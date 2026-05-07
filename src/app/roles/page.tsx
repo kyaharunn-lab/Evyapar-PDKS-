@@ -19,6 +19,25 @@ import { cn } from "@/lib/utils"
 
 export default function RolesPage() {
   const [isAddOpen, setIsAddOpen] = React.useState(false)
+  
+  // Form States
+  const [roleName, setRoleName] = React.useState("")
+  const [roleCode, setRoleCode] = React.useState("")
+  const [roleDescription, setRoleDescription] = React.useState("")
+
+  const handleCreateRole = () => {
+    console.log("Yeni Rol Verileri:", {
+      roleName,
+      roleCode,
+      roleDescription
+    });
+    
+    // İşlem sonrası formu temizle ve kapat (isteğe bağlı)
+    // setRoleName("");
+    // setRoleCode("");
+    // setRoleDescription("");
+    // setIsAddOpen(false);
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -107,6 +126,8 @@ export default function RolesPage() {
                         id="role-name" 
                         placeholder="Örn: Kıdemli İK Sorumlusu" 
                         className="rounded-xl border-slate-200 h-11 text-sm focus:ring-primary/20" 
+                        value={roleName}
+                        onChange={(e) => setRoleName(e.target.value)}
                       />
                     </div>
 
@@ -116,6 +137,8 @@ export default function RolesPage() {
                         id="role-code" 
                         placeholder="Örn: ROLE_HR_SENIOR" 
                         className="rounded-xl border-slate-200 h-11 text-sm focus:ring-primary/20 font-mono" 
+                        value={roleCode}
+                        onChange={(e) => setRoleCode(e.target.value)}
                       />
                     </div>
 
@@ -125,6 +148,8 @@ export default function RolesPage() {
                         id="role-description" 
                         placeholder="Bu rolün sistemdeki yetki kapsamını açıklayın..." 
                         className="rounded-xl border-slate-200 min-h-[120px] text-sm resize-none focus:ring-primary/20" 
+                        value={roleDescription}
+                        onChange={(e) => setRoleDescription(e.target.value)}
                       />
                     </div>
                   </div>
@@ -149,6 +174,7 @@ export default function RolesPage() {
               </Button>
               <Button 
                 className="flex-[2] h-12 rounded-2xl bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 font-bold text-white transition-all active:scale-95"
+                onClick={handleCreateRole}
               >
                 Rolü Oluştur
               </Button>
