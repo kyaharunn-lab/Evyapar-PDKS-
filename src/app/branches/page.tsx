@@ -14,7 +14,8 @@ import {
   User,
   Clock,
   Settings2,
-  Info
+  Info,
+  Map as MapIcon
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -202,6 +203,11 @@ export default function BranchesPage() {
                       <Input id="branch-radius" placeholder="100" type="number" className="rounded-xl border-slate-200 h-10 text-sm" />
                     </div>
                   </div>
+
+                  <Button variant="outline" className="w-full h-10 rounded-xl border-dashed border-slate-300 text-slate-600 hover:bg-slate-50 font-semibold text-xs">
+                    <MapIcon className="mr-2 h-3.5 w-3.5" />
+                    Haritadan Konum Seç
+                  </Button>
                 </div>
 
                 <Separator className="bg-slate-100" />
