@@ -32,6 +32,7 @@ import { useFirestore, useCollection } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
+import { formatTimeTR } from "@/lib/date-time"
 
 const t = translations.common;
 
@@ -120,13 +121,13 @@ export default function AttendanceLogsPage() {
                     <TableCell>
                       <div className="flex items-center text-sm">
                         <Clock className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                        {log.entryTime?.toDate().toLocaleTimeString() || "-"}
+                        {formatTimeTR(log.entryTime)}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center text-sm">
                         <Clock className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                        {log.exitTime?.toDate().toLocaleTimeString() || "-"}
+                        {formatTimeTR(log.exitTime)}
                       </div>
                     </TableCell>
                     <TableCell>

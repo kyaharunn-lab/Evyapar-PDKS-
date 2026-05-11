@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { 
   Users, 
   UserCheck, 
@@ -9,7 +10,11 @@ import {
   Activity,
   ArrowUpRight,
   ArrowDownRight,
-  LayoutDashboard
+  LayoutDashboard,
+  CalendarPlus,
+  Coffee,
+  ShieldCheck,
+  UserPlus
 } from "lucide-react"
 import { 
   BarChart, 
@@ -74,29 +79,58 @@ export default function DashboardPage() {
     ];
   }, [personnel, todayLogs]);
 
+  const quickActions = [
+    { title: "Personel Ekle", href: "/personnel", icon: UserPlus, tone: "from-indigo-600 to-sky-500" },
+    { title: "Vardiya Planla", href: "/shifts", icon: CalendarPlus, tone: "from-violet-600 to-fuchsia-500" },
+    { title: "Mola Başlat", href: "/breaks", icon: Coffee, tone: "from-orange-500 to-amber-400" },
+    { title: "Erişim Yönet", href: "/access-control", icon: ShieldCheck, tone: "from-emerald-500 to-teal-400" },
+  ];
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-primary">{t.dashboard}</h2>
+          <h2 className="text-3xl font-extrabold tracking-tight premium-gradient-text">{t.dashboard}</h2>
           <p className="text-muted-foreground mt-1 text-base">{d.kpiSummary}</p>
         </div>
-        <Badge variant="outline" className="px-5 py-2.5 rounded-2xl bg-white shadow-sm font-bold border-slate-200 border-dashed animate-pulse text-xs tracking-wider">
+        <Badge variant="outline" className="px-5 py-2.5 rounded-2xl bg-white/90 shadow-sm font-bold border-white animate-pulse text-xs tracking-wider">
           <Activity className="w-4 h-4 mr-2.5 text-accent" />
           CANLI İZLEME AKTİF
         </Badge>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {quickActions.map((action) => (
+          <Link
+            href={action.href}
+            key={action.title}
+            className="group relative overflow-hidden rounded-2xl bg-white p-4 shadow-[0_18px_55px_-36px_rgba(15,23,42,0.55)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_28px_70px_-38px_rgba(79,70,229,0.45)]"
+          >
+            <div className={`absolute inset-y-0 right-0 w-28 bg-gradient-to-br ${action.tone} opacity-10 transition-opacity group-hover:opacity-20`} />
+            <div className="relative flex items-center gap-3">
+              <div className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${action.tone} text-white shadow-lg shadow-slate-900/10`}>
+                <action.icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-extrabold text-primary">{action.title}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Hızlı işlem</p>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {kpis.map((item, i) => (
           <Card key={i} className="premium-card relative overflow-hidden group">
+            <div className="mini-sparkline" />
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-[11px] font-bold uppercase tracking-[1.5px] text-slate-400">{item.title}</CardTitle>
-              <div className="p-2.5 rounded-xl bg-slate-50 group-hover:bg-primary/5 transition-colors">
-                <item.icon className={cn("h-5 w-5", item.color)} />
+              <div className="p-2.5 rounded-xl premium-icon-bg group-hover:scale-105 transition-transform">
+                <item.icon className="h-5 w-5" />
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative">
               {loadingPersonnel || loadingLogs ? (
                 <Skeleton className="h-10 w-24 mb-2" />
               ) : (
@@ -140,7 +174,13 @@ export default function DashboardPage() {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                     <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize: 12, fontWeight: 700, fill: '#94A3B8'}} dy={10} />
                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94A3B8'}} />
-                    <Bar dataKey="present" fill="#0E2B4D" radius={[6, 6, 0, 0]} barSize={32} />
+                    <defs>
+                      <linearGradient id="attendanceGradient" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#6366F1" stopOpacity={0.95} />
+                        <stop offset="100%" stopColor="#0EA5E9" stopOpacity={0.55} />
+                      </linearGradient>
+                    </defs>
+                    <Bar dataKey="present" fill="url(#attendanceGradient)" radius={[10, 10, 0, 0]} barSize={32} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -164,7 +204,9 @@ export default function DashboardPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={branches} cx="50%" cy="50%" innerRadius={75} outerRadius={95} paddingAngle={8} dataKey="value" strokeWidth={0}>
-                        {branches.map((entry: any, index: number) => <Cell key={`cell-${index}`} fill="#0E2B4D" />)}
+                        {branches.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={["#6366F1", "#0EA5E9", "#10B981", "#F97316"][index % 4]} />
+                        ))}
                       </Pie>
                       <RechartsTooltip />
                     </PieChart>

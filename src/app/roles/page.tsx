@@ -33,35 +33,136 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
+import { useToast } from "@/hooks/use-toast"
 
 export default function RolesPage() {
+  const { toast } = useToast()
   const [isAddOpen, setIsAddOpen] = React.useState(false)
+  const [isDetailOpen, setIsDetailOpen] = React.useState(false)
   const [roles, setRoles] = React.useState<any[]>([])
+  const [selectedRole, setSelectedRole] = React.useState<any | null>(null)
+  const [editingRoleId, setEditingRoleId] = React.useState<string | null>(null)
   
   // Form States
   const [roleName, setRoleName] = React.useState("")
   const [roleCode, setRoleCode] = React.useState("")
   const [roleDescription, setRoleDescription] = React.useState("")
 
+  const ROLES_STORAGE_KEY = "app_roles"
+
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(ROLES_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) setRoles(parsed)
+    } catch {
+      // ignore corrupted local data
+    }
+  }, [])
+
+  const persistRoles = React.useCallback((next: any[]) => {
+    try {
+      localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(next))
+    } catch {
+      // ignore storage errors (quota, blocked, etc.)
+    }
+  }, [])
+
   const handleCreateRole = () => {
-    if (!roleName || !roleCode) return;
+    if (!roleName.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Hata",
+        description: "Rol adı zorunludur.",
+      })
+      return
+    }
+    if (!roleCode.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Hata",
+        description: "Rol kodu zorunludur.",
+      })
+      return
+    }
 
-    const newRole = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: roleName,
-      code: roleCode,
+    const now = Date.now()
+    const base = {
+      roleName: roleName.trim(),
+      roleCode: roleCode.trim(),
       description: roleDescription,
+      level: 1,
       status: "Active",
-      personnelCount: 0
-    };
+      updatedAt: now,
+    }
 
-    setRoles(prev => [newRole, ...prev]);
+    setRoles((prev) => {
+      const list = Array.isArray(prev) ? prev : []
+      if (editingRoleId) {
+        const idx = list.findIndex((r) => r?.id === editingRoleId)
+        if (idx >= 0) {
+          const updated = { ...list[idx], ...base }
+          const next = [updated, ...list.slice(0, idx), ...list.slice(idx + 1)]
+          persistRoles(next)
+          return next
+        }
+      }
+      const createdAt = now
+      const newRole = { id: `role-${createdAt}-${Math.random().toString(16).slice(2)}`, ...base, createdAt }
+      const next = [newRole, ...list]
+      persistRoles(next)
+      return next
+    })
     
     // Reset and close
     setRoleName("");
     setRoleCode("");
     setRoleDescription("");
+    setEditingRoleId(null)
     setIsAddOpen(false);
+
+    toast({
+      title: "Başarılı",
+      description: editingRoleId ? "Rol güncellendi." : "Rol oluşturuldu.",
+    })
+  }
+
+  const handleOpenDetail = (role: any) => {
+    setSelectedRole(role)
+    setIsDetailOpen(true)
+  }
+
+  const handleEdit = (role: any) => {
+    setEditingRoleId(role?.id || null)
+    setRoleName(role?.roleName || "")
+    setRoleCode(role?.roleCode || "")
+    setRoleDescription(role?.description || "")
+    setIsAddOpen(true)
+  }
+
+  const handleDelete = (role: any) => {
+    if (!role?.id) return
+    setRoles((prev) => {
+      const next = (Array.isArray(prev) ? prev : []).filter((r) => r?.id !== role.id)
+      persistRoles(next)
+      return next
+    })
+    toast({ title: "Başarılı", description: "Rol silindi." })
+  }
+
+  const handleDeactivate = (role: any) => {
+    if (!role?.id) return
+    setRoles((prev) => {
+      const list = Array.isArray(prev) ? prev : []
+      const idx = list.findIndex((r) => r?.id === role.id)
+      if (idx < 0) return list
+      const updated = { ...list[idx], status: "Inactive", updatedAt: Date.now() }
+      const next = [updated, ...list.slice(0, idx), ...list.slice(idx + 1)]
+      persistRoles(next)
+      return next
+    })
+    toast({ title: "Başarılı", description: "Rol pasifleştirildi." })
   }
 
   return (
@@ -133,11 +234,11 @@ export default function RolesPage() {
               <TableBody>
                 {roles.map((role) => (
                   <TableRow key={role.id} className="group hover:bg-slate-50/80 transition-all">
-                    <TableCell className="pl-6 font-bold text-primary">{role.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-slate-500">{role.code}</TableCell>
+                    <TableCell className="pl-6 font-bold text-primary">{role.roleName}</TableCell>
+                    <TableCell className="font-mono text-xs text-slate-500">{role.roleCode}</TableCell>
                     <TableCell className="text-xs text-slate-600 max-w-[200px] truncate">{role.description || "-"}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-700">{role.personnelCount}</Badge>
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-700">0</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className="bg-green-50 text-green-700 border-green-100 font-bold">Aktif</Badge>
@@ -150,12 +251,18 @@ export default function RolesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenDetail(role)}>
+                            Detay Gör
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEdit(role)}>
                             <Edit2 className="mr-2 h-4 w-4 text-slate-400" />
                             Düzenle
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-accent" onClick={() => setRoles(roles.filter(r => r.id !== role.id))}>
+                          <DropdownMenuItem onClick={() => handleDeactivate(role)}>
+                            Pasifleştir
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-accent" onClick={() => handleDelete(role)}>
                             <Trash2 className="mr-2 h-4 w-4" />
                             Sil
                           </DropdownMenuItem>
@@ -171,12 +278,23 @@ export default function RolesPage() {
       )}
 
       {/* Yeni Rol Paneli */}
-      <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
+      <Sheet
+        open={isAddOpen}
+        onOpenChange={(open) => {
+          setIsAddOpen(open)
+          if (!open) {
+            setEditingRoleId(null)
+            setRoleName("")
+            setRoleCode("")
+            setRoleDescription("")
+          }
+        }}
+      >
         <SheetContent side="right" className="w-full sm:max-w-[500px] p-0 border-none shadow-2xl">
           <div className="h-full flex flex-col">
             <SheetHeader className="p-8 pb-6 border-b bg-white relative">
               <div className="flex items-center justify-between">
-                <SheetTitle className="text-2xl font-extrabold text-primary">Yeni Rol Oluştur</SheetTitle>
+                <SheetTitle className="text-2xl font-extrabold text-primary">{editingRoleId ? "Rol Düzenle" : "Yeni Rol Oluştur"}</SheetTitle>
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -259,12 +377,51 @@ export default function RolesPage() {
                 onClick={handleCreateRole}
                 disabled={!roleName || !roleCode}
               >
-                Rolü Oluştur
+                {editingRoleId ? "Kaydet" : "Rolü Oluştur"}
               </Button>
             </div>
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Rol Detay Paneli */}
+      <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[520px] p-0 border-none shadow-2xl">
+          <div className="h-full flex flex-col">
+            <SheetHeader className="p-8 pb-6 border-b bg-white relative">
+              <div className="flex items-center justify-between">
+                <SheetTitle className="text-2xl font-extrabold text-primary">Rol Detayı</SheetTitle>
+                <Button variant="ghost" size="icon" onClick={() => setIsDetailOpen(false)} className="rounded-full h-8 w-8 hover:bg-slate-100 transition-colors">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <SheetDescription className="text-slate-500 font-medium mt-1">Seçilen rolün bilgileri.</SheetDescription>
+            </SheetHeader>
+            <ScrollArea className="flex-1">
+              <div className="p-8 space-y-4">
+                {selectedRole && (
+                  <>
+                    <InfoRow label="Rol Adı" value={selectedRole.roleName || "-"} />
+                    <InfoRow label="Rol Kodu" value={selectedRole.roleCode || "-"} />
+                    <InfoRow label="Açıklama" value={selectedRole.description || "-"} />
+                    <InfoRow label="Seviye" value={(selectedRole.level || 1).toString()} />
+                    <InfoRow label="Durum" value={selectedRole.status === "Active" ? "Aktif" : "Pasif"} />
+                  </>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border border-slate-100 bg-white rounded-xl px-4 py-3">
+      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
+      <span className="text-sm font-semibold text-slate-700 text-right">{value}</span>
     </div>
   )
 }

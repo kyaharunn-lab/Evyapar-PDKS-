@@ -77,6 +77,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { formatDateTimeTR } from "@/lib/date-time"
 import { Textarea } from "@/components/ui/textarea"
 
 const t = translations.common;
@@ -102,8 +103,12 @@ export default function AdvanceRequestsPage() {
     return query(collection(db, "advance_requests"), orderBy("createdAt", "desc"));
   }, [db]);
 
+  const personnelQuery = React.useMemo(() => {
+    return db ? collection(db, "personnel") : null;
+  }, [db]);
+
   const { data: rawRequests, loading: loadingAdvances } = useCollection(advancesQuery);
-  const { data: personnel } = useCollection(db ? collection(db, "personnel") : null);
+  const { data: personnel } = useCollection(personnelQuery);
 
   // Merge request data with personnel data
   const mergedRequests = React.useMemo(() => {
@@ -293,7 +298,7 @@ export default function AdvanceRequestsPage() {
                       <StatusBadge status={req.status} />
                     </TableCell>
                     <TableCell className="text-xs text-slate-500">
-                      {req.createdAt?.toDate ? format(req.createdAt.toDate(), "dd.MM.yyyy HH:mm") : "-"}
+                      {formatDateTimeTR(req.createdAt)}
                     </TableCell>
                     <TableCell className="text-right pr-6">
                       <DropdownMenu>
@@ -364,7 +369,7 @@ export default function AdvanceRequestsPage() {
                 <div className="grid grid-cols-2 gap-6">
                   <DetailItem label={a.amount} value={`${(parseFloat(selectedRequest.amount) || 0).toLocaleString()} ${selectedRequest.currency || "₺"}`} />
                   <DetailItem label={a.limit} value={`${(selectedRequest.person?.salary?.advanceLimit || 0).toLocaleString()} ₺`} />
-                  <DetailItem label="Talep Tarihi" value={selectedRequest.createdAt?.toDate ? format(selectedRequest.createdAt.toDate(), "dd.MM.yyyy HH:mm") : "-"} />
+                  <DetailItem label="Talep Tarihi" value={formatDateTimeTR(selectedRequest.createdAt)} />
                   <DetailItem label={a.paymentDate} value={selectedRequest.paymentDate?.toDate ? format(selectedRequest.paymentDate.toDate(), "dd.MM.yyyy") : (selectedRequest.status === "Approved" ? "Ödeme Bekleniyor" : "-")} />
                   <DetailItem label="IBAN" value={selectedRequest.iban || selectedRequest.person?.salary?.iban || "-"} />
                   <DetailItem label="Ödeme Yöntemi" value={selectedRequest.paymentMethod || "Banka Havalesi"} />

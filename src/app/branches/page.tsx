@@ -61,17 +61,20 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { useFirestore, useCollection } from "@/firebase"
-import { collection, query, where, addDoc, serverTimestamp, orderBy } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
+import { TIME_INPUT_PROPS } from "@/lib/date-time"
 
 export default function BranchesPage() {
-  const db = useFirestore()
   const { toast } = useToast()
   
   const [isAddOpen, setIsAddOpen] = React.useState(false)
+  const [isDetailOpen, setIsDetailOpen] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [branches, setBranches] = React.useState<any[]>([])
+  const [localPersonnel, setLocalPersonnel] = React.useState<any[]>([])
+  const [selectedBranch, setSelectedBranch] = React.useState<any | null>(null)
+  const [editingBranchId, setEditingBranchId] = React.useState<string | null>(null)
 
   // Form States
   const [formData, setFormData] = React.useState({
@@ -90,25 +93,67 @@ export default function BranchesPage() {
     status: "Active"
   })
 
-  // Real-time Queries
-  const branchesQuery = React.useMemo(() => {
-    if (!db) return null;
-    return query(collection(db, "branches"), orderBy("createdAt", "desc"));
-  }, [db]);
+  const BRANCHES_STORAGE_KEY = "app_branches";
+  const LEGACY_BRANCHES_STORAGE_KEY = "evyapar_pdks_branches_local_v1";
+  const PERSONNEL_STORAGE_KEY = "app_personnel";
 
-  const managersQuery = React.useMemo(() => {
-    if (!db) return null;
-    return query(
-      collection(db, "personnel"),
-      where("role", "in", ["Manager", "Admin"])
-    );
-  }, [db]);
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BRANCHES_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) setBranches(parsed);
+      } else {
+        const legacyRaw = localStorage.getItem(LEGACY_BRANCHES_STORAGE_KEY);
+        if (legacyRaw) {
+          const parsed = JSON.parse(legacyRaw);
+          if (Array.isArray(parsed)) {
+            setBranches(parsed);
+            try {
+              localStorage.setItem(BRANCHES_STORAGE_KEY, JSON.stringify(parsed));
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore corrupted local data
+    }
+  }, []);
 
-  const { data: branches, loading: loadingBranches } = useCollection(branchesQuery);
-  const { data: managers, loading: loadingManagers } = useCollection(managersQuery);
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PERSONNEL_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setLocalPersonnel(parsed);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const persistBranches = React.useCallback((next: any[]) => {
+    try {
+      localStorage.setItem(BRANCHES_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const sortedBranches = React.useMemo(() => {
+    const list = Array.isArray(branches) ? branches : [];
+    return [...list].sort((a: any, b: any) => (b?.createdAt || 0) - (a?.createdAt || 0));
+  }, [branches]);
+
+  const getManagerLabel = React.useCallback((managerId: string | undefined) => {
+    if (!managerId) return "Atanmadı";
+    const match = localPersonnel.find((p) => p?.id === managerId);
+    const fullName = match?.fullName || [match?.name, match?.surname].filter(Boolean).join(" ");
+    return fullName || match?.personnelCode || managerId;
+  }, [localPersonnel]);
 
   const handleSave = async () => {
-    if (!db) return;
     if (!formData.branchName || !formData.branchCode) {
       toast({
         variant: "destructive",
@@ -119,16 +164,41 @@ export default function BranchesPage() {
     }
 
     setIsSubmitting(true);
+
     try {
-      await addDoc(collection(db, "branches"), {
+      const now = Date.now();
+      const base = {
         ...formData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        managerId: formData.managerId || "",
+        updatedAt: now,
+      };
+
+      setBranches((prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        if (editingBranchId) {
+          const idx = list.findIndex((b) => b?.id === editingBranchId);
+          if (idx >= 0) {
+            const updated = { ...list[idx], ...base };
+            const next = [updated, ...list.slice(0, idx), ...list.slice(idx + 1)];
+            persistBranches(next);
+            return next;
+          }
+        }
+
+        const createdAt = now;
+        const newBranch = {
+          id: `branch-${createdAt}-${Math.random().toString(16).slice(2)}`,
+          ...base,
+          createdAt,
+        };
+        const next = [newBranch, ...list];
+        persistBranches(next);
+        return next;
       });
 
       toast({
         title: "Başarılı",
-        description: "Şube kaydı oluşturuldu.",
+        description: editingBranchId ? "Şube güncellendi." : "Şube kaydı oluşturuldu.",
       });
 
       // Reset form and close
@@ -147,6 +217,7 @@ export default function BranchesPage() {
         radius: "100",
         status: "Active"
       });
+      setEditingBranchId(null);
       setIsAddOpen(false);
     } catch (error) {
       console.error("Save error:", error);
@@ -158,6 +229,56 @@ export default function BranchesPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleOpenDetail = (branch: any) => {
+    setSelectedBranch(branch);
+    setIsDetailOpen(true);
+  };
+
+  const handleEdit = (branch: any) => {
+    setEditingBranchId(branch?.id || null);
+    setFormData({
+      branchName: branch?.branchName || "",
+      branchCode: branch?.branchCode || "",
+      managerId: branch?.managerId || "",
+      email: branch?.email || "",
+      city: branch?.city || "",
+      district: branch?.district || "",
+      zipCode: branch?.zipCode || "",
+      phone: branch?.phone || "",
+      address: branch?.address || "",
+      latitude: branch?.latitude || "",
+      longitude: branch?.longitude || "",
+      radius: branch?.radius || "100",
+      status: branch?.status || "Active",
+    });
+    setIsAddOpen(true);
+  };
+
+  const handleDelete = (branch: any) => {
+    if (!branch?.id) return;
+    setBranches((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      const next = list.filter((b) => b?.id !== branch.id);
+      persistBranches(next);
+      return next;
+    });
+    toast({ title: "Başarılı", description: "Şube silindi." });
+  };
+
+  const handleDeactivate = (branch: any) => {
+    if (!branch?.id) return;
+    setBranches((prev) => {
+      const list = Array.isArray(prev) ? prev : [];
+      const idx = list.findIndex((b) => b?.id === branch.id);
+      if (idx < 0) return list;
+      const updated = { ...list[idx], status: "Passive", updatedAt: Date.now() };
+      const next = [updated, ...list.slice(0, idx), ...list.slice(idx + 1)];
+      persistBranches(next);
+      return next;
+    });
+    toast({ title: "Başarılı", description: "Şube pasifleştirildi." });
   };
 
   return (
@@ -192,8 +313,8 @@ export default function BranchesPage() {
 
       {/* KPI Kartları */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KPICard title="Toplam Şube" value={branches?.length || "0"} icon={Building2} color="text-primary" bg="bg-primary/5" />
-        <KPICard title="Aktif Şube" value={branches?.filter(b => b.status === "Active").length || "0"} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
+        <KPICard title="Toplam Şube" value={sortedBranches.length.toString()} icon={Building2} color="text-primary" bg="bg-primary/5" />
+        <KPICard title="Aktif Şube" value={sortedBranches.filter(b => b.status === "Active").length.toString()} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
         <KPICard title="Toplam Personel" value="0" icon={Users} color="text-blue-600" bg="bg-blue-50" />
         <KPICard title="QR Aktif" value="0" icon={QrCode} color="text-orange-600" bg="bg-orange-50" />
       </div>
@@ -201,11 +322,11 @@ export default function BranchesPage() {
       {/* Liste Görünümü */}
       <Card className="premium-card overflow-hidden">
         <CardContent className="p-0">
-          {loadingBranches ? (
+          {false && sortedBranches.length === 0 ? (
             <div className="p-6 space-y-4">
               {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
             </div>
-          ) : !branches || branches.length === 0 ? (
+          ) : sortedBranches.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-20 text-center min-h-[400px]">
               <div className="bg-secondary/50 p-6 rounded-full mb-6">
                 <Building2 className="h-12 w-12 text-muted-foreground" />
@@ -233,13 +354,13 @@ export default function BranchesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {branches.map((branch) => (
+                {sortedBranches.map((branch) => (
                   <TableRow key={branch.id} className="group hover:bg-slate-50/80 transition-all">
                     <TableCell className="pl-6 font-bold text-primary">{branch.branchName}</TableCell>
                     <TableCell className="font-mono text-xs">{branch.branchCode}</TableCell>
                     <TableCell className="text-sm text-slate-600">{branch.city} / {branch.district || "-"}</TableCell>
                     <TableCell className="text-sm">
-                      {managers?.find(m => m.id === branch.managerId)?.name || "Atanmadı"}
+                      {getManagerLabel(branch.managerId)}
                     </TableCell>
                     <TableCell>
                       <Badge className={cn(
@@ -257,12 +378,18 @@ export default function BranchesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleOpenDetail(branch)}>
                             <Eye className="mr-2 h-4 w-4 text-slate-400" />
-                            Detaylar
+                            Detay Gör
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleEdit(branch)}>
+                            Düzenle
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-accent">
+                          <DropdownMenuItem onClick={() => handleDeactivate(branch)}>
+                            Pasifleştir
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-accent" onClick={() => handleDelete(branch)}>
                             <Trash2 className="mr-2 h-4 w-4" />
                             Sil
                           </DropdownMenuItem>
@@ -277,13 +404,53 @@ export default function BranchesPage() {
         </CardContent>
       </Card>
 
+      {/* Şube Detay Paneli */}
+      <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[520px] p-0 border-none shadow-2xl">
+          <div className="h-full flex flex-col">
+            <SheetHeader className="p-8 pb-6 border-b bg-white relative">
+              <div className="flex items-center justify-between">
+                <SheetTitle className="text-2xl font-extrabold text-primary">Şube Detayı</SheetTitle>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsDetailOpen(false)}
+                  className="rounded-full h-8 w-8 hover:bg-slate-100 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <SheetDescription className="text-slate-500 font-medium mt-1">
+                Seçilen şubenin bilgileri.
+              </SheetDescription>
+            </SheetHeader>
+            <ScrollArea className="flex-1">
+              <div className="p-8 space-y-4">
+                {selectedBranch && (
+                  <>
+                    <InfoRow label="Şube Adı" value={selectedBranch.branchName || "-"} />
+                    <InfoRow label="Şube Kodu" value={selectedBranch.branchCode || "-"} />
+                    <InfoRow label="Yetkili" value={getManagerLabel(selectedBranch.managerId)} />
+                    <InfoRow label="E-posta" value={selectedBranch.email || "-"} />
+                    <InfoRow label="Telefon" value={selectedBranch.phone || "-"} />
+                    <InfoRow label="Şehir / İlçe" value={`${selectedBranch.city || "-"} / ${selectedBranch.district || "-"}`} />
+                    <InfoRow label="Adres" value={selectedBranch.address || "-"} />
+                    <InfoRow label="Durum" value={selectedBranch.status === "Active" ? "Aktif" : "Pasif"} />
+                  </>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Yeni Şube Paneli */}
       <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
         <SheetContent side="right" className="w-full sm:max-w-[550px] p-0 border-none shadow-2xl">
           <div className="h-full flex flex-col">
             <SheetHeader className="p-8 pb-6 border-b bg-white relative">
               <div className="flex items-center justify-between">
-                <SheetTitle className="text-2xl font-extrabold text-primary">Yeni Şube Ekle</SheetTitle>
+                <SheetTitle className="text-2xl font-extrabold text-primary">{editingBranchId ? "Şube Düzenle" : "Yeni Şube Ekle"}</SheetTitle>
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -334,16 +501,16 @@ export default function BranchesPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label className="text-[11px] font-bold text-slate-500 uppercase">Yetkili Müdür</Label>
-                      <Select onValueChange={(val) => setFormData({...formData, managerId: val})}>
+                      <Select value={formData.managerId} onValueChange={(val) => setFormData({...formData, managerId: val})}>
                         <SelectTrigger className="rounded-xl border-slate-200 h-10 text-sm bg-white">
                           <div className="flex items-center gap-2">
                             <User className="h-3.5 w-3.5 text-slate-400" />
-                            <SelectValue placeholder={loadingManagers ? "Yükleniyor..." : "Yönetici Seçin"} />
+                            <SelectValue placeholder="Yönetici Seçin" />
                           </div>
                         </SelectTrigger>
                         <SelectContent>
-                          {managers && managers.length > 0 ? (
-                            managers.map((m: any) => (
+                          {localPersonnel && localPersonnel.length > 0 ? (
+                            localPersonnel.map((m: any) => (
                               <SelectItem key={m.id} value={m.id}>
                                 <div className="flex flex-col text-left py-0.5">
                                   <span className="font-bold text-slate-700 leading-tight">{m.name} {m.surname}</span>
@@ -475,11 +642,11 @@ export default function BranchesPage() {
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-1.5">
                         <Label className="text-[11px] font-bold text-slate-500 uppercase">Açılış Saati</Label>
-                        <Input type="time" defaultValue="08:00" className="rounded-xl border-slate-200 h-10 text-sm bg-white" />
+                        <Input {...TIME_INPUT_PROPS} defaultValue="08:00" className="rounded-xl border-slate-200 h-10 text-sm bg-white" />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-[11px] font-bold text-slate-500 uppercase">Kapanış Saati</Label>
-                        <Input type="time" defaultValue="18:00" className="rounded-xl border-slate-200 h-10 text-sm bg-white" />
+                        <Input {...TIME_INPUT_PROPS} defaultValue="18:00" className="rounded-xl border-slate-200 h-10 text-sm bg-white" />
                       </div>
                     </div>
                     
@@ -564,12 +731,21 @@ export default function BranchesPage() {
                 onClick={handleSave}
                 disabled={isSubmitting}
               >
-                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Şubeyi Kaydet"}
+                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : (editingBranchId ? "Kaydet" : "Şubeyi Kaydet")}
               </Button>
             </div>
           </div>
         </SheetContent>
       </Sheet>
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border border-slate-100 bg-white rounded-xl px-4 py-3">
+      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
+      <span className="text-sm font-semibold text-slate-700 text-right">{value}</span>
     </div>
   )
 }

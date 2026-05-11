@@ -58,74 +58,157 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useFirestore, useCollection, useUser } from "@/firebase"
-import { 
-  collection, 
-  query, 
-  orderBy, 
-  where, 
-  doc, 
-  updateDoc, 
-  addDoc, 
-  serverTimestamp,
-  Timestamp 
-} from "firebase/firestore"
-import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const t = translations.common;
 const l = translations.leaves;
+const LEAVE_REQUESTS_KEY = "app_leave_requests";
+const PERSONNEL_KEY = "app_personnel";
+
+const LEAVE_TYPES = [
+  { value: "Annual", label: "Yıllık İzin" },
+  { value: "Sick", label: "Hastalık İzni" },
+  { value: "Excused", label: "Mazeret İzni" },
+  { value: "Unpaid", label: "Ücretsiz İzin" },
+  { value: "Hourly", label: "Saatlik İzin" },
+];
+
+const readLocalArray = (key: string) => {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const getPersonnelName = (person: any) => {
+  return (person?.fullName || [person?.name, person?.surname].filter(Boolean).join(" ") || [person?.firstName, person?.lastName].filter(Boolean).join(" ") || person?.personnelCode || "Personel").toString();
+};
+
+const getLeaveTypeLabel = (type: string) => {
+  const normalized: Record<string, string> = {
+    annual: "Annual",
+    sick: "Sick",
+    excuse: "Excused",
+    excused: "Excused",
+    unpaid: "Unpaid",
+    hourly: "Hourly",
+  };
+  const key = normalized[type] || type;
+  return l.types[key as keyof typeof l.types] || LEAVE_TYPES.find((item) => item.value === key)?.label || type;
+};
+
+const getLeaveTypeKey = (type: string) => {
+  const normalized: Record<string, string> = {
+    annual: "Annual",
+    sick: "Sick",
+    excuse: "Excused",
+    excused: "Excused",
+    unpaid: "Unpaid",
+    hourly: "Hourly",
+  };
+  return normalized[type] || type;
+};
+
+const getStatusKey = (status: string) => {
+  const normalized: Record<string, string> = {
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    cancelled: "Cancelled",
+  };
+  return normalized[status] || status;
+};
+
+const calculateLeaveDays = (startDate?: string, endDate?: string) => {
+  if (!startDate || !endDate) return 0;
+  try {
+    return Math.max(0, differenceInDays(parseISO(endDate), parseISO(startDate)) + 1);
+  } catch {
+    return 0;
+  }
+};
 
 export default function LeaveRequestsPage() {
-  const db = useFirestore()
-  const { user } = useUser()
   const { toast } = useToast()
   
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedRequest, setSelectedRequest] = React.useState<any>(null)
+  const [isCreateOpen, setIsCreateOpen] = React.useState(false)
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
   const [isRejectOpen, setIsRejectOpen] = React.useState(false)
   const [isApproveOpen, setIsApproveOpen] = React.useState(false)
   const [rejectionReason, setRejectionReason] = React.useState("")
   const [loadingAction, setLoadingAction] = React.useState(false)
+  const [loadingLeaves, setLoadingLeaves] = React.useState(true)
+  const [rawRequests, setRawRequests] = React.useState<any[]>([])
+  const [personnel, setPersonnel] = React.useState<any[]>([])
+  const [formData, setFormData] = React.useState({
+    personnelId: "",
+    leaveType: "",
+    startDate: "",
+    endDate: "",
+    notes: "",
+  })
+  const [formErrors, setFormErrors] = React.useState<Record<string, string>>({})
 
-  // Real-time queries
-  const leavesQuery = React.useMemo(() => {
-    if (!db) return null;
-    return query(collection(db, "leave_requests"), orderBy("createdAt", "desc"));
-  }, [db]);
+  const loadLocalData = React.useCallback(() => {
+    setRawRequests(readLocalArray(LEAVE_REQUESTS_KEY));
+    setPersonnel(readLocalArray(PERSONNEL_KEY).filter((person: any) => !person?.isDeleted));
+    setLoadingLeaves(false);
+  }, []);
 
-  const { data: rawRequests, loading: loadingLeaves } = useCollection(leavesQuery);
-  const { data: personnel } = useCollection(db ? collection(db, "personnel") : null);
+  React.useEffect(() => {
+    loadLocalData();
+  }, [loadLocalData]);
+
+  const persistRequests = React.useCallback((next: any[]) => {
+    localStorage.setItem(LEAVE_REQUESTS_KEY, JSON.stringify(next));
+    setRawRequests(next);
+  }, []);
 
   // Merge request data with personnel data
   const mergedRequests = React.useMemo(() => {
-    if (!rawRequests || !personnel) return [];
     return rawRequests.map(req => ({
       ...req,
-      person: personnel.find(p => p.id === req.personnelId)
+      status: getStatusKey(req.status || "Pending"),
+      personnelId: req.personnelId || req.personId,
+      leaveType: getLeaveTypeKey(req.leaveType || ""),
+      notes: req.notes || req.description || "",
+      totalDays: req.totalDays || calculateLeaveDays(req.startDate, req.endDate),
+      person: personnel.find(p => p.id === (req.personnelId || req.personId))
     })).filter(req => 
       !searchTerm || 
-      req.person?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.person?.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getPersonnelName(req.person).toLowerCase().includes(searchTerm.toLowerCase()) ||
       req.person?.registryNo?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [rawRequests, personnel, searchTerm]);
 
   // KPI Calculations
   const stats = React.useMemo(() => {
-    const pending = mergedRequests.filter(r => r.status === "Pending").length;
-    const approved = mergedRequests.filter(r => r.status === "Approved").length;
-    const rejected = mergedRequests.filter(r => r.status === "Rejected").length;
+    const pending = mergedRequests.filter(r => getStatusKey(r.status) === "Pending").length;
+    const approved = mergedRequests.filter(r => getStatusKey(r.status) === "Approved").length;
+    const rejected = mergedRequests.filter(r => getStatusKey(r.status) === "Rejected").length;
     const today = format(new Date(), "yyyy-MM-dd");
     const onLeaveToday = mergedRequests.filter(r => 
-      r.status === "Approved" && 
+      getStatusKey(r.status) === "Approved" &&
       today >= r.startDate && 
       today <= r.endDate
     ).length;
@@ -133,25 +216,70 @@ export default function LeaveRequestsPage() {
     return { pending, approved, rejected, onLeaveToday };
   }, [mergedRequests]);
 
-  const handleUpdateStatus = async (requestId: string, status: string, reason?: string) => {
-    if (!db) return;
+  const resetForm = () => {
+    setFormData({
+      personnelId: "",
+      leaveType: "",
+      startDate: "",
+      endDate: "",
+      notes: "",
+    });
+    setFormErrors({});
+  };
+
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    if (!formData.personnelId) errors.personnelId = "Personel seçiniz.";
+    if (!formData.leaveType) errors.leaveType = "İzin türü seçiniz.";
+    if (!formData.startDate) errors.startDate = "Başlangıç tarihi seçiniz.";
+    if (!formData.endDate) errors.endDate = "Bitiş tarihi seçiniz.";
+    if (formData.startDate && formData.endDate && formData.endDate < formData.startDate) {
+      errors.endDate = "Bitiş tarihi başlangıçtan önce olamaz.";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateLeave = () => {
+    if (!validateForm()) return;
+
+    const createdAt = Date.now();
+    const nextRequest = {
+      id: `leave-${createdAt}-${Math.random().toString(16).slice(2)}`,
+      personnelId: formData.personnelId,
+      leaveType: formData.leaveType,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      totalDays: calculateLeaveDays(formData.startDate, formData.endDate),
+      notes: formData.notes,
+      status: "Pending",
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    persistRequests([nextRequest, ...rawRequests]);
+    setIsCreateOpen(false);
+    resetForm();
+    toast({
+      title: "Başarılı",
+      description: "İzin talebi oluşturuldu.",
+    });
+  };
+
+  const handleUpdateStatus = (requestId: string, status: string, reason?: string) => {
     setLoadingAction(true);
     try {
-      const requestRef = doc(db, "leave_requests", requestId);
-      await updateDoc(requestRef, {
-        status,
-        approvedBy: user?.email || "System",
-        rejectionReason: reason || "",
-        updatedAt: serverTimestamp()
+      const next = rawRequests.map((request) => {
+        if (request.id !== requestId) return request;
+        return {
+          ...request,
+          status,
+          rejectionReason: reason || "",
+          updatedAt: Date.now(),
+        };
       });
-
-      // Audit Log
-      await addDoc(collection(db, "audit_logs"), {
-        action: `Leave ${status}`,
-        requestId,
-        performedBy: user?.email || "System",
-        timestamp: serverTimestamp()
-      });
+      persistRequests(next);
 
       toast({
         title: t.save,
@@ -187,7 +315,13 @@ export default function LeaveRequestsPage() {
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Excel
           </Button>
-          <Button className="h-10 rounded-xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20">
+          <Button
+            className="h-10 rounded-xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20"
+            onClick={() => {
+              resetForm();
+              setIsCreateOpen(true);
+            }}
+          >
             <Plus className="mr-2 h-4 w-4" />
             {l.newRequest}
           </Button>
@@ -262,14 +396,14 @@ export default function LeaveRequestsPage() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <span className="font-bold text-primary">{req.person?.name} {req.person?.surname}</span>
+                          <span className="font-bold text-primary">{getPersonnelName(req.person)}</span>
                           <span className="text-[10px] font-mono text-slate-400">{req.person?.registryNo || "-"}</span>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="font-bold border-slate-200">
-                        {l.types[req.leaveType as keyof typeof l.types] || req.leaveType}
+                        {getLeaveTypeLabel(req.leaveType)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm font-medium">{req.startDate || "-"}</TableCell>
@@ -290,7 +424,7 @@ export default function LeaveRequestsPage() {
                         <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
                           <DropdownMenuItem onClick={() => { setSelectedRequest(req); setIsDetailOpen(true); }}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
-                            {l.viewDetails || "Detayları Gör"}
+                            Detayları Gör
                           </DropdownMenuItem>
                           {req.status === "Pending" && (
                             <>
@@ -315,6 +449,127 @@ export default function LeaveRequestsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Create Leave Modal */}
+      <Dialog
+        open={isCreateOpen}
+        onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="sm:max-w-[620px] rounded-[32px] p-0 overflow-hidden border-none">
+          <DialogHeader className="p-8 bg-primary text-white">
+            <DialogTitle className="text-2xl font-bold">Yeni İzin Talebi</DialogTitle>
+            <DialogDescription className="text-white/80">Personel için yeni izin talebi oluşturun.</DialogDescription>
+          </DialogHeader>
+          <div className="p-8 space-y-5">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold text-slate-500 uppercase">Personel seç</Label>
+              <Select
+                value={formData.personnelId}
+                onValueChange={(value) => {
+                  setFormData((prev) => ({ ...prev, personnelId: value }));
+                  if (formErrors.personnelId) setFormErrors((prev) => ({ ...prev, personnelId: "" }));
+                }}
+              >
+                <SelectTrigger className={cn("rounded-xl h-11 border-slate-200 bg-white", formErrors.personnelId && "border-red-500")}>
+                  <SelectValue placeholder="Personel seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {personnel.length > 0 ? (
+                    personnel.map((person) => (
+                      <SelectItem key={person.id} value={person.id}>
+                        {getPersonnelName(person)}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-personnel" disabled>Kayıtlı personel yok</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              {formErrors.personnelId && <p className="text-xs font-medium text-red-600">{formErrors.personnelId}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold text-slate-500 uppercase">İzin türü</Label>
+              <Select
+                value={formData.leaveType}
+                onValueChange={(value) => {
+                  setFormData((prev) => ({ ...prev, leaveType: value }));
+                  if (formErrors.leaveType) setFormErrors((prev) => ({ ...prev, leaveType: "" }));
+                }}
+              >
+                <SelectTrigger className={cn("rounded-xl h-11 border-slate-200 bg-white", formErrors.leaveType && "border-red-500")}>
+                  <SelectValue placeholder="İzin türü seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEAVE_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formErrors.leaveType && <p className="text-xs font-medium text-red-600">{formErrors.leaveType}</p>}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-slate-500 uppercase">Başlangıç tarihi</Label>
+                <Input
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, startDate: e.target.value }));
+                    if (formErrors.startDate) setFormErrors((prev) => ({ ...prev, startDate: "" }));
+                  }}
+                  className={cn("rounded-xl h-11 border-slate-200", formErrors.startDate && "border-red-500")}
+                />
+                {formErrors.startDate && <p className="text-xs font-medium text-red-600">{formErrors.startDate}</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-bold text-slate-500 uppercase">Bitiş tarihi</Label>
+                <Input
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => {
+                    setFormData((prev) => ({ ...prev, endDate: e.target.value }));
+                    if (formErrors.endDate) setFormErrors((prev) => ({ ...prev, endDate: "" }));
+                  }}
+                  className={cn("rounded-xl h-11 border-slate-200", formErrors.endDate && "border-red-500")}
+                />
+                {formErrors.endDate && <p className="text-xs font-medium text-red-600">{formErrors.endDate}</p>}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold text-slate-500 uppercase">Açıklama</Label>
+              <Textarea
+                placeholder="Açıklama girin..."
+                value={formData.notes}
+                onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                className="rounded-xl border-slate-200 min-h-[100px] resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter className="p-8 pt-0 flex gap-3">
+            <Button
+              variant="ghost"
+              className="rounded-xl"
+              onClick={() => {
+                setIsCreateOpen(false);
+                resetForm();
+              }}
+            >
+              Vazgeç
+            </Button>
+            <Button className="rounded-xl bg-primary hover:bg-primary/90" onClick={handleCreateLeave}>
+              Kaydet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Detail Panel */}
       <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>

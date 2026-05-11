@@ -13,23 +13,16 @@ import {
   ClipboardList,
   FileText,
   Bell,
-  Building2,
-  Users2,
-  Briefcase,
   ShieldCheck,
-  QrCode,
-  Lock,
-  Smartphone,
-  MapPin,
   Fingerprint,
   History,
   BarChart3,
-  FileSpreadsheet,
-  UserX,
   BrainCircuit,
-  Building,
   Settings2,
-  LogOut
+  LogOut,
+  ChevronDown,
+  Network,
+  KeyRound
 } from "lucide-react"
 
 import {
@@ -45,6 +38,7 @@ import {
   SidebarMenuItem,
   useSidebar
 } from "@/components/ui/sidebar"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { translations } from "@/lib/translations"
@@ -55,67 +49,63 @@ const c = translations.common;
 
 const navigation = [
   {
-    title: s.anaMenu,
+    title: "ANA MENÜ",
     items: [
-      { title: c.dashboard, url: "/dashboard", icon: LayoutDashboard },
+      { title: "Ana Panel", url: "/dashboard", icon: LayoutDashboard },
     ],
   },
   {
-    title: s.operasyon,
+    title: "OPERASYON",
     items: [
-      { title: s.personnelManagement, url: "/personnel", icon: Users },
-      { title: c.attendance, url: "/attendance", icon: Clock },
-      { title: s.liveAttendance, url: "/live", icon: Activity },
-      { title: c.shifts, url: "/shifts", icon: CalendarClock },
-      { title: s.breakRecords, url: "/breaks", icon: Coffee },
+      { title: "Personel Yönetimi", url: "/personnel", icon: Users },
+      { title: "Giriş / Çıkış Kayıtları", url: "/attendance", icon: Clock },
+      { title: "Canlı İçeride Listesi", url: "/live", icon: Activity },
+      { title: "Vardiya Yönetimi", url: "/shifts", icon: CalendarClock },
+      { title: "Mola Kayıtları", url: "/breaks", icon: Coffee },
     ],
   },
   {
-    title: s.talepler,
+    title: "TALEPLER",
     items: [
-      { title: s.leaveRequests, url: "/leaves", icon: ClipboardList },
-      { title: s.advanceRequests, url: "/advances", icon: FileText },
-      { title: s.pendingApprovals, url: "/approvals", icon: Bell, badge: "8" },
+      { title: "İzin Talepleri", url: "/leaves", icon: ClipboardList },
+      { title: "Avans Talepleri", url: "/advances", icon: FileText },
+      { title: "Onay Bekleyenler", url: "/approvals", icon: Bell, badge: "8" },
     ],
   },
   {
-    title: s.organizasyon,
+    title: "ORGANİZASYON",
     items: [
-      { title: c.branches, url: "/branches", icon: Building2 },
-      { title: s.depts, url: "/departments", icon: Users2 },
-      { title: s.positions, url: "/positions", icon: Briefcase },
-      { title: s.roles, url: "/roles", icon: ShieldCheck },
-      { title: s.qrPoints, url: "/qr-points", icon: QrCode },
+      { title: "Organizasyon Yapısı", url: "/organization", icon: Network, activePaths: ["/organization", "/branches", "/departments", "/positions"] },
+      { title: "Yetki & Erişim Yönetimi", url: "/access-management", icon: KeyRound, activePaths: ["/access-management", "/roles", "/access-control"] },
+      { title: "Doğrulama Kuralları", url: "/verification", icon: ShieldCheck, activePaths: ["/verification", "/qr-points", "/device-ids", "/location-rules"] },
     ],
   },
   {
-    title: s.guvenlik,
+    title: "GÜVENLİK",
     items: [
-      { title: c.accessControl, url: "/access-control", icon: Lock },
-      { title: s.deviceIdManagement, url: "/device-ids", icon: Smartphone },
-      { title: s.locationRules, url: "/location-rules", icon: MapPin },
-      { title: s.kvkkConsent, url: "/kvkk", icon: Fingerprint },
-      { title: s.auditLogs, url: "/audit", icon: History },
+      { title: "KVKK Onayları", url: "/kvkk", icon: Fingerprint },
+      { title: "Denetim Logları", url: "/audit", icon: History },
     ],
   },
   {
-    title: s.analizRapor,
+    title: "ANALİZ & RAPOR",
     items: [
-      { title: c.reports, url: "/reports", icon: BarChart3 },
-      { title: s.overtimeReport, url: "/reports/overtime", icon: FileSpreadsheet },
-      { title: s.absenceReport, url: "/reports/absence", icon: UserX },
-      { title: c.aiInsights, url: "/ai-insights", icon: BrainCircuit },
+      { title: "Raporlar", url: "/reports", icon: BarChart3, activePaths: ["/reports", "/reports/overtime", "/reports/absence"] },
+      { title: "Yapay Zekâ Analizleri", url: "/ai-insights", icon: BrainCircuit },
     ],
   },
   {
-    title: s.sistem,
+    title: "SİSTEM",
     items: [
-      { title: s.companyInfo, url: "/settings/company", icon: Building },
-      { title: s.notificationSettings, url: "/settings/notifications", icon: Bell },
-      { title: c.settings, url: "/settings", icon: Settings2 },
+      { title: "Ayarlar", url: "/settings", icon: Settings2, activePaths: ["/settings", "/settings/company", "/settings/notifications"] },
     ],
   },
 ]
+
+function isItemActive(pathname: string, item: { url: string; activePaths?: string[] }) {
+  const paths = item.activePaths || [item.url]
+  return paths.some((path) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))
+}
 
 function EvyaparLogo() {
   return (
@@ -148,13 +138,24 @@ function EvyaparLogo() {
 export function MainSidebar() {
   const pathname = usePathname()
   const { state } = useSidebar()
+  const activeGroups = React.useMemo(() => {
+    return navigation.reduce<Record<string, boolean>>((acc, group) => {
+      acc[group.title] = group.items.some((item) => isItemActive(pathname, item))
+      return acc
+    }, {})
+  }, [pathname])
+  const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
+
+  React.useEffect(() => {
+    setOpenGroups((current) => ({ ...current, ...activeGroups }))
+  }, [activeGroups])
 
   return (
-    <Sidebar 
-      collapsible="icon" 
-      className="border-none w-[260px] bg-gradient-to-b from-[#071A2F] to-[#0B2340] text-slate-300"
+    <Sidebar
+      collapsible="icon"
+      className="border-none w-[260px] bg-[radial-gradient(circle_at_20%_0%,rgba(99,102,241,0.28),transparent_28rem),linear-gradient(180deg,#050816_0%,#071426_48%,#020617_100%)] text-slate-300 shadow-2xl shadow-slate-950/30"
     >
-      <SidebarHeader className="h-[72px] flex flex-row items-center px-4 border-b border-white/5 group">
+      <SidebarHeader className="h-[78px] flex flex-row items-center px-4 border-b border-white/10 group">
         <Link href="/dashboard" className="flex items-center gap-3 w-full">
           <EvyaparLogo />
           <div className="flex flex-col min-w-0 group-data-[collapsible=icon]:hidden animate-in fade-in slide-in-from-left-2 duration-300">
@@ -170,49 +171,68 @@ export function MainSidebar() {
       
       <SidebarContent className="px-3 py-4 custom-scrollbar">
         {navigation.map((group) => (
-          <SidebarGroup key={group.title} className="mb-4 last:mb-0 p-0">
-            <SidebarGroupLabel className="text-[#6F839B] text-[10px] font-extrabold tracking-[1.5px] px-2 mb-2 uppercase h-auto group-data-[collapsible=icon]:hidden">
-              {group.title}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === item.url}
-                      tooltip={item.title}
-                      className={cn(
-                        "h-[40px] rounded-lg px-3 transition-all duration-200 group-data-[collapsible=icon]:justify-center",
-                        pathname === item.url 
-                          ? "bg-[#123B66] text-white font-semibold relative before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:bg-[#EF4444] before:rounded-full" 
-                          : "text-[#A8B8CC] hover:bg-[#102F52] hover:text-[#E8F1FF]"
-                      )}
-                    >
-                      <Link href={item.url} className="flex items-center w-full">
-                        <item.icon className={cn("w-[18px] h-[18px] shrink-0", pathname === item.url ? "text-[#EF4444]" : "text-inherit")} />
-                        <span className="ml-3 truncate text-[13px] group-data-[collapsible=icon]:hidden">{item.title}</span>
-                        {item.badge && (
-                          <Badge className="ml-auto bg-[#EF4444] hover:bg-[#EF4444] text-white text-[9px] px-1.5 h-4 min-w-[18px] border-none group-data-[collapsible=icon]:hidden shadow-sm">
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <Collapsible
+            key={group.title}
+            open={state === "collapsed" ? true : openGroups[group.title] ?? activeGroups[group.title] ?? group.title === "ANA MENÜ"}
+            onOpenChange={(open) => setOpenGroups((current) => ({ ...current, [group.title]: open }))}
+          >
+            <SidebarGroup className="mb-2.5 last:mb-0 p-0">
+              <CollapsibleTrigger asChild>
+                <SidebarGroupLabel className={cn(
+                  "group/category flex h-8 cursor-pointer items-center justify-between rounded-xl px-2 text-[10px] font-extrabold uppercase tracking-[1.6px] transition-all",
+                  activeGroups[group.title] ? "text-sky-200 bg-white/[0.05]" : "text-slate-500 hover:bg-white/[0.04] hover:text-slate-300",
+                  "group-data-[collapsible=icon]:hidden"
+                )}>
+                  <span>{group.title}</span>
+                  <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-300", (openGroups[group.title] ?? activeGroups[group.title]) && "rotate-180")} />
+                </SidebarGroupLabel>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:animate-in data-[state=open]:fade-in">
+                <SidebarGroupContent>
+                  <SidebarMenu className="gap-1">
+                    {group.items.map((item) => {
+                      const active = isItemActive(pathname, item)
+                      const badge = "badge" in item ? item.badge : undefined
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={active}
+                            tooltip={item.title}
+                            className={cn(
+                              "h-[40px] rounded-xl px-3 transition-all duration-300 group-data-[collapsible=icon]:justify-center",
+                              active
+                                ? "bg-white/12 text-white font-semibold shadow-[0_12px_35px_-18px_rgba(99,102,241,0.9)] ring-1 ring-white/10 relative before:absolute before:left-0 before:top-2.5 before:bottom-2.5 before:w-[3px] before:bg-gradient-to-b before:from-sky-400 before:to-violet-400 before:rounded-full after:absolute after:inset-0 after:rounded-xl after:bg-gradient-to-r after:from-indigo-500/15 after:to-sky-500/10 after:pointer-events-none"
+                                : "text-slate-400 hover:bg-white/8 hover:text-white hover:translate-x-0.5"
+                            )}
+                          >
+                            <Link href={item.url} className="flex items-center w-full">
+                              <item.icon className={cn("w-[18px] h-[18px] shrink-0 transition-colors", active ? "text-sky-300 drop-shadow" : "text-inherit")} />
+                              <span className="ml-3 truncate text-[13px] group-data-[collapsible=icon]:hidden">{item.title}</span>
+                              {badge && (
+                                <Badge className="ml-auto bg-gradient-to-r from-rose-500 to-orange-400 hover:from-rose-500 hover:to-orange-400 text-white text-[9px] px-1.5 h-4 min-w-[18px] border-none group-data-[collapsible=icon]:hidden shadow-lg shadow-rose-500/25">
+                                  {badge}
+                                </Badge>
+                              )}
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </SidebarGroup>
+          </Collapsible>
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="p-3 bg-[#051525]/40 border-t border-white/5">
+      <SidebarFooter className="p-3 bg-white/[0.03] border-t border-white/10">
         <div className="flex flex-col gap-2.5 group-data-[collapsible=icon]:items-center">
-          <div className="flex items-center gap-2.5 p-1.5 rounded-xl bg-white/5 border border-white/5 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:border-none">
-            <Avatar className="h-8 w-8 border border-white/10 shrink-0 shadow-sm">
+          <div className="flex items-center gap-2.5 p-2 rounded-2xl bg-white/8 border border-white/10 shadow-inner shadow-white/5 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:border-none">
+            <Avatar className="h-9 w-9 border border-white/15 shrink-0 shadow-lg shadow-black/20">
               <AvatarImage src="https://picsum.photos/seed/admin/200/200" />
-              <AvatarFallback className="bg-[#123B66] text-white text-[10px] font-bold">İK</AvatarFallback>
+              <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-sky-500 text-white text-[10px] font-bold">İK</AvatarFallback>
             </Avatar>
             <div className="flex flex-col min-w-0 group-data-[collapsible=icon]:hidden">
               <span className="text-[13px] font-bold text-white truncate leading-none">İK Yöneticisi</span>
@@ -222,7 +242,7 @@ export function MainSidebar() {
               </div>
             </div>
           </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 text-[#EF4444] hover:text-red-400 text-[13px] font-bold transition-colors group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center">
+          <button className="flex items-center gap-2 px-3 py-1.5 text-rose-300 hover:text-white hover:bg-white/8 rounded-xl text-[13px] font-bold transition-all group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center">
             <LogOut className="w-4 h-4 shrink-0" />
             <span className="group-data-[collapsible=icon]:hidden">{c.logout}</span>
           </button>

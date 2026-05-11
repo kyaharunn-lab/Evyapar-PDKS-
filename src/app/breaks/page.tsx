@@ -17,10 +17,10 @@ import {
   Eye,
   LogOut,
   Calendar,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Trash2
 } from "lucide-react"
-import { format, differenceInMinutes, differenceInSeconds } from "date-fns"
-import { tr } from "date-fns/locale"
+import { differenceInSeconds } from "date-fns"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,24 +47,76 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useFirestore, useCollection } from "@/firebase"
-import { collection, query, where, orderBy, Timestamp, doc, updateDoc, serverTimestamp } from "firebase/firestore"
-import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
+import { useToast } from "@/hooks/use-toast"
+import { TIME_INPUT_PROPS, formatTimeTR, getCurrentTimeInputValueTR, normalizeTimeInputTR } from "@/lib/date-time"
 
 const b = translations.breaks;
 const t = translations.common;
+const BREAKS_STORAGE_KEY = "app_breaks";
+const PERSONNEL_STORAGE_KEY = "app_personnel";
+const BRANCHES_STORAGE_KEYS = ["app_branches", "evyapar_pdks_branches_local_v1"];
+
+const readLocalArray = (keys: string[]) => {
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // ignore corrupted local data
+    }
+  }
+  return [];
+};
+
+const getPersonnelName = (person: any) => {
+  return (person?.fullName || [person?.name, person?.surname].filter(Boolean).join(" ") || person?.personnelCode || "Personel").toString();
+};
+
+const getBranchName = (branch: any) => {
+  return (branch?.branchName || branch?.name || branch?.branchCode || "Şube").toString();
+};
 
 export default function BreakLogsPage() {
-  const db = useFirestore()
+  const { toast } = useToast()
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedLog, setSelectedLog] = React.useState<any>(null)
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
+  const [isManualOpen, setIsManualOpen] = React.useState(false)
   const [now, setNow] = React.useState(new Date())
+  const [breakLogs, setBreakLogs] = React.useState<any[]>([])
+  const [personnel, setPersonnel] = React.useState<any[]>([])
+  const [branches, setBranches] = React.useState<any[]>([])
+  const [formData, setFormData] = React.useState({
+    personnelId: "",
+    branchId: "",
+    breakType: "",
+    startTime: getCurrentTimeInputValueTR(),
+    estimatedDuration: "",
+    description: "",
+  })
 
   // Update timer every second
   React.useEffect(() => {
@@ -72,49 +124,61 @@ export default function BreakLogsPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // Today's range
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
+  React.useEffect(() => {
+    setBreakLogs(readLocalArray([BREAKS_STORAGE_KEY]));
+    setPersonnel(readLocalArray([PERSONNEL_STORAGE_KEY]).filter((p: any) => !p?.isDeleted));
+    setBranches(readLocalArray(BRANCHES_STORAGE_KEYS));
+  }, [])
 
-  // Real-time query for today's breaks
-  const breaksQuery = React.useMemo(() => {
-    if (!db) return null;
-    return query(
-      collection(db, "break_logs"),
-      where("createdAt", ">=", Timestamp.fromDate(todayStart)),
-      orderBy("createdAt", "desc")
-    );
-  }, [db]);
+  const persistBreaks = React.useCallback((next: any[]) => {
+    try {
+      localStorage.setItem(BREAKS_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // keep UI updated even if storage is unavailable
+    }
+  }, [])
 
-  const { data: rawLogs, loading: loadingLogs } = useCollection(breaksQuery);
-  const { data: personnel } = useCollection(db ? collection(db, "personnel") : null);
+  const resetForm = React.useCallback(() => {
+    setFormData({
+      personnelId: "",
+      branchId: "",
+      breakType: "",
+      startTime: getCurrentTimeInputValueTR(),
+      estimatedDuration: "",
+      description: "",
+    })
+  }, [])
 
   // Merge log data with personnel data
   const mergedLogs = React.useMemo(() => {
-    if (!rawLogs || !personnel) return [];
-    return rawLogs.map(log => ({
+    return breakLogs.map(log => ({
       ...log,
-      person: personnel.find(p => p.id === log.personnelId)
+      person: personnel.find(p => p.id === log.personnelId),
+      branch: branches.find(branch => (branch?.id || branch?.branchCode) === log.branchId)
     })).filter(log => 
       !searchTerm || 
-      log.person?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.person?.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getPersonnelName(log.person).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getBranchName(log.branch).toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.person?.registryNo?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [rawLogs, personnel, searchTerm]);
+  }, [breakLogs, branches, personnel, searchTerm]);
 
   // KPI Calculations
   const stats = React.useMemo(() => {
     const active = mergedLogs.filter(log => log.status === "Active").length;
     const totalToday = mergedLogs.length;
     const exceeded = mergedLogs.filter(log => log.exceededLimit).length;
+    const totalDuration = mergedLogs.reduce((total, log) => {
+      if (log.status === "Active") return total;
+      return total + Number(log.duration || 0);
+    }, 0);
     
-    return { active, totalToday, exceeded };
+    return { active, totalToday, exceeded, totalDuration };
   }, [mergedLogs]);
 
   const formatElapsedTime = (startTime: any) => {
     if (!startTime) return "00:00";
-    const start = startTime.toDate ? startTime.toDate() : new Date(startTime);
+    const start = new Date(startTime);
     const diff = Math.max(0, differenceInSeconds(now, start));
     const mins = Math.floor(diff / 60);
     const secs = diff % 60;
@@ -123,24 +187,89 @@ export default function BreakLogsPage() {
 
   const getBreakTypeLabel = (type: string) => {
     const types: any = {
-      Lunch: b.types.lunch,
-      Tea: b.types.tea,
-      Smoke: b.types.smoke,
-      Rest: b.types.rest,
+      Lunch: "Yemek",
+      Tea: "Çay",
+      Smoke: "Sigara",
+      Rest: "Dinlenme",
       Tech: b.types.tech,
       Personal: b.types.personal
     };
     return types[type] || type;
   };
 
-  const handleEndBreak = async (logId: string) => {
-    if (!db) return;
-    const logRef = doc(db, "break_logs", logId);
-    updateDoc(logRef, {
-      endTime: serverTimestamp(),
-      status: "Completed",
-      updatedAt: serverTimestamp()
+  const getDurationMinutes = (startTime: string, endTime: string) => {
+    const diff = Math.max(0, differenceInSeconds(new Date(endTime), new Date(startTime)));
+    return Math.ceil(diff / 60);
+  };
+
+  const handleManualSave = () => {
+    if (!formData.personnelId || !formData.breakType || !formData.startTime) {
+      toast({
+        variant: "destructive",
+        title: "Hata",
+        description: "Personel, mola türü ve başlangıç saati zorunludur.",
+      });
+      return;
+    }
+
+    const selectedPerson = personnel.find((p) => p.id === formData.personnelId);
+    const start = new Date();
+    const [hour, minute] = formData.startTime.split(":").map(Number);
+    start.setHours(hour || 0, minute || 0, 0, 0);
+    const createdAt = Date.now();
+    const newBreak = {
+      id: `break-${createdAt}-${Math.random().toString(16).slice(2)}`,
+      personnelId: formData.personnelId,
+      branchId: formData.branchId || selectedPerson?.branchId || "",
+      breakType: formData.breakType,
+      startTime: start.toISOString(),
+      estimatedDuration: formData.estimatedDuration,
+      notes: formData.description,
+      status: "Active",
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    setBreakLogs((prev) => {
+      const next = [newBreak, ...prev];
+      persistBreaks(next);
+      return next;
     });
+
+    setIsManualOpen(false);
+    resetForm();
+    toast({
+      title: "Başarılı",
+      description: "Mola kaydı başlatıldı.",
+    });
+  };
+
+  const handleEndBreak = (logId: string) => {
+    const endedAt = new Date().toISOString();
+    setBreakLogs((prev) => {
+      const next = prev.map((log) => {
+        if (log.id !== logId) return log;
+        return {
+          ...log,
+          endTime: endedAt,
+          duration: getDurationMinutes(log.startTime, endedAt),
+          status: "Completed",
+          updatedAt: Date.now(),
+        };
+      });
+      persistBreaks(next);
+      return next;
+    });
+    toast({ title: "Başarılı", description: "Mola bitirildi." });
+  };
+
+  const handleDeleteBreak = (logId: string) => {
+    setBreakLogs((prev) => {
+      const next = prev.filter((log) => log.id !== logId);
+      persistBreaks(next);
+      return next;
+    });
+    toast({ title: "Başarılı", description: "Mola kaydı silindi." });
   };
 
   return (
@@ -154,11 +283,22 @@ export default function BreakLogsPage() {
           <p className="text-muted-foreground mt-1">{b.description}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="h-10 rounded-xl border-slate-200">
+          <Button
+            variant="outline"
+            className="h-10 rounded-xl border-slate-200"
+            onClick={() => {
+              setBreakLogs(readLocalArray([BREAKS_STORAGE_KEY]));
+              setPersonnel(readLocalArray([PERSONNEL_STORAGE_KEY]).filter((p: any) => !p?.isDeleted));
+              setBranches(readLocalArray(BRANCHES_STORAGE_KEYS));
+            }}
+          >
             <RefreshCcw className="mr-2 h-4 w-4" />
             Yenile
           </Button>
-          <Button className="h-10 rounded-xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20">
+          <Button
+            className="h-10 rounded-xl bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20"
+            onClick={() => setIsManualOpen(true)}
+          >
             {b.manualStart}
           </Button>
         </div>
@@ -168,7 +308,7 @@ export default function BreakLogsPage() {
         <KPICard title={b.onBreak} value={stats.active} icon={Coffee} color="text-yellow-600" bg="bg-yellow-50" />
         <KPICard title={b.totalToday} value={stats.totalToday} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
         <KPICard title={b.exceeded} value={stats.exceeded} icon={AlertCircle} color="text-accent" bg="bg-red-50" />
-        <KPICard title="Bugünkü Toplam Süre" value="14.2 sa" icon={Clock} color="text-primary" bg="bg-primary/5" />
+        <KPICard title="Bugünkü Toplam Süre" value={`${stats.totalDuration} dk`} icon={Clock} color="text-primary" bg="bg-primary/5" />
       </div>
 
       <Card className="premium-card overflow-hidden">
@@ -196,11 +336,7 @@ export default function BreakLogsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {loadingLogs ? (
-            <div className="p-6 space-y-4">
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
-            </div>
-          ) : mergedLogs.length === 0 ? (
+          {mergedLogs.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-20 text-center">
               <div className="bg-secondary/50 p-6 rounded-full mb-6">
                 <Coffee className="h-12 w-12 text-muted-foreground" />
@@ -213,6 +349,7 @@ export default function BreakLogsPage() {
               <TableHeader className="enterprise-table-header">
                 <TableRow>
                   <TableHead className="pl-6">{t.personnel}</TableHead>
+                  <TableHead>Şube</TableHead>
                   <TableHead>{b.breakType}</TableHead>
                   <TableHead>{b.startTime}</TableHead>
                   <TableHead>{b.elapsed}</TableHead>
@@ -232,10 +369,13 @@ export default function BreakLogsPage() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <span className="font-bold text-primary">{log.person?.name} {log.person?.surname}</span>
+                          <span className="font-bold text-primary">{getPersonnelName(log.person)}</span>
                           <span className="text-[10px] font-mono text-slate-400">{log.person?.registryNo || "-"}</span>
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-semibold text-primary">{log.branch ? getBranchName(log.branch) : "-"}</span>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="font-bold border-slate-200">
@@ -245,7 +385,7 @@ export default function BreakLogsPage() {
                     <TableCell>
                       <div className="flex items-center text-sm font-medium">
                         <Clock className="mr-2 h-3.5 w-3.5 text-slate-400" />
-                        {log.startTime?.toDate ? format(log.startTime.toDate(), "HH:mm") : "-"}
+                        {formatTimeTR(log.startTime)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -281,6 +421,11 @@ export default function BreakLogsPage() {
                               {b.manualEnd}
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-accent" onClick={() => handleDeleteBreak(log.id)}>
+                            <Trash2 className="mr-3 h-4 w-4" />
+                            Sil
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -291,6 +436,137 @@ export default function BreakLogsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Manual Break Modal */}
+      <Dialog
+        open={isManualOpen}
+        onOpenChange={(open) => {
+          setIsManualOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="sm:max-w-[640px] p-0 border-none rounded-[28px] overflow-hidden">
+          <DialogHeader className="p-8 bg-primary text-white">
+            <DialogTitle className="text-2xl font-extrabold">Manuel Mola Başlat</DialogTitle>
+            <DialogDescription className="text-white/60">Personel için manuel mola kaydı oluşturun.</DialogDescription>
+          </DialogHeader>
+          <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Personel seç</label>
+              <Select
+                value={formData.personnelId}
+                onValueChange={(value) => {
+                  const selectedPerson = personnel.find((p) => p.id === value);
+                  setFormData((prev) => ({
+                    ...prev,
+                    personnelId: value,
+                    branchId: prev.branchId || selectedPerson?.branchId || "",
+                  }));
+                }}
+              >
+                <SelectTrigger className="rounded-xl border-slate-200 bg-white">
+                  <SelectValue placeholder="Personel seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {personnel.length > 0 ? (
+                    personnel.map((person) => (
+                      <SelectItem key={person.id} value={person.id}>
+                        {getPersonnelName(person)}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-personnel" disabled>Kayıtlı personel yok</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Şube seç</label>
+              <Select value={formData.branchId} onValueChange={(value) => setFormData((prev) => ({ ...prev, branchId: value }))}>
+                <SelectTrigger className="rounded-xl border-slate-200 bg-white">
+                  <SelectValue placeholder="Şube seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.length > 0 ? (
+                    branches.map((branch) => {
+                      const value = (branch?.id || branch?.branchCode || "").toString();
+                      if (!value) return null;
+                      return (
+                        <SelectItem key={value} value={value}>
+                          {getBranchName(branch)}
+                        </SelectItem>
+                      );
+                    })
+                  ) : (
+                    <SelectItem value="no-branches" disabled>Kayıtlı şube yok</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Mola türü</label>
+              <Select value={formData.breakType} onValueChange={(value) => setFormData((prev) => ({ ...prev, breakType: value }))}>
+                <SelectTrigger className="rounded-xl border-slate-200 bg-white">
+                  <SelectValue placeholder="Mola türü seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Lunch">Yemek</SelectItem>
+                  <SelectItem value="Tea">Çay</SelectItem>
+                  <SelectItem value="Smoke">Sigara</SelectItem>
+                  <SelectItem value="Rest">Dinlenme</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Başlangıç saati</label>
+              <Input
+                {...TIME_INPUT_PROPS}
+                className="rounded-xl border-slate-200"
+                value={formData.startTime}
+                onChange={(e) => setFormData((prev) => ({ ...prev, startTime: normalizeTimeInputTR(e.target.value) }))}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Tahmini süre</label>
+              <Input
+                type="number"
+                min="1"
+                placeholder="Dakika"
+                className="rounded-xl border-slate-200"
+                value={formData.estimatedDuration}
+                onChange={(e) => setFormData((prev) => ({ ...prev, estimatedDuration: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-1.5 md:col-span-2">
+              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Açıklama</label>
+              <Textarea
+                placeholder="Açıklama girin..."
+                className="rounded-xl border-slate-200 min-h-[90px] resize-none"
+                value={formData.description}
+                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter className="p-8 bg-slate-50/50 flex gap-3">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsManualOpen(false);
+                resetForm();
+              }}
+              className="rounded-xl"
+            >
+              Vazgeç
+            </Button>
+            <Button className="bg-primary hover:bg-primary/90 px-8 rounded-xl" onClick={handleManualSave}>Kaydet</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Detail Panel */}
       <Sheet open={isDetailOpen} onOpenChange={setIsDetailOpen}>
@@ -310,7 +586,7 @@ export default function BreakLogsPage() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="space-y-1">
-                    <h4 className="text-xl font-bold text-primary">{selectedLog.person?.name} {selectedLog.person?.surname}</h4>
+                    <h4 className="text-xl font-bold text-primary">{getPersonnelName(selectedLog.person)}</h4>
                     <p className="text-sm font-medium text-slate-500">{selectedLog.person?.position}</p>
                     <BreakStatusBadge status={selectedLog.status} exceeded={selectedLog.exceededLimit} />
                   </div>
@@ -318,10 +594,10 @@ export default function BreakLogsPage() {
 
                 <div className="grid grid-cols-2 gap-6">
                   <DetailItem label="Mola Türü" value={getBreakTypeLabel(selectedLog.breakType)} />
-                  <DetailItem label="Başlangıç" value={selectedLog.startTime?.toDate ? format(selectedLog.startTime.toDate(), "HH:mm:ss") : "-"} />
-                  <DetailItem label="Bitiş" value={selectedLog.endTime?.toDate ? format(selectedLog.endTime.toDate(), "HH:mm:ss") : "Devam Ediyor..."} />
+                  <DetailItem label="Başlangıç" value={formatTimeTR(selectedLog.startTime, { seconds: true })} />
+                  <DetailItem label="Bitiş" value={selectedLog.endTime ? formatTimeTR(selectedLog.endTime, { seconds: true }) : "Devam Ediyor..."} />
                   <DetailItem label="Toplam Süre" value={selectedLog.status === "Active" ? formatElapsedTime(selectedLog.startTime) : `${selectedLog.duration || 0} dk`} />
-                  <DetailItem label="Şube" value={selectedLog.person?.branchId || "-"} />
+                  <DetailItem label="Şube" value={selectedLog.branch ? getBranchName(selectedLog.branch) : "-"} />
                   <DetailItem label="Departman" value={selectedLog.person?.departmentId || "-"} />
                 </div>
 

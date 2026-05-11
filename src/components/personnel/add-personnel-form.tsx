@@ -19,7 +19,6 @@ import {
   Building,
   Info
 } from "lucide-react"
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from "firebase/firestore"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -40,7 +39,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { useFirestore, useCollection } from "@/firebase"
+import { useFirestore } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
@@ -58,7 +57,7 @@ const personnelSchema = z.object({
   email: z.string().email("Geçerli bir e-posta adresi girin"),
   address: z.string().optional(),
   branchId: z.string().min(1, "Şube seçimi zorunludur"),
-  departmentId: z.string().min(1, "Departman seçimi zorunludur"),
+  departmentId: z.string().optional().or(z.literal("")),
   position: z.string().optional(),
   workType: z.enum(["Office", "Field", "Remote", "Hybrid"]),
   startDate: z.string().optional(),
@@ -101,11 +100,67 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null)
+  const [localBranches, setLocalBranches] = React.useState<any[]>([])
+  const [loadingLocalBranches, setLoadingLocalBranches] = React.useState(true)
+  const [localDepartments, setLocalDepartments] = React.useState<any[]>([])
+  const [loadingLocalDepartments, setLoadingLocalDepartments] = React.useState(true)
+  const [localRoles, setLocalRoles] = React.useState<any[]>([])
+  const [loadingLocalRoles, setLoadingLocalRoles] = React.useState(true)
 
   // Real-time collection data
-  const { data: branches, loading: loadingBranches } = useCollection(db ? collection(db, "branches") : null);
-  const { data: departments, loading: loadingDepts } = useCollection(db ? collection(db, "departments") : null);
-  const { data: roles, loading: loadingRoles } = useCollection(db ? collection(db, "roles") : null);
+  // NOTE: Select/dropdown sources are intentionally localStorage-backed (no Firestore reads).
+
+  const PERSONNEL_STORAGE_KEY = "app_personnel"
+
+  React.useEffect(() => {
+    const readBranchesFromLocalStorage = () => {
+      const keysToTry = ["app_branches", "evyapar_pdks_branches_local_v1"];
+      for (const key of keysToTry) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          // ignore and continue
+        }
+      }
+      return [];
+    };
+
+    try {
+      setLoadingLocalBranches(true);
+      setLocalBranches(readBranchesFromLocalStorage());
+    } finally {
+      setLoadingLocalBranches(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const readFromLocalStorage = (keysToTry: string[]) => {
+      for (const key of keysToTry) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          // ignore and continue
+        }
+      }
+      return [];
+    };
+
+    try {
+      setLoadingLocalDepartments(true);
+      setLoadingLocalRoles(true);
+      setLocalDepartments(readFromLocalStorage(["app_departments", "evyapar_pdks_departments_local_v1"]));
+      setLocalRoles(readFromLocalStorage(["app_roles", "evyapar_pdks_roles_local_v1"]));
+    } finally {
+      setLoadingLocalDepartments(false);
+      setLoadingLocalRoles(false);
+    }
+  }, []);
 
   const form = useForm<PersonnelFormValues>({
     resolver: zodResolver(personnelSchema),
@@ -152,26 +207,18 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
   })
 
   const onSubmit = async (values: PersonnelFormValues) => {
-    if (!db) return
     setIsSubmitting(true)
     try {
-      // Sicil No Kontrolü
-      if (values.registryNo) {
-        const q = query(collection(db, "personnel"), where("registryNo", "==", values.registryNo));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          form.setError("registryNo", { message: "Bu sicil numarası zaten kullanımda" });
-          setIsSubmitting(false);
-          return;
-        }
-      }
-
       const registryNo = values.registryNo || `SICIL-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
       const qrId = values.qrId || `QR-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
       const personnelCode = `EMP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
 
-      await addDoc(collection(db, "personnel"), {
+      const createdAt = Date.now()
+      const newPersonnel = {
+        id: `personnel-${createdAt}-${Math.random().toString(16).slice(2)}`,
         ...values,
+        // keep department optional; normalize empty to undefined
+        departmentId: values.departmentId || undefined,
         registryNo,
         fullName: `${values.name} ${values.surname}`,
         qrId,
@@ -186,11 +233,33 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
           bankName: values.salaryBankName,
           paymentDay: parseInt(values.salaryPaymentDay || "1"),
           advanceLimit: parseFloat(values.salaryAdvanceLimit || "0"),
-          overtimeMultiplier: parseFloat(values.salaryOvertimeMultiplier || "1.5")
+          overtimeMultiplier: parseFloat(values.salaryOvertimeMultiplier || "1.5"),
         },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
+        createdAt,
+        updatedAt: createdAt,
+      }
+
+      let next: any[] = []
+      try {
+        const raw = localStorage.getItem(PERSONNEL_STORAGE_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        next = Array.isArray(parsed) ? parsed : []
+      } catch {
+        next = []
+      }
+
+      // basic uniqueness guard on registryNo if provided/derived
+      if (next.some((p) => p?.registryNo === registryNo)) {
+        form.setError("registryNo", { message: "Bu sicil numarası zaten kullanımda" })
+        return
+      }
+
+      next = [newPersonnel, ...next]
+      try {
+        localStorage.setItem(PERSONNEL_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        // allow flow to continue even if storage is blocked
+      }
 
       toast({
         title: "Başarılı",
@@ -309,14 +378,21 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder={loadingBranches ? "Yükleniyor..." : "Şube seçin"} />
+                              <SelectValue placeholder={loadingLocalBranches ? "Yükleniyor..." : "Şube seçin"} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {branches?.length > 0 ? (
-                              branches.map((b: any) => (
-                                <SelectItem key={b.id} value={b.name || b.id}>{b.name}</SelectItem>
-                              ))
+                            {localBranches?.length > 0 ? (
+                              localBranches.map((b: any) => {
+                                const value = (b?.id || b?.branchCode || "").toString();
+                                const label = (b?.branchName || b?.name || "").toString();
+                                if (!value || !label) return null;
+                                return (
+                                  <SelectItem key={value} value={value}>
+                                    {label}
+                                  </SelectItem>
+                                );
+                              })
                             ) : (
                               <SelectItem value="none" disabled>Kayıtlı şube yok</SelectItem>
                             )}
@@ -335,14 +411,21 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder={loadingDepts ? "Yükleniyor..." : "Departman seçin"} />
+                              <SelectValue placeholder={loadingLocalDepartments ? "Yükleniyor..." : "Departman seçin"} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {departments?.length > 0 ? (
-                              departments.map((d: any) => (
-                                <SelectItem key={d.id} value={d.name || d.id}>{d.name}</SelectItem>
-                              ))
+                            {localDepartments?.length > 0 ? (
+                              localDepartments.map((d: any) => {
+                                const value = (d?.id || d?.departmentCode || d?.code || "").toString();
+                                const label = (d?.departmentName || d?.name || "").toString();
+                                if (!value || !label) return null;
+                                return (
+                                  <SelectItem key={value} value={value}>
+                                    {label}
+                                  </SelectItem>
+                                );
+                              })
                             ) : (
                               <SelectItem value="none" disabled>Kayıtlı departman yok</SelectItem>
                             )}
@@ -381,14 +464,21 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder={loadingRoles ? "Yükleniyor..." : "Rol seçin"} />
+                              <SelectValue placeholder={loadingLocalRoles ? "Yükleniyor..." : "Rol seçin"} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {roles?.length > 0 ? (
-                              roles.map((r: any) => (
-                                <SelectItem key={r.id} value={r.name || r.id}>{r.name}</SelectItem>
-                              ))
+                            {localRoles?.length > 0 ? (
+                              localRoles.map((r: any) => {
+                                const value = (r?.id || r?.roleCode || r?.code || "").toString();
+                                const label = (r?.roleName || r?.name || "").toString();
+                                if (!value || !label) return null;
+                                return (
+                                  <SelectItem key={value} value={value}>
+                                    {label}
+                                  </SelectItem>
+                                );
+                              })
                             ) : (
                               <SelectItem value="none" disabled>Kayıtlı rol yok</SelectItem>
                             )}

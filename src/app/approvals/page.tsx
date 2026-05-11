@@ -78,6 +78,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { formatDateTimeTR } from "@/lib/date-time"
 import { Textarea } from "@/components/ui/textarea"
 
 const t = translations.common;
@@ -114,9 +115,13 @@ export default function ApprovalsCenterPage() {
     return query(collection(db, "advance_requests"), where("status", "==", "Pending"));
   }, [db]);
 
+  const personnelQuery = React.useMemo(() => {
+    return db ? collection(db, "personnel") : null;
+  }, [db]);
+
   const { data: pendingLeaves, loading: loadingLeaves } = useCollection(leaveQuery);
   const { data: pendingAdvances, loading: loadingAdvances } = useCollection(advanceQuery);
-  const { data: personnel } = useCollection(db ? collection(db, "personnel") : null);
+  const { data: personnel } = useCollection(personnelQuery);
 
   // Unified Approvals List
   const allApprovals = React.useMemo(() => {
@@ -431,7 +436,7 @@ export default function ApprovalsCenterPage() {
 
                 <div className="grid grid-cols-2 gap-6">
                   <DetailItem label="Talep Özeti" value={selectedRequest.summary} />
-                  <DetailItem label="Talep Tarihi" value={selectedRequest.createdAt?.toDate ? format(selectedRequest.createdAt.toDate(), "dd.MM.yyyy HH:mm") : "-"} />
+                  <DetailItem label="Talep Tarihi" value={formatDateTimeTR(selectedRequest.createdAt)} />
                   {selectedRequest.type === "Leave" ? (
                     <>
                       <DetailItem label="İzin Türü" value={translations.leaves.types[selectedRequest.leaveType as keyof typeof translations.leaves.types] || selectedRequest.leaveType} />

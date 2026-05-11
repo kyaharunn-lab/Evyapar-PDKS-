@@ -66,6 +66,7 @@ import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
+import { formatTimeTR } from "@/lib/date-time"
 
 const t = translations.common;
 const l = translations.live;
@@ -103,9 +104,17 @@ export default function LiveAttendancePage() {
     );
   }, [db, todayStr]);
 
+  const personnelQuery = React.useMemo(() => {
+    return db ? collection(db, "personnel") : null;
+  }, [db]);
+
+  const branchesQuery = React.useMemo(() => {
+    return db ? collection(db, "branches") : null;
+  }, [db]);
+
   const { data: rawLogs, loading: loadingLogs } = useCollection(logsQuery);
-  const { data: personnel } = useCollection(db ? collection(db, "personnel") : null);
-  const { data: branches } = useCollection(db ? collection(db, "branches") : null);
+  const { data: personnel } = useCollection(personnelQuery);
+  const { data: branches } = useCollection(branchesQuery);
 
   // Merge log data with personnel data
   const liveLogs = React.useMemo(() => {
@@ -195,7 +204,7 @@ export default function LiveAttendancePage() {
         <div className="flex items-center gap-2">
           <div className="text-right mr-4 hidden md:block">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{l.lastUpdate}</p>
-            <p className="text-sm font-semibold text-primary">{format(lastRefresh, "HH:mm:ss")}</p>
+            <p className="text-sm font-semibold text-primary">{formatTimeTR(lastRefresh, { seconds: true })}</p>
           </div>
           <Button 
             variant="outline" 
@@ -299,7 +308,7 @@ export default function LiveAttendancePage() {
                     <TableCell>
                       <div className="flex items-center text-sm font-medium">
                         <Clock className="mr-2 h-3.5 w-3.5 text-slate-400" />
-                        {log.entryTime?.toDate ? format(log.entryTime.toDate(), "HH:mm") : "-"}
+                        {formatTimeTR(log.entryTime)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -374,7 +383,7 @@ export default function LiveAttendancePage() {
                   <DetailItem label="Sicil No" value={selectedLog.person?.registryNo || "-"} />
                   <DetailItem label="Şube" value={selectedLog.branchName} />
                   <DetailItem label="Departman" value={selectedLog.person?.departmentId || "-"} />
-                  <DetailItem label="Giriş Saati" value={selectedLog.entryTime?.toDate ? format(selectedLog.entryTime.toDate(), "HH:mm") : "-"} />
+                  <DetailItem label="Giriş Saati" value={formatTimeTR(selectedLog.entryTime)} />
                   <DetailItem label="İçeride Süre" value={formatDuration(selectedLog.entryTime)} />
                   <DetailItem label="Vardiya" value={selectedLog.shiftId || "Gündüz"} />
                 </div>

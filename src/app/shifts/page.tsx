@@ -21,7 +21,6 @@ import {
   List,
   Calendar as CalendarIcon,
   MapPin,
-  Briefcase
 } from "lucide-react"
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from "date-fns"
 import { tr } from "date-fns/locale"
@@ -45,36 +44,165 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter
 } from "@/components/ui/dialog"
-import { useFirestore, useCollection } from "@/firebase"
-import { collection, query, orderBy, where, Timestamp, addDoc, serverTimestamp } from "firebase/firestore"
-import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { TIME_INPUT_PROPS, formatTimeValueTR, normalizeTimeInputTR } from "@/lib/date-time"
 
 const s = translations.shifts;
 const t = translations.common;
+const SHIFTS_STORAGE_KEY = "app_shifts";
+const PERSONNEL_STORAGE_KEY = "app_personnel";
+const BRANCHES_STORAGE_KEYS = ["app_branches", "evyapar_pdks_branches_local_v1"];
+const ALL_BRANCHES_VALUE = "__all_branches__";
+
+const readLocalArray = (keys: string[]) => {
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // ignore corrupted local data
+    }
+  }
+  return [];
+};
+
+const getBranchLabel = (branch: any) => {
+  return (branch?.branchName || branch?.name || branch?.branchCode || "Şube").toString();
+};
+
+const getPersonnelLabel = (person: any) => {
+  return (person?.fullName || [person?.name, person?.surname].filter(Boolean).join(" ") || person?.personnelCode || "Personel").toString();
+};
 
 export default function ShiftsPage() {
-  const db = useFirestore();
   const { toast } = useToast();
   
   const [viewMode, setViewMode] = React.useState<"timeline" | "grid" | "list">("timeline")
   const [selectedDate, setSelectedDate] = React.useState(new Date())
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("")
+  const [shifts, setShifts] = React.useState<any[]>([])
+  const [personnel, setPersonnel] = React.useState<any[]>([])
+  const [branches, setBranches] = React.useState<any[]>([])
+  const [formData, setFormData] = React.useState({
+    name: "",
+    startDate: "",
+    startTime: "08:00",
+    endTime: "17:00",
+    branchId: ALL_BRANCHES_VALUE,
+    personnelIds: [] as string[],
+  })
 
-  // Real-time Queries
-  const shiftsQuery = React.useMemo(() => db ? query(collection(db, "shifts"), orderBy("startDate", "asc")) : null, [db]);
-  const personnelQuery = React.useMemo(() => db ? query(collection(db, "personnel"), where("isDeleted", "==", false)) : null, [db]);
-  const branchesQuery = React.useMemo(() => db ? collection(db, "branches") : null, [db]);
+  React.useEffect(() => {
+    setShifts(readLocalArray([SHIFTS_STORAGE_KEY]));
+    setPersonnel(readLocalArray([PERSONNEL_STORAGE_KEY]).filter((p: any) => !p?.isDeleted));
+    setBranches(readLocalArray(BRANCHES_STORAGE_KEYS));
+  }, []);
 
-  const { data: shifts, loading: loadingShifts } = useCollection(shiftsQuery);
-  const { data: personnel, loading: loadingPersonnel } = useCollection(personnelQuery);
-  const { data: branches } = useCollection(branchesQuery);
+  const resetForm = React.useCallback(() => {
+    setFormData({
+      name: "",
+      startDate: "",
+      startTime: "08:00",
+      endTime: "17:00",
+      branchId: ALL_BRANCHES_VALUE,
+      personnelIds: [],
+    });
+  }, []);
+
+  const selectedPersonnel = React.useMemo(() => {
+    return personnel.filter((p) => formData.personnelIds.includes(p.id));
+  }, [formData.personnelIds, personnel]);
+
+  const filteredPersonnel = React.useMemo(() => {
+    if (formData.branchId === ALL_BRANCHES_VALUE) return personnel;
+    return personnel.filter((p) => p?.branchId === formData.branchId);
+  }, [formData.branchId, personnel]);
+
+  const handleBranchChange = (value: string) => {
+    setFormData((prev) => {
+      const nextPersonnelIds = value === ALL_BRANCHES_VALUE
+        ? prev.personnelIds
+        : prev.personnelIds.filter((id) => personnel.some((p) => p?.id === id && p?.branchId === value));
+
+      return {
+        ...prev,
+        branchId: value,
+        personnelIds: nextPersonnelIds,
+      };
+    });
+  };
+
+  const handlePersonnelToggle = (personId: string, checked: boolean | "indeterminate") => {
+    setFormData((prev) => ({
+      ...prev,
+      personnelIds: checked === true
+        ? Array.from(new Set([...prev.personnelIds, personId]))
+        : prev.personnelIds.filter((id) => id !== personId),
+    }));
+  };
+
+  const handleSaveShift = () => {
+    const requiredError = !formData.name.trim()
+      || !formData.startDate
+      || !formData.startTime
+      || !formData.endTime
+      || !formData.branchId
+      || formData.personnelIds.length === 0;
+
+    if (requiredError) {
+      toast({
+        variant: "destructive",
+        title: "Hata",
+        description: "Vardiya adı, tarih, saatler, şube ve en az 1 personel zorunludur.",
+      });
+      return;
+    }
+
+    const createdAt = Date.now();
+    const newShift = {
+      id: `shift-${createdAt}-${Math.random().toString(16).slice(2)}`,
+      name: formData.name.trim(),
+      startDate: formData.startDate,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      branchId: formData.branchId,
+      personnelIds: formData.personnelIds,
+      createdAt,
+      updatedAt: createdAt,
+    };
+
+    setShifts((prev) => {
+      const next = [newShift, ...prev];
+      try {
+        localStorage.setItem(SHIFTS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // keep UI updated even if storage is unavailable
+      }
+      return next;
+    });
+
+    setIsCreateModalOpen(false);
+    resetForm();
+    toast({
+      title: "Başarılı",
+      description: "Vardiya kaydedildi.",
+    });
+  };
 
   // Calendar Helpers
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -194,11 +322,7 @@ export default function ShiftsPage() {
         </div>
 
         <CardContent className="p-0">
-          {loadingShifts ? (
-            <div className="p-12 space-y-6">
-              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
-            </div>
-          ) : !shifts || shifts.length === 0 ? (
+          {!shifts || shifts.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-24 text-center">
               <div className="bg-secondary/50 p-8 rounded-full mb-8">
                 <CalendarClock className="h-16 w-16 text-muted-foreground" />
@@ -231,7 +355,7 @@ export default function ShiftsPage() {
 
                 {/* Timeline Body - Grouped by Shift Name/Type */}
                 <div className="divide-y">
-                  {["Gündüz", "Akşam", "Gece"].map((shiftType) => (
+                  {["Gündüz", "Akşam", "Gece", "Diğer"].map((shiftType) => (
                     <div key={shiftType} className="grid grid-cols-8 min-h-[120px]">
                       <div className="p-4 border-r bg-slate-50/20 flex flex-col justify-center">
                         <Badge variant="outline" className="w-fit mb-2 font-bold text-[10px] border-primary/20">
@@ -241,7 +365,10 @@ export default function ShiftsPage() {
                       </div>
                       {weekDays.map((day) => {
                         const dayStr = format(day, "yyyy-MM-dd");
-                        const dayShifts = shifts.filter(s => s.startDate === dayStr && s.name.includes(shiftType));
+                        const dayShifts = shifts.filter(s => {
+                          const knownType = ["Gündüz", "Akşam", "Gece"].some((type) => s.name.includes(type));
+                          return s.startDate === dayStr && (shiftType === "Diğer" ? !knownType : s.name.includes(shiftType));
+                        });
                         
                         return (
                           <div key={day.toString()} className={cn(
@@ -297,7 +424,13 @@ export default function ShiftsPage() {
       </Card>
 
       {/* Create Shift Modal */}
-      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+      <Dialog
+        open={isCreateModalOpen}
+        onOpenChange={(open) => {
+          setIsCreateModalOpen(open);
+          if (!open) resetForm();
+        }}
+      >
         <DialogContent className="sm:max-w-[700px] p-0 border-none rounded-[32px] overflow-hidden">
           <DialogHeader className="p-8 bg-primary text-white">
             <DialogTitle className="text-2xl font-extrabold">Yeni Vardiya Tanımla</DialogTitle>
@@ -307,41 +440,123 @@ export default function ShiftsPage() {
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Vardiya Adı</label>
-                <Input placeholder="Örn: Gündüz Vardiyası" className="rounded-xl border-slate-200" />
+                <Input
+                  placeholder="Örn: Gündüz Vardiyası"
+                  className="rounded-xl border-slate-200"
+                  value={formData.name}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Başlangıç Saati</label>
-                  <Input type="time" defaultValue="08:00" className="rounded-xl border-slate-200" />
+                  <Input
+                    {...TIME_INPUT_PROPS}
+                    className="rounded-xl border-slate-200"
+                    value={formData.startTime}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, startTime: normalizeTimeInputTR(e.target.value) }))}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Bitiş Saati</label>
-                  <Input type="time" defaultValue="17:00" className="rounded-xl border-slate-200" />
+                  <Input
+                    {...TIME_INPUT_PROPS}
+                    className="rounded-xl border-slate-200"
+                    value={formData.endTime}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, endTime: normalizeTimeInputTR(e.target.value) }))}
+                  />
                 </div>
               </div>
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Şube</label>
-                <Input placeholder="Şube seçin..." className="rounded-xl border-slate-200" />
+                <Select value={formData.branchId} onValueChange={handleBranchChange}>
+                  <SelectTrigger className="rounded-xl border-slate-200 bg-white">
+                    <SelectValue placeholder="Şube seçin..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL_BRANCHES_VALUE}>Tüm Şubeler</SelectItem>
+                    {branches.length > 0 ? (
+                      branches.map((branch) => {
+                        const value = (branch?.id || branch?.branchCode || "").toString();
+                        if (!value) return null;
+                        return (
+                          <SelectItem key={value} value={value}>
+                            {getBranchLabel(branch)}
+                          </SelectItem>
+                        );
+                      })
+                    ) : (
+                      <SelectItem value="no-branches" disabled>Kayıtlı şube yok</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Başlangıç Tarihi</label>
-                <Input type="date" className="rounded-xl border-slate-200" />
+                <Input
+                  type="date"
+                  className="rounded-xl border-slate-200"
+                  value={formData.startDate}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, startDate: e.target.value }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Personel Ataması</label>
-                <div className="p-4 border rounded-xl bg-slate-50 text-center">
-                  <Users className="h-6 w-6 text-slate-300 mx-auto mb-2" />
-                  <p className="text-[11px] text-slate-500 font-medium">En az 1 personel seçilmelidir</p>
-                  <Button variant="link" className="text-xs h-auto p-0 mt-1">Personel Seç</Button>
+                <div className="p-4 border rounded-xl bg-slate-50">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-5 w-5 text-slate-300" />
+                      <p className="text-[11px] text-slate-500 font-medium">Personel Seç</p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] font-bold">
+                      {selectedPersonnel.length} seçili
+                    </Badge>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto space-y-2 pr-1">
+                    {filteredPersonnel.length > 0 ? (
+                      filteredPersonnel.map((person) => (
+                        <label
+                          key={person.id}
+                          className="flex items-center gap-3 rounded-lg border border-slate-100 bg-white px-3 py-2 text-sm font-medium text-slate-700"
+                        >
+                          <Checkbox
+                            checked={formData.personnelIds.includes(person.id)}
+                            onCheckedChange={(checked) => handlePersonnelToggle(person.id, checked)}
+                          />
+                          <span className="truncate">{getPersonnelLabel(person)}</span>
+                        </label>
+                      ))
+                    ) : (
+                      <p className="py-6 text-center text-[11px] text-slate-500 font-medium">Kayıtlı personel yok</p>
+                    )}
+                  </div>
+                  {selectedPersonnel.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {selectedPersonnel.map((person) => (
+                        <Badge key={person.id} variant="secondary" className="max-w-full truncate">
+                          {getPersonnelLabel(person)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
           <DialogFooter className="p-8 bg-slate-50/50 flex gap-3">
-            <Button variant="ghost" onClick={() => setIsCreateModalOpen(false)} className="rounded-xl">Vazgeç</Button>
-            <Button className="bg-primary hover:bg-primary/90 px-8 rounded-xl">Vardiyayı Kaydet</Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsCreateModalOpen(false);
+                resetForm();
+              }}
+              className="rounded-xl"
+            >
+              Vazgeç
+            </Button>
+            <Button className="bg-primary hover:bg-primary/90 px-8 rounded-xl" onClick={handleSaveShift}>Vardiyayı Kaydet</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -364,7 +579,7 @@ function ShiftCard({ shift, personnel }: { shift: any, personnel: any[] | undefi
       </div>
       <div className="flex items-center text-[10px] font-bold text-slate-600 mb-2">
         <Clock className="mr-1 h-3 w-3" />
-        {shift.startTime} - {shift.endTime}
+        {formatTimeValueTR(shift.startTime)} - {formatTimeValueTR(shift.endTime)}
       </div>
       <div className="flex -space-x-2">
         {assignedPersonnel.slice(0, 3).map((p, idx) => (
@@ -385,6 +600,7 @@ function ShiftCard({ shift, personnel }: { shift: any, personnel: any[] | undefi
 
 function ListShiftCard({ shift, personnel, branches }: { shift: any, personnel: any[] | undefined, branches: any[] | undefined }) {
   const branch = branches?.find(b => b.id === shift.branchId);
+  const branchLabel = shift.branchId === ALL_BRANCHES_VALUE ? "Tüm Şubeler" : branch ? getBranchLabel(branch) : "Şube bulunamadı";
   const assignedPersonnel = personnel?.filter(p => shift.personnelIds?.includes(p.id)) || [];
 
   return (
@@ -410,14 +626,14 @@ function ListShiftCard({ shift, personnel, branches }: { shift: any, personnel: 
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Saat Aralığı</p>
             <p className="text-sm font-bold text-primary flex items-center gap-2">
               <Clock className="h-3.5 w-3.5 text-accent" />
-              {shift.startTime} - {shift.endTime}
+              {formatTimeValueTR(shift.startTime)} - {formatTimeValueTR(shift.endTime)}
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Lokasyon</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Şube</p>
             <p className="text-sm font-bold text-primary flex items-center gap-2">
               <MapPin className="h-3.5 w-3.5 text-slate-400" />
-              {branch?.name || "Merkez"}
+              {branchLabel}
             </p>
           </div>
         </div>
@@ -442,11 +658,7 @@ function ListShiftCard({ shift, personnel, branches }: { shift: any, personnel: 
           </div>
         </div>
         
-        <div className="pt-2 border-t flex items-center justify-between text-[11px] font-medium text-slate-500">
-          <div className="flex items-center gap-1.5">
-            <Briefcase className="h-3.5 w-3.5" />
-            {shift.departmentId || "Genel"}
-          </div>
+        <div className="pt-2 border-t flex items-center justify-end text-[11px] font-medium text-slate-500">
           <div className="flex items-center gap-1.5">
             <CalendarIcon className="h-3.5 w-3.5" />
             {shift.startDate}
