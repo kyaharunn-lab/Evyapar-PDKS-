@@ -1,0 +1,17 @@
+   ▲ Next.js 15.5.9
+   - Local:        http://localhost:9002
+   - Network:      http://192.168.1.149:9002
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 11.7s
+ ○ Compiling /mobile-preview ...
+ ✓ Compiled /mobile-preview in 5s (1375 modules)
+ GET /mobile-preview 200 in 6469ms
+ ✓ Compiled in 1722ms (452 modules)
+ ✓ Compiled in 80ms (438 modules)
+ GET /mobile-preview 200 in 289ms
+ GET /mobile-preview 200 in 315ms
+ ○ Compiling /favicon.ico ...
+ ✓ Compiled /favicon.ico in 587ms (940 modules)
+ GET /favicon.ico 200 in 866ms

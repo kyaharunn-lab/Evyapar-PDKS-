@@ -3,7 +3,6 @@
 import * as React from "react"
 import {
   Bell,
-  Building2,
   CalendarClock,
   Camera,
   CheckCircle2,
@@ -14,13 +13,10 @@ import {
   IdCard,
   LocateFixed,
   MapPin,
-  Moon,
   QrCode,
   RefreshCw,
   Save,
-  ShieldCheck,
   Smartphone,
-  Sun,
   UserRound,
   Wifi,
   XCircle,
@@ -112,6 +108,21 @@ function hasBranchLocation(branch: any) {
   return Boolean(branch?.latitude || branch?.lat || branch?.location?.latitude) && Boolean(branch?.longitude || branch?.lng || branch?.location?.longitude)
 }
 
+function normalizeScreen(screen: any) {
+  const raw = valueText(screen, "Ana")
+  const map: Record<string, string> = {
+    "Ana Sayfa": "Ana",
+    "Giriş / Çıkış": "Giriş",
+    "QR Okutma": "QR",
+    "GPS Konum": "GPS",
+    "Vardiyalarım": "Vardiya",
+    "İzin Taleplerim": "İzin",
+    "Bildirimler": "Bildirim",
+    "Profilim": "Profil",
+  }
+  return screens.includes(raw) ? raw : map[raw] || "Ana"
+}
+
 function matchesPerson(record: any, personId: string) {
   const ids = [record?.personnelId, record?.personId, record?.employeeId, record?.userId].map((v) => valueText(v, ""))
   return ids.includes(personId) || (Array.isArray(record?.personnelIds) && record.personnelIds.map(String).includes(personId))
@@ -182,6 +193,9 @@ export default function MobilePreviewPage() {
     setSettings((current: any) => ({
       ...current,
       ...saved,
+      screen: normalizeScreen(saved.screen || current.screen),
+      theme: themes.includes(saved.theme) ? saved.theme : current.theme,
+      state: states.includes(saved.state) ? saved.state : current.state,
       personnelId: savedPersonExists ? saved.personnelId : getId(nextData.personnel[0]) || NONE,
       branchId: savedBranchExists ? saved.branchId : getId(nextData.branches[0]) || NONE,
     }))
@@ -263,7 +277,7 @@ export default function MobilePreviewPage() {
   const handleQrSimulation = () => {
     const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
     const success = Boolean(activePoint)
-    updateSettings({ screen: "QR", qrStatus: success ? "Başarılı" : "Başarısız", state: success ? "QR bekleniyor" : "QR bekleniyor" })
+    updateSettings({ screen: "QR", qrStatus: success ? "Başarılı" : "Başarısız", state: success ? "Mesai başladı" : "QR bekleniyor" })
     addAudit("QR doğrulama simülasyonu yapıldı", success ? `${branchName(selectedBranch)} QR noktası doğrulandı.` : "Seçili şubede aktif QR noktası bulunamadı.", "QR")
     toast({ variant: success ? "default" : "destructive", title: success ? "QR doğrulandı" : "QR doğrulanamadı", description: success ? activePoint?.pointName || activePoint?.name : "Bu şubeye ait aktif QR noktası bulunamadı." })
   }
@@ -354,7 +368,7 @@ export default function MobilePreviewPage() {
       <div className="grid gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
         <ControlPanel data={data} settings={settings} setField={(key: string, value: string) => updateSettings({ [key]: value })} />
         <Card className="overflow-hidden rounded-[32px] border-white/70 bg-white/80 shadow-2xl shadow-slate-200/70 backdrop-blur-xl">
-          <CardContent className="grid min-h-[760px] place-items-center p-6 md:p-10">
+          <CardContent className="grid min-h-[760px] place-items-center p-3 sm:p-6 md:p-10">
             {data.personnel.length === 0 ? (
               <div className="grid min-h-[520px] w-full place-items-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 text-center">
                 <div>
@@ -446,11 +460,11 @@ function PhoneMockup(props: any) {
   return (
     <div className="relative">
       <div className="absolute -inset-8 rounded-[64px] bg-gradient-to-br from-sky-400/20 via-violet-500/20 to-fuchsia-500/20 blur-3xl" />
-      <div className={cn("relative rounded-[46px] border-[10px] border-slate-950 bg-slate-950 shadow-2xl shadow-slate-950/40", isTablet ? "h-[720px] w-[430px]" : "h-[720px] w-[360px]")}>
+      <div data-mobile-preview-phone className={cn("relative rounded-[46px] border-[10px] border-slate-950 bg-slate-950 shadow-2xl shadow-slate-950/40", isTablet ? "h-[720px] w-[330px] sm:w-[430px]" : "h-[720px] w-[330px] sm:w-[360px]")}>
         <div className="absolute left-1/2 top-0 z-20 h-7 w-32 -translate-x-1/2 rounded-b-3xl bg-slate-950" />
         <div className={cn("h-full overflow-hidden rounded-[34px]", palette.shell)}>
           <MobileStatusBar isAndroid={isAndroid} />
-          <div className="h-[610px] overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2 transition-all duration-300">
+          <div data-mobile-preview-scroll className="h-[610px] overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2 transition-all duration-300">
             <MobileScreen {...props} palette={palette} />
           </div>
           <BottomNav palette={palette} active={settings.screen} setScreen={props.setScreen} />
@@ -513,7 +527,7 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
   return (
     <div>
       <MobileHeader person={person} palette={palette} title={greeting} />
-      <StatusHero state={settings.state} palette={palette} />
+      <StatusHero state={settings.state} palette={palette} qrStatus={settings.qrStatus} gpsStatus={settings.gpsStatus} />
       <MobileCard>
         <div className="flex items-center justify-between"><span className="text-sm font-bold text-white/60">Bugünkü vardiya</span><CalendarClock className="h-4 w-4 text-white/60" /></div>
         <div className="mt-2 text-lg font-extrabold text-white">{todayShift?.name || "Tanımlı vardiya yok"}</div>
@@ -525,12 +539,12 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
         <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "Pozisyon yok")} />
       </MobileCard>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <QuickAction icon={QrCode} label="QR ile giriş" palette={palette} onClick={() => setScreen("QR")} />
-        <QuickAction icon={LocateFixed} label="GPS ile giriş" palette={palette} onClick={() => setScreen("GPS")} />
-        <QuickAction icon={Clock3} label={settings.state === "Molada" ? "Mola bitir" : "Mola başlat"} palette={palette} onClick={onBreak} />
-        <QuickAction icon={CalendarClock} label="İzin talep et" palette={palette} onClick={() => setScreen("İzin")} />
-        <QuickAction icon={IdCard} label="Vardiyalarım" palette={palette} onClick={() => setScreen("Vardiya")} />
-        <QuickAction icon={Bell} label="Bildirimler" palette={palette} onClick={() => setScreen("Bildirim")} />
+        <QuickAction actionKey="qr" icon={QrCode} label="QR ile giriş" palette={palette} onClick={() => setScreen("QR")} />
+        <QuickAction actionKey="gps" icon={LocateFixed} label="GPS ile giriş" palette={palette} onClick={() => setScreen("GPS")} />
+        <QuickAction actionKey="break" icon={Clock3} label={settings.state === "Molada" ? "Mola bitir" : "Mola başlat"} palette={palette} onClick={onBreak} />
+        <QuickAction actionKey="leave" icon={CalendarClock} label="İzin talep et" palette={palette} onClick={() => setScreen("İzin")} />
+        <QuickAction actionKey="shifts" icon={IdCard} label="Vardiyalarım" palette={palette} onClick={() => setScreen("Vardiya")} />
+        <QuickAction actionKey="notifications" icon={Bell} label="Bildirimler" palette={palette} onClick={() => setScreen("Bildirim")} />
       </div>
     </div>
   )
@@ -551,7 +565,7 @@ function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts,
       <h3 className="text-xl font-extrabold text-white">Giriş / Çıkış</h3>
       <p className="mt-1 text-sm font-semibold text-white/50">{time}</p>
       <p className="mt-1 text-xs font-bold text-white/45">{personName(person)}</p>
-      <button onClick={() => onAttendance(inside ? "Çıkış" : "Giriş")} className={cn("mx-auto mt-7 grid h-40 w-40 place-items-center rounded-full text-white shadow-2xl transition hover:scale-[1.02]", palette.button)}>
+      <button data-mobile-action="attendance-toggle" onClick={() => onAttendance(inside ? "Çıkış" : "Giriş")} className={cn("mx-auto mt-7 grid h-40 w-40 place-items-center rounded-full text-white shadow-2xl transition hover:scale-[1.02]", palette.button)}>
         <div><Fingerprint className="mx-auto mb-2 h-12 w-12" /><span className="text-sm font-black">{inside ? "Çıkış Yap" : "Giriş Yap"}</span></div>
       </button>
       <div className="mt-7 space-y-3 text-left">
@@ -575,12 +589,20 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
         <div className="h-44 w-44 rounded-[28px] border-4 border-sky-300/80 shadow-[0_0_32px_rgba(56,189,248,0.35)]" />
         <div className="absolute h-0.5 w-48 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent" />
       </div>
-      <Button onClick={onQr} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>QR Simülasyonu Başlat</Button>
+      <Button data-mobile-action="qr-sim" onClick={onQr} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>QR Simülasyonu Başlat</Button>
       <MobileCard className="mt-4">
         <p className="text-xs font-bold uppercase tracking-widest text-white/50">Şube QR noktası</p>
         <h4 className="mt-1 text-lg font-extrabold text-white">{activePoint?.pointName || activePoint?.name || "Bu şubeye ait QR noktası bulunamadı."}</h4>
         <p className="text-xs text-white/50">{branch ? branchName(branch) : "Şube seçilmedi"} · {activePoint ? "Aktif" : "Pasif/Yok"}</p>
         <VerifyRow label="QR doğrulama sonucu" value={settings.qrStatus || "QR bekleniyor"} danger={settings.qrStatus === "Başarısız" || !activePoint} />
+        <div className="mt-3 space-y-2">
+          {qrPoints.length ? qrPoints.map((point: any) => (
+            <div key={getId(point) || point?.qrCode || point?.pointName} className="flex items-center justify-between rounded-2xl bg-white/10 px-3 py-2 text-xs">
+              <span className="font-bold text-white/70">{point?.pointName || point?.name || "QR noktası"}</span>
+              <span className={cn("font-black", isActive(point?.status) ? "text-emerald-300" : "text-rose-300")}>{isActive(point?.status) ? "Aktif" : "Pasif"}</span>
+            </div>
+          )) : null}
+        </div>
       </MobileCard>
     </div>
   )
@@ -598,7 +620,7 @@ function GpsScreen({ branch, settings, palette, onGps }: any) {
           <MapPin className={cn("h-10 w-10", outside || !hasLocation ? "text-rose-300" : "text-emerald-300")} />
         </div>
       </div>
-      <Button onClick={onGps} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>GPS ile giriş</Button>
+      <Button data-mobile-action="gps-sim" onClick={onGps} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>GPS ile giriş</Button>
       <MobileCard className="mt-4">
         <VerifyRow label="Şube lokasyonu" value={hasLocation ? branchName(branch) : "Şube konumu tanımlı değil"} danger={!hasLocation} />
         <VerifyRow label="Personel konumu" value={outside ? "Şube dışında" : hasLocation ? "Şube alanında" : "Simülasyon bekliyor"} danger={outside || !hasLocation} />
@@ -637,7 +659,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
   return (
     <div>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">İzin Taleplerim</h3><CalendarClock className="h-5 w-5 text-white/60" /></div>
-      <Button onClick={() => setOpen((value) => !value)} className={cn("mb-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>Yeni izin talebi</Button>
+      <Button data-mobile-action="leave-new" onClick={() => setOpen((value) => !value)} className={cn("mb-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>Yeni izin talebi</Button>
       {open && (
         <MobileCard className="mb-4 space-y-3">
           <Input value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
@@ -646,7 +668,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
             <Input type="date" value={form.endDate} onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
           </div>
           <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Açıklama" className="min-h-16 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
-          <Button onClick={submit} className="h-10 w-full rounded-2xl bg-white text-slate-950 hover:bg-white/90">Kaydet</Button>
+          <Button data-mobile-action="leave-save" onClick={submit} className="h-10 w-full rounded-2xl bg-white text-slate-950 hover:bg-white/90">Kaydet</Button>
         </MobileCard>
       )}
       <ListItems items={items} empty="İzin talebi bulunamadı." />
@@ -660,19 +682,20 @@ function BreakScreen({ breaks, settings, palette, onBreak }: any) {
   return (
     <div>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">Mola</h3><Clock3 className="h-5 w-5 text-white/60" /></div>
-      <Button onClick={onBreak} className={cn("mb-4 h-12 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{active ? "Mola bitir" : "Mola başlat"}</Button>
+      <Button data-mobile-action="break-toggle" onClick={onBreak} className={cn("mb-4 h-12 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{active ? "Mola bitir" : "Mola başlat"}</Button>
       <ListItems items={items} empty="Henüz mola kaydı bulunamadı." />
     </div>
   )
 }
 
 function NotificationScreen({ leaves, shifts, settings, notificationSettings, palette }: any) {
+  const now = new Date().toLocaleString("tr-TR")
   const items = [
-    ...leaves.slice(0, 3).map((leave: any) => ({ title: "İzin durumu", detail: `${leave.startDate || "-"} · ${normalizeStatus(leave.status)}`, badge: "İzin" })),
-    ...shifts.slice(0, 3).map((shift: any) => ({ title: "Vardiya hatırlatması", detail: `${shift.name || "Vardiya"} ${shift.startTime || "--:--"}`, badge: "Vardiya" })),
-    ...(settings.qrStatus === "Başarısız" ? [{ title: "QR güvenlik uyarısı", detail: "Aktif QR noktası bulunamadı.", badge: "QR" }] : []),
-    ...(settings.state === "GPS dışında" ? [{ title: "GPS güvenlik uyarısı", detail: "Personel şube lokasyonu dışında.", badge: "GPS" }] : []),
-    ...(notificationSettings?.global?.push === false ? [{ title: "Mobil push kapalı", detail: "Bildirim ayarlarında mobil push pasif.", badge: "Ayar" }] : []),
+    ...leaves.slice(0, 3).map((leave: any) => ({ title: "İzin durumu", detail: `${leave.startDate || "-"} · ${normalizeStatus(leave.status)}`, badge: "İzin", time: leave.createdAt || now, unread: normalizeStatus(leave.status) === "Bekliyor" })),
+    ...shifts.slice(0, 3).map((shift: any) => ({ title: "Vardiya hatırlatması", detail: `${shift.name || "Vardiya"} ${shift.startTime || "--:--"}`, badge: "Vardiya", time: shift.startDate || now })),
+    ...(settings.qrStatus === "Başarısız" ? [{ title: "QR güvenlik uyarısı", detail: "Aktif QR noktası bulunamadı.", badge: "QR", time: now, unread: true }] : []),
+    ...(settings.state === "GPS dışında" ? [{ title: "GPS güvenlik uyarısı", detail: "Personel şube lokasyonu dışında.", badge: "GPS", time: now, unread: true }] : []),
+    ...(notificationSettings?.global?.push === false ? [{ title: "Mobil push kapalı", detail: "Bildirim ayarlarında mobil push pasif.", badge: "Ayar", time: now }] : []),
   ]
   return <ListScreen title="Bildirimler" icon={Bell} empty="Bildirim kaydı bulunmuyor." items={items} palette={palette} />
 }
@@ -717,7 +740,11 @@ function ListItems({ items, empty }: any) {
         <MobileCard key={`${item.title}-${index}`}>
           <div className="flex items-center justify-between gap-3">
             <div><h4 className="font-extrabold text-white">{item.title}</h4><p className="text-xs text-white/50">{item.detail}</p>{item.meta && <p className="mt-1 text-[11px] font-semibold text-white/40">{item.meta}</p>}</div>
-            <Badge className="shrink-0 bg-white/15 text-white hover:bg-white/15">{item.badge}</Badge>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <Badge className="bg-white/15 text-white hover:bg-white/15">{item.badge}</Badge>
+              {item.time && <span className="text-[9px] font-bold text-white/35">{String(item.time).slice(0, 16)}</span>}
+              {item.unread && <span className="h-2 w-2 rounded-full bg-sky-300" />}
+            </div>
           </div>
         </MobileCard>
       )) : <div className="grid h-56 place-items-center rounded-[28px] border border-dashed border-white/15 bg-white/5 px-5 text-center text-sm font-semibold text-white/55">{empty}</div>}
@@ -727,22 +754,22 @@ function ListItems({ items, empty }: any) {
 
 function BottomNav({ palette, active, setScreen }: any) {
   const items = [
-    ["Ana", Home],
-    ["Giriş", Fingerprint],
-    ["QR", QrCode],
-    ["Profil", UserRound],
+    ["Ana", "home", Home],
+    ["Giriş", "check", Fingerprint],
+    ["QR", "qr", QrCode],
+    ["Profil", "profile", UserRound],
   ]
   return (
-    <div className="mx-3 mb-3 grid h-[68px] grid-cols-4 rounded-[26px] border border-white/10 bg-black/20 px-2 py-2 backdrop-blur-xl">
-      {items.map(([label, Icon]: any) => {
+    <div data-mobile-preview-bottom-nav className="mx-3 mb-3 grid h-[68px] grid-cols-4 rounded-[26px] border border-white/10 bg-black/20 px-2 py-2 backdrop-blur-xl">
+      {items.map(([label, key, Icon]: any) => {
         const selected = active === label
-        return <button key={label} onClick={() => setScreen(label)} className={cn("flex flex-col items-center justify-center rounded-2xl text-[9px] font-black transition-all duration-300", selected ? `${palette.nav} text-white shadow-lg` : "text-white/45 hover:bg-white/10 hover:text-white/80")}><Icon className="mb-1 h-4 w-4" />{label}</button>
+        return <button key={label} data-mobile-nav={key} onClick={() => setScreen(label)} className={cn("flex flex-col items-center justify-center rounded-2xl text-[9px] font-black transition-all duration-300", selected ? `${palette.nav} text-white shadow-lg` : "text-white/45 hover:bg-white/10 hover:text-white/80")}><Icon className="mb-1 h-4 w-4" />{label}</button>
       })}
     </div>
   )
 }
 
-function StatusHero({ state, palette }: any) {
+function StatusHero({ state, palette, qrStatus, gpsStatus }: any) {
   const danger = state === "Geç kaldı" || state === "GPS dışında" || state === "QR bekleniyor"
   return (
     <div className={cn("mb-4 rounded-[30px] p-5 text-white shadow-xl", danger ? "bg-gradient-to-br from-rose-500 to-orange-700" : palette.button)}>
@@ -751,13 +778,13 @@ function StatusHero({ state, palette }: any) {
         <span className="text-2xl font-black">{state}</span>
         {danger ? <XCircle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
       </div>
-      <p className="mt-2 text-xs font-semibold text-white/75">PDKS doğrulama önizlemesi aktif</p>
+      <p className="mt-2 text-xs font-semibold text-white/75">QR: {qrStatus || "Bekleniyor"} · GPS: {gpsStatus || "Bekleniyor"}</p>
     </div>
   )
 }
 
-function QuickAction({ icon: Icon, label, palette, onClick }: any) {
-  return <button onClick={onClick} className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-white/15"><Icon className={cn("mb-3 h-5 w-5 rounded-xl p-0.5", palette.text)} /><div className="text-xs font-extrabold">{label}</div></button>
+function QuickAction({ icon: Icon, label, palette, onClick, actionKey }: any) {
+  return <button data-mobile-action={actionKey} onClick={onClick} className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-white/15"><Icon className={cn("mb-3 h-5 w-5 rounded-xl p-0.5", palette.text)} /><div className="text-xs font-extrabold">{label}</div></button>
 }
 
 function VerifyRow({ label, value, danger }: any) {
