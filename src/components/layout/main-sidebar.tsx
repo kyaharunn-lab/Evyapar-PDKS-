@@ -22,7 +22,8 @@ import {
   LogOut,
   ChevronDown,
   Network,
-  KeyRound
+  KeyRound,
+  Smartphone
 } from "lucide-react"
 
 import {
@@ -98,6 +99,12 @@ const navigation = [
     title: "SİSTEM",
     items: [
       { title: "Ayarlar", url: "/settings", icon: Settings2, activePaths: ["/settings", "/settings/company", "/settings/notifications"] },
+    ],
+  },
+  {
+    title: "MOBIL",
+    items: [
+      { title: "Mobil Uygulama Onizleme", url: "/mobile-preview", icon: Smartphone },
     ],
   },
 ]

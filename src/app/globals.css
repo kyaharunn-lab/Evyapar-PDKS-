@@ -40,9 +40,9 @@
   body {
     @apply bg-background text-foreground font-body antialiased;
     background:
-      radial-gradient(circle at top left, rgba(99, 102, 241, 0.10), transparent 34rem),
-      radial-gradient(circle at top right, rgba(14, 165, 233, 0.10), transparent 32rem),
-      #f5f7fb;
+      radial-gradient(circle at 10% 0%, rgba(79, 70, 229, 0.13), transparent 34rem),
+      radial-gradient(circle at 90% 2%, rgba(14, 165, 233, 0.12), transparent 32rem),
+      linear-gradient(180deg, #f8fbff 0%, #eef3fb 48%, #f6f8fc 100%);
     text-rendering: geometricPrecision;
   }
 
@@ -52,29 +52,45 @@
 }
 
 .premium-card {
-  @apply border border-white/70 shadow-[0_18px_55px_-32px_rgba(15,23,42,0.45)] hover:shadow-[0_26px_70px_-34px_rgba(79,70,229,0.42)] transition-all duration-500 bg-white rounded-2xl;
+  @apply border border-white/75 shadow-[0_22px_65px_-34px_rgba(15,23,42,0.50)] hover:shadow-[0_28px_80px_-34px_rgba(79,70,229,0.46)] transition-all duration-500 bg-white/[0.88] rounded-2xl backdrop-blur-xl;
   position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background-image:
+    linear-gradient(135deg, rgba(255,255,255,0.94), rgba(255,255,255,0.76)),
+    radial-gradient(circle at top right, rgba(99,102,241,0.12), transparent 18rem);
 }
 
 .premium-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-4px);
 }
 
 .premium-card::before {
   content: "";
-  @apply pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent opacity-80;
+  @apply pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-sky-200 to-transparent opacity-90;
+  z-index: 1;
+}
+
+.premium-card::after {
+  content: "";
+  @apply pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-indigo-400/10 blur-3xl transition-transform duration-700;
+  z-index: -1;
+}
+
+.premium-card:hover::after {
+  transform: scale(1.45);
 }
 
 .glass-header {
-  @apply bg-white/80 backdrop-blur-2xl border-b border-white/60 sticky top-0 z-50 shadow-[0_18px_45px_-35px_rgba(15,23,42,0.45)];
+  @apply relative bg-[radial-gradient(circle_at_18%_0%,rgba(99,102,241,0.26),transparent_28rem),linear-gradient(135deg,#06101f_0%,#071426_46%,#101a3a_100%)] backdrop-blur-2xl border-b border-white/10 sticky top-0 z-50 shadow-[0_20px_70px_-34px_rgba(2,6,23,0.85)];
 }
 
 .enterprise-table-header {
-  @apply bg-slate-50/90 text-slate-500 font-black text-[10px] uppercase tracking-widest;
+  @apply sticky top-0 z-10 bg-slate-50/95 text-slate-500 font-black text-[10px] uppercase tracking-widest backdrop-blur-xl;
 }
 
 .enterprise-table-header th {
-  @apply border-b border-slate-100/80;
+  @apply border-b border-slate-100/90 shadow-[inset_0_-1px_0_rgba(148,163,184,0.15)];
 }
 
 .badge-aktif {
@@ -127,6 +143,47 @@
   animation: premium-fade-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.analytics-grid {
+  @apply grid gap-4 md:gap-5 xl:gap-6;
+}
+
+.metric-card {
+  @apply relative overflow-hidden rounded-2xl border border-white/70 bg-white/80 shadow-xl shadow-slate-200/60 backdrop-blur-xl transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl hover:shadow-indigo-200/50;
+}
+
+.metric-card::before {
+  content: "";
+  @apply pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white to-transparent;
+}
+
+.metric-card::after {
+  content: "";
+  @apply pointer-events-none absolute inset-x-0 bottom-0 h-12 opacity-50;
+  background:
+    linear-gradient(135deg, transparent 0 18%, rgba(99,102,241,.18) 18% 20%, transparent 20% 38%, rgba(14,165,233,.18) 38% 40%, transparent 40% 62%, rgba(168,85,247,.18) 62% 64%, transparent 64%),
+    linear-gradient(to top, rgba(99,102,241,.08), transparent);
+  clip-path: polygon(0 70%, 13% 52%, 28% 64%, 43% 35%, 58% 48%, 74% 24%, 100% 38%, 100% 100%, 0 100%);
+}
+
+.dashboard-panel {
+  @apply rounded-[28px] border border-white/70 bg-white/[0.82] shadow-2xl shadow-slate-200/60 backdrop-blur-xl;
+}
+
+.status-pulse {
+  @apply relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400;
+}
+
+.status-pulse::after {
+  content: "";
+  @apply absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60;
+}
+
+.shimmer {
+  background: linear-gradient(90deg, rgba(241,245,249,0.72), rgba(255,255,255,0.92), rgba(241,245,249,0.72));
+  background-size: 240% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
 @keyframes premium-fade-in {
   from {
     opacity: 0;
@@ -136,4 +193,9 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -120% 0; }
 }
