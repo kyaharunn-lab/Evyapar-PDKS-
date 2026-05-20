@@ -83,6 +83,44 @@ import { Textarea } from "@/components/ui/textarea"
 
 const t = translations.common;
 const a = translations.approvals;
+const LEAVE_REQUESTS_KEY = "app_leave_requests";
+const ADVANCE_REQUESTS_KEY = "app_advance_requests";
+const PERSONNEL_KEY = "app_personnel";
+const AUDIT_KEY = "app_audit_logs";
+
+const readLocalArray = (key: string) => {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalArray = (key: string, value: any[]) => {
+  localStorage.setItem(key, JSON.stringify(value));
+};
+
+const getLocalPersonId = (request: any) => {
+  return (request?.personnelId || request?.personId || request?.personelId || request?.employeeId || "").toString();
+};
+
+const getLocalPersonName = (person: any, request: any) => {
+  return (request?.personName || request?.personelAdı || person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || "Personel").toString();
+};
+
+const isPendingStatus = (status: any) => {
+  const raw = (status || "pending").toString().toLowerCase();
+  return raw === "pending" || raw === "bekliyor" || raw === "wait" || raw === "waiting";
+};
+
+const asDate = (value: any) => {
+  if (value?.toDate) return value.toDate();
+  if (!value) return new Date();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+};
 
 export default function ApprovalsCenterPage() {
   const db = useFirestore()
@@ -97,6 +135,26 @@ export default function ApprovalsCenterPage() {
   const [actionReason, setActionReason] = React.useState("")
   const [loadingAction, setLoadingAction] = React.useState(false)
   const [now, setNow] = React.useState(new Date())
+  const [localLeaves, setLocalLeaves] = React.useState<any[]>([])
+  const [localAdvances, setLocalAdvances] = React.useState<any[]>([])
+  const [localPersonnel, setLocalPersonnel] = React.useState<any[]>([])
+
+  const loadLocalApprovals = React.useCallback(() => {
+    setLocalLeaves(readLocalArray(LEAVE_REQUESTS_KEY))
+    setLocalAdvances(readLocalArray(ADVANCE_REQUESTS_KEY))
+    setLocalPersonnel(readLocalArray(PERSONNEL_KEY).filter((person: any) => !person?.isDeleted))
+  }, [])
+
+  React.useEffect(() => {
+    loadLocalApprovals()
+    const onStorage = (event: StorageEvent) => {
+      if ([LEAVE_REQUESTS_KEY, ADVANCE_REQUESTS_KEY, PERSONNEL_KEY].includes(event.key || "")) {
+        loadLocalApprovals()
+      }
+    }
+    window.addEventListener("storage", onStorage)
+    return () => window.removeEventListener("storage", onStorage)
+  }, [loadLocalApprovals])
 
   // Update "now" every minute for wait time calc
   React.useEffect(() => {
@@ -125,7 +183,7 @@ export default function ApprovalsCenterPage() {
 
   // Unified Approvals List
   const allApprovals = React.useMemo(() => {
-    if (!personnel) return [];
+    const people = [...(personnel || []), ...localPersonnel];
     
     const leaves = (pendingLeaves || []).map(req => ({
       ...req,
@@ -135,7 +193,7 @@ export default function ApprovalsCenterPage() {
       color: "text-blue-600",
       bg: "bg-blue-50",
       summary: `${req.totalDays} Gün ${translations.leaves.types[req.leaveType as keyof typeof translations.leaves.types] || req.leaveType}`,
-      person: personnel.find(p => p.id === req.personnelId),
+      person: people.find(p => p.id === req.personnelId),
       priority: req.totalDays > 5 ? "High" : "Normal"
     }));
 
@@ -147,14 +205,61 @@ export default function ApprovalsCenterPage() {
       color: "text-green-600",
       bg: "bg-green-50",
       summary: `${(parseFloat(req.amount) || 0).toLocaleString()} ${req.currency || "₺"} Avans`,
-      person: personnel.find(p => p.id === req.personnelId),
+      person: people.find(p => p.id === req.personnelId),
       priority: parseFloat(req.amount) > 10000 ? "Critical" : "Normal"
     }));
 
-    return [...leaves, ...advances]
+    const localLeaveApprovals = localLeaves
+      .filter(req => isPendingStatus(req.status))
+      .map(req => {
+        const personId = getLocalPersonId(req);
+        const person = people.find(p => p.id === personId);
+        const totalDays = req.totalDays || req.days || 1;
+        return {
+          ...req,
+          id: req.id || `local-leave-${personId}-${req.createdAt || req.startDate}`,
+          sourceKey: LEAVE_REQUESTS_KEY,
+          type: "Leave",
+          typeLabel: a.types.Leave,
+          icon: ClipboardList,
+          color: "text-blue-600",
+          bg: "bg-blue-50",
+          summary: `${totalDays} Gün ${req.leaveType || req.type || "İzin"}`,
+          person: person || { id: personId, name: getLocalPersonName(person, req), surname: "", registryNo: req.personnelCode || req.sicilNo },
+          personnelId: personId,
+          totalDays,
+          priority: req.urgency === "urgent" || totalDays > 5 ? "High" : "Normal",
+          createdAt: req.createdAt || req.updatedAt || new Date().toISOString(),
+        };
+      });
+
+    const localAdvanceApprovals = localAdvances
+      .filter(req => isPendingStatus(req.status))
+      .map(req => {
+        const personId = getLocalPersonId(req);
+        const person = people.find(p => p.id === personId);
+        const amount = parseFloat(req.amount) || 0;
+        return {
+          ...req,
+          id: req.id || `local-advance-${personId}-${req.createdAt || amount}`,
+          sourceKey: ADVANCE_REQUESTS_KEY,
+          type: "Advance",
+          typeLabel: a.types.Advance,
+          icon: FileText,
+          color: "text-green-600",
+          bg: "bg-green-50",
+          summary: `${amount.toLocaleString()} ${req.currency || "₺"} Avans`,
+          person: person || { id: personId, name: getLocalPersonName(person, req), surname: "", registryNo: req.personnelCode || req.sicilNo },
+          personnelId: personId,
+          priority: amount > 10000 ? "Critical" : "Normal",
+          createdAt: req.createdAt || req.updatedAt || new Date().toISOString(),
+        };
+      });
+
+    return [...leaves, ...advances, ...localLeaveApprovals, ...localAdvanceApprovals]
       .sort((a, b) => {
-        const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date();
-        const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date();
+        const dateA = asDate(a.createdAt);
+        const dateB = asDate(b.createdAt);
         return dateB.getTime() - dateA.getTime();
       })
       .filter(req => 
@@ -163,7 +268,7 @@ export default function ApprovalsCenterPage() {
         req.person?.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         req.summary?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-  }, [pendingLeaves, pendingAdvances, personnel, searchTerm]);
+  }, [pendingLeaves, pendingAdvances, personnel, localPersonnel, localLeaves, localAdvances, searchTerm]);
 
   // KPIs
   const stats = React.useMemo(() => {
@@ -180,9 +285,51 @@ export default function ApprovalsCenterPage() {
   }, [allApprovals]);
 
   const handleAction = async (requestId: string, type: string, action: "Approved" | "Rejected", reason: string = "") => {
-    if (!db) return;
     setLoadingAction(true);
     try {
+      if (selectedRequest?.sourceKey) {
+        const key = selectedRequest.sourceKey;
+        const records = readLocalArray(key);
+        const nowIso = new Date().toISOString();
+        const next = records.map((record: any) => {
+          if ((record?.id || "").toString() !== requestId) return record;
+          return {
+            ...record,
+            status: action === "Approved" ? "approved" : "rejected",
+            updatedAt: nowIso,
+            ...(action === "Approved"
+              ? { approvedBy: user?.email || "Admin", approvedAt: nowIso }
+              : { rejectedBy: user?.email || "Admin", rejectedAt: nowIso, rejectedReason: reason, rejectionReason: reason }),
+          };
+        });
+        writeLocalArray(key, next);
+        writeLocalArray(AUDIT_KEY, [
+          {
+            id: `approval-${Date.now()}`,
+            action: `${type === "Leave" ? "İzin" : "Avans"} talebi ${action === "Approved" ? "onaylandı" : "reddedildi"}`,
+            requestId,
+            performedBy: user?.email || "Admin",
+            channel: "Panel",
+            category: "Onay",
+            detail: reason || selectedRequest.summary || "",
+            createdAt: nowIso,
+            timestamp: Date.now(),
+          },
+          ...readLocalArray(AUDIT_KEY),
+        ]);
+        loadLocalApprovals();
+        toast({
+          title: "İşlem Tamamlandı",
+          description: `Talep ${action === "Approved" ? "onaylandı" : "reddedildi"}.`,
+        });
+        setIsApproveOpen(false);
+        setIsRejectOpen(false);
+        setIsDetailOpen(false);
+        setActionReason("");
+        return;
+      }
+
+      if (!db) return;
       const collectionName = type === "Leave" ? "leave_requests" : "advance_requests";
       const requestRef = doc(db, collectionName, requestId);
       
@@ -226,8 +373,7 @@ export default function ApprovalsCenterPage() {
   };
 
   const getWaitTime = (createdAt: any) => {
-    if (!createdAt?.toDate) return "0 sa";
-    const start = createdAt.toDate();
+    const start = asDate(createdAt);
     const diffHours = differenceInHours(now, start);
     if (diffHours < 1) return "< 1 sa";
     if (diffHours < 24) return `${diffHours} sa`;

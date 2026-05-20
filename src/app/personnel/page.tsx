@@ -80,6 +80,7 @@ export default function PersonnelPage() {
 
   const [localBranches, setLocalBranches] = React.useState<any[]>([])
   const [localDepartments, setLocalDepartments] = React.useState<any[]>([])
+  const [localPositions, setLocalPositions] = React.useState<any[]>([])
   const [localRoles, setLocalRoles] = React.useState<any[]>([])
 
   const loadEmployees = React.useCallback(() => {
@@ -129,6 +130,7 @@ export default function PersonnelPage() {
 
     setLocalBranches(readFromLocalStorage(["app_branches", "evyapar_pdks_branches_local_v1"]))
     setLocalDepartments(readFromLocalStorage(["app_departments", "evyapar_pdks_departments_local_v1"]))
+    setLocalPositions(readFromLocalStorage(["app_positions"]))
     setLocalRoles(readFromLocalStorage(["app_roles", "evyapar_pdks_roles_local_v1"]))
   }, [])
 
@@ -147,20 +149,26 @@ export default function PersonnelPage() {
 
   const getBranchLabel = React.useCallback((branchId: string | undefined) => {
     if (!branchId) return "-"
-    const match = localBranches.find((b) => (b?.id || b?.branchCode) === branchId)
-    return match?.branchName || match?.name || branchId
+    const match = localBranches.find((b) => [b?.id, b?.branchCode, b?.code].filter(Boolean).map(String).includes(branchId))
+    return match?.branchName || match?.name || match?.title || branchId
   }, [localBranches])
 
   const getDepartmentLabel = React.useCallback((departmentId: string | undefined) => {
     if (!departmentId) return "-"
-    const match = localDepartments.find((d) => (d?.id || d?.departmentCode || d?.code) === departmentId)
-    return match?.departmentName || match?.name || departmentId
+    const match = localDepartments.find((d) => [d?.id, d?.departmentCode, d?.code].filter(Boolean).map(String).includes(departmentId))
+    return match?.departmentName || match?.name || match?.title || departmentId
   }, [localDepartments])
+
+  const getPositionLabel = React.useCallback((positionId: string | undefined) => {
+    if (!positionId) return "-"
+    const match = localPositions.find((pos) => [pos?.id, pos?.positionCode, pos?.code].filter(Boolean).map(String).includes(positionId))
+    return match?.positionName || match?.name || match?.title || positionId
+  }, [localPositions])
 
   const getRoleLabel = React.useCallback((roleId: string | undefined) => {
     if (!roleId) return "-"
-    const match = localRoles.find((r) => (r?.id || r?.roleCode || r?.code) === roleId)
-    return match?.roleName || match?.name || roleId
+    const match = localRoles.find((r) => [r?.id, r?.roleCode, r?.code].filter(Boolean).map(String).includes(roleId))
+    return match?.roleName || match?.name || match?.title || roleId
   }, [localRoles])
 
   const filteredEmployees = React.useMemo(() => {
@@ -402,18 +410,18 @@ export default function PersonnelPage() {
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center text-sm font-semibold text-slate-700">
                           <Building className="mr-2 h-3.5 w-3.5 text-slate-400" />
-                          {emp.departmentId || "-"}
+                          {getDepartmentLabel(emp.departmentId)}
                         </div>
                         <div className="flex items-center text-[12px] font-medium text-slate-500">
                           <Briefcase className="mr-2 h-3.5 w-3.5 text-slate-400" />
-                          {emp.position || "-"}
+                          {getPositionLabel(emp.position)}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-sm font-bold text-slate-600">
                       <div className="flex items-center">
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-300 mr-2.5"></span>
-                        {emp.branchId || "-"}
+                        {getBranchLabel(emp.branchId)}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -482,7 +490,7 @@ export default function PersonnelPage() {
       </Card>
 
       <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-[900px] p-0 border-none">
+        <SheetContent side="right" className="w-full overflow-hidden sm:max-w-[900px] p-0 border-none">
           <div className="h-full flex flex-col">
             <header className="p-8 pb-4 flex justify-between items-start bg-white border-b">
               <div className="space-y-1">
@@ -495,7 +503,7 @@ export default function PersonnelPage() {
                 <X className="h-5 w-5" />
               </Button>
             </header>
-            <ScrollArea className="flex-1 p-8">
+            <ScrollArea className="flex-1 p-4 sm:p-8">
               <AddPersonnelForm 
                 onSuccess={() => {
                   loadEmployees()
@@ -544,7 +552,7 @@ export default function PersonnelPage() {
                   <div className="grid grid-cols-1 gap-4">
                     <InfoRow label="Şube" value={getBranchLabel(selectedEmployee.branchId)} />
                     <InfoRow label="Departman" value={getDepartmentLabel(selectedEmployee.departmentId)} />
-                    <InfoRow label="Pozisyon" value={selectedEmployee.position || "-"} />
+                    <InfoRow label="Pozisyon" value={getPositionLabel(selectedEmployee.position)} />
                     <InfoRow label="Çalışma Türü" value={selectedEmployee.workType || "-"} />
                     <InfoRow label="Yetki Rolü" value={getRoleLabel(selectedEmployee.role)} />
                     <InfoRow label="Durum" value={selectedEmployee.status === "Active" ? t.active : t.inactive} />
@@ -619,7 +627,7 @@ export default function PersonnelPage() {
                                 {localBranches?.length > 0 ? (
                                   localBranches.map((b: any) => {
                                     const value = (b?.id || b?.branchCode || "").toString()
-                                    const label = (b?.branchName || b?.name || "").toString()
+                                    const label = (b?.branchName || b?.name || b?.title || "").toString()
                                     if (!value || !label) return null
                                     return <SelectItem key={value} value={value}>{label}</SelectItem>
                                   })
@@ -640,7 +648,7 @@ export default function PersonnelPage() {
                                 {localDepartments?.length > 0 ? (
                                   localDepartments.map((d: any) => {
                                     const value = (d?.id || d?.departmentCode || d?.code || "").toString()
-                                    const label = (d?.departmentName || d?.name || "").toString()
+                                    const label = (d?.departmentName || d?.name || d?.title || "").toString()
                                     if (!value || !label) return null
                                     return <SelectItem key={value} value={value}>{label}</SelectItem>
                                   })
@@ -681,7 +689,7 @@ export default function PersonnelPage() {
                                 {localRoles?.length > 0 ? (
                                   localRoles.map((r: any) => {
                                     const value = (r?.id || r?.roleCode || r?.code || "").toString()
-                                    const label = (r?.roleName || r?.name || "").toString()
+                                    const label = (r?.roleName || r?.name || r?.title || "").toString()
                                     if (!value || !label) return null
                                     return <SelectItem key={value} value={value}>{label}</SelectItem>
                                   })

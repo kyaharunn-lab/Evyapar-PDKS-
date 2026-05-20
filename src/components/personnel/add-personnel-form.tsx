@@ -112,6 +112,24 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
 
   const PERSONNEL_STORAGE_KEY = "app_personnel"
 
+  const getBranchLabel = React.useCallback((branchId: string | undefined) => {
+    if (!branchId) return "-"
+    const match = localBranches.find((b) => [b?.id, b?.branchCode, b?.code].filter(Boolean).map(String).includes(branchId))
+    return match?.branchName || match?.name || match?.title || branchId
+  }, [localBranches])
+
+  const getDepartmentLabel = React.useCallback((departmentId: string | undefined) => {
+    if (!departmentId) return "-"
+    const match = localDepartments.find((d) => [d?.id, d?.departmentCode, d?.code].filter(Boolean).map(String).includes(departmentId))
+    return match?.departmentName || match?.name || match?.title || departmentId
+  }, [localDepartments])
+
+  const getRoleLabel = React.useCallback((roleId: string | undefined) => {
+    if (!roleId) return "-"
+    const match = localRoles.find((r) => [r?.id, r?.roleCode, r?.code].filter(Boolean).map(String).includes(roleId))
+    return match?.roleName || match?.name || match?.title || roleId
+  }, [localRoles])
+
   React.useEffect(() => {
     const readBranchesFromLocalStorage = () => {
       const keysToTry = ["app_branches", "evyapar_pdks_branches_local_v1"];
@@ -279,9 +297,9 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 pb-20">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full min-w-0 space-y-8 pb-20">
+        <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-3">
+          <div className="min-w-0 space-y-8 xl:col-span-2">
             {/* 1. Profil Bilgileri */}
             <Card className="border-none shadow-sm bg-slate-50/50">
               <CardContent className="p-6">
@@ -385,7 +403,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                             {localBranches?.length > 0 ? (
                               localBranches.map((b: any) => {
                                 const value = (b?.id || b?.branchCode || "").toString();
-                                const label = (b?.branchName || b?.name || "").toString();
+                                const label = (b?.branchName || b?.name || b?.title || "").toString();
                                 if (!value || !label) return null;
                                 return (
                                   <SelectItem key={value} value={value}>
@@ -418,7 +436,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                             {localDepartments?.length > 0 ? (
                               localDepartments.map((d: any) => {
                                 const value = (d?.id || d?.departmentCode || d?.code || "").toString();
-                                const label = (d?.departmentName || d?.name || "").toString();
+                                const label = (d?.departmentName || d?.name || d?.title || "").toString();
                                 if (!value || !label) return null;
                                 return (
                                   <SelectItem key={value} value={value}>
@@ -471,7 +489,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                             {localRoles?.length > 0 ? (
                               localRoles.map((r: any) => {
                                 const value = (r?.id || r?.roleCode || r?.code || "").toString();
-                                const label = (r?.roleName || r?.name || "").toString();
+                                const label = (r?.roleName || r?.name || r?.title || "").toString();
                                 if (!value || !label) return null;
                                 return (
                                   <SelectItem key={value} value={value}>
@@ -588,8 +606,8 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
             </Card>
           </div>
 
-          <div className="space-y-6">
-            <Card className="sticky top-0 border-primary/10 shadow-lg overflow-hidden">
+          <div className="min-w-0 space-y-6">
+            <Card className="sticky top-0 w-full max-w-full border-primary/10 shadow-lg overflow-hidden">
               <div className="bg-primary p-6 text-white text-center">
                 <div className="relative inline-block">
                   <Avatar className="h-24 w-24 border-4 border-white/20 shadow-xl">
@@ -614,20 +632,24 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                 </p>
               </div>
               <CardContent className="p-6 space-y-4">
+                <div className="flex justify-between items-center gap-3 text-sm">
+                  <span className="text-muted-foreground">Şube</span>
+                  <span className="min-w-0 truncate font-semibold text-primary">{getBranchLabel(form.watch("branchId"))}</span>
+                </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Departman</span>
-                  <span className="font-semibold text-primary">{form.watch("departmentId") || "-"}</span>
+                  <span className="min-w-0 truncate font-semibold text-primary">{getDepartmentLabel(form.watch("departmentId"))}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Maaş</span>
-                  <span className="font-bold text-accent">
+                  <span className="min-w-0 truncate font-bold text-accent">
                     {form.watch("salaryAmount") ? `${form.watch("salaryAmount")} ${form.watch("salaryCurrency")}` : "-"}
                   </span>
                 </div>
                 <Separator />
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Yetki Rolü</span>
-                  <Badge variant="outline" className="font-bold border-primary/20">{form.watch("role") || "-"}</Badge>
+                  <Badge variant="outline" className="max-w-[60%] truncate font-bold border-primary/20">{getRoleLabel(form.watch("role"))}</Badge>
                 </div>
               </CardContent>
             </Card>

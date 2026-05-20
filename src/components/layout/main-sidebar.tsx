@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils"
 
 const s = translations.sidebar;
 const c = translations.common;
+const APPROVAL_STORAGE_KEYS = ["app_leave_requests", "app_advance_requests"] as const;
 
 const navigation = [
   {
@@ -114,6 +115,26 @@ function isItemActive(pathname: string, item: { url: string; activePaths?: strin
   return paths.some((path) => pathname === path || (path !== "/" && pathname.startsWith(`${path}/`)))
 }
 
+function isPendingApprovalStatus(status: unknown) {
+  const normalized = String(status || "").trim().toLowerCase()
+  return normalized === "pending" || normalized === "bekliyor"
+}
+
+function readApprovalCount() {
+  if (typeof window === "undefined") return 0
+
+  return APPROVAL_STORAGE_KEYS.reduce((total, key) => {
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(key) || "[]")
+      if (!Array.isArray(parsed)) return total
+
+      return total + parsed.filter((request) => isPendingApprovalStatus(request?.status)).length
+    } catch {
+      return total
+    }
+  }, 0)
+}
+
 function EvyaparLogo() {
   return (
     <div className="relative flex items-center justify-center w-[42px] h-[42px] bg-gradient-to-br from-[#EF4444] to-[#B91C1C] rounded-xl shadow-lg shadow-red-500/20 group-hover:scale-105 transition-transform duration-300 overflow-hidden">
@@ -145,6 +166,7 @@ function EvyaparLogo() {
 export function MainSidebar() {
   const pathname = usePathname()
   const { state } = useSidebar()
+  const [pendingApprovalsCount, setPendingApprovalsCount] = React.useState(0)
   const activeGroups = React.useMemo(() => {
     return navigation.reduce<Record<string, boolean>>((acc, group) => {
       acc[group.title] = group.items.some((item) => isItemActive(pathname, item))
@@ -156,6 +178,33 @@ export function MainSidebar() {
   React.useEffect(() => {
     setOpenGroups((current) => ({ ...current, ...activeGroups }))
   }, [activeGroups])
+
+  React.useEffect(() => {
+    const refreshApprovalCount = () => setPendingApprovalsCount(readApprovalCount())
+    const handleStorage = (event: StorageEvent) => {
+      if (APPROVAL_STORAGE_KEYS.includes(event.key as typeof APPROVAL_STORAGE_KEYS[number])) {
+        refreshApprovalCount()
+      }
+    }
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshApprovalCount()
+    }
+
+    refreshApprovalCount()
+    window.addEventListener("storage", handleStorage)
+    window.addEventListener("focus", refreshApprovalCount)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener("focus", refreshApprovalCount)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    setPendingApprovalsCount(readApprovalCount())
+  }, [pathname])
 
   return (
     <Sidebar
@@ -199,7 +248,7 @@ export function MainSidebar() {
                   <SidebarMenu className="gap-1">
                     {group.items.map((item) => {
                       const active = isItemActive(pathname, item)
-                      const badge = "badge" in item ? item.badge : undefined
+                      const badge = item.url === "/approvals" ? String(pendingApprovalsCount) : "badge" in item ? item.badge : undefined
                       return (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton
