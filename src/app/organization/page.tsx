@@ -32,7 +32,7 @@ export default function OrganizationPage() {
   }, [])
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pt-6 md:pt-8">
       <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.35),transparent_28rem),linear-gradient(135deg,#071426_0%,#111a3b_48%,#312e81_100%)] p-8 text-white shadow-2xl shadow-slate-300/40">
         <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>

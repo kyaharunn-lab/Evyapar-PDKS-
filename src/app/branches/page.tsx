@@ -153,6 +153,44 @@ export default function BranchesPage() {
     return fullName || match?.personnelCode || managerId;
   }, [localPersonnel]);
 
+  const getBranchPersonnelCount = React.useCallback((branch: any) => {
+    const normalize = (value: any) => {
+      if (!value) return "";
+      if (typeof value === "object") {
+        return normalize(value.id || value.branchId || value.branchCode || value.code || value.branchName || value.name || value.title);
+      }
+      return value.toString().trim().toLowerCase();
+    };
+
+    const branchKeys = [
+      branch?.id,
+      branch?.branchId,
+      branch?.branchCode,
+      branch?.code,
+      branch?.branchName,
+      branch?.name,
+      branch?.title,
+    ].map(normalize).filter(Boolean);
+
+    if (branchKeys.length === 0) return 0;
+
+    return localPersonnel.filter((person) => {
+      if (person?.isDeleted) return false;
+      const personBranchKeys = [
+        person?.branchId,
+        person?.branch,
+        person?.branchName,
+        person?.selectedBranch,
+      ].map(normalize).filter(Boolean);
+
+      return personBranchKeys.some((key) => branchKeys.includes(key));
+    }).length;
+  }, [localPersonnel]);
+
+  const totalPersonnelInBranches = React.useMemo(() => {
+    return sortedBranches.reduce((total, branch) => total + getBranchPersonnelCount(branch), 0);
+  }, [getBranchPersonnelCount, sortedBranches]);
+
   const handleSave = async () => {
     if (!formData.branchName || !formData.branchCode) {
       toast({
@@ -315,7 +353,7 @@ export default function BranchesPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KPICard title="Toplam Şube" value={sortedBranches.length.toString()} icon={Building2} color="text-primary" bg="bg-primary/5" />
         <KPICard title="Aktif Şube" value={sortedBranches.filter(b => b.status === "Active").length.toString()} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
-        <KPICard title="Toplam Personel" value="0" icon={Users} color="text-blue-600" bg="bg-blue-50" />
+        <KPICard title="Toplam Personel" value={totalPersonnelInBranches.toString()} icon={Users} color="text-blue-600" bg="bg-blue-50" />
         <KPICard title="QR Aktif" value="0" icon={QrCode} color="text-orange-600" bg="bg-orange-50" />
       </div>
 
@@ -349,6 +387,7 @@ export default function BranchesPage() {
                   <TableHead>Kod</TableHead>
                   <TableHead>Şehir / İlçe</TableHead>
                   <TableHead>Yetkili</TableHead>
+                  <TableHead>Personel</TableHead>
                   <TableHead>Durum</TableHead>
                   <TableHead className="text-right pr-6">İşlemler</TableHead>
                 </TableRow>
@@ -361,6 +400,11 @@ export default function BranchesPage() {
                     <TableCell className="text-sm text-slate-600">{branch.city} / {branch.district || "-"}</TableCell>
                     <TableCell className="text-sm">
                       {getManagerLabel(branch.managerId)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="border-blue-100 bg-blue-50 text-xs font-bold text-blue-700">
+                        {getBranchPersonnelCount(branch)} personel
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className={cn(

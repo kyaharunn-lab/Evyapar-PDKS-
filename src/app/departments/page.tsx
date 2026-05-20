@@ -135,22 +135,59 @@ export default function DepartmentsPage() {
 
   const getManagerLabel = React.useCallback((managerId: string | undefined) => {
     if (!managerId) return "Henüz Atanmadı"
-    const match = localPersonnel.find((p) => p?.id === managerId)
+    const normalizedManager = managerId.toString().trim().toLowerCase()
+    const match = localPersonnel.find((p) => {
+      const fullName = p?.fullName || [p?.name, p?.surname].filter(Boolean).join(" ")
+      return [p?.id, p?.personnelCode, p?.registryNo, fullName].filter(Boolean).some((value) => value.toString().trim().toLowerCase() === normalizedManager)
+    })
     const fullName = match?.fullName || [match?.name, match?.surname].filter(Boolean).join(" ")
     return fullName || match?.personnelCode || managerId
   }, [localPersonnel])
 
+  const normalizeRelationValue = React.useCallback((value: any) => {
+    if (!value) return ""
+    if (typeof value === "object") {
+      return normalizeRelationValue(value.id || value.departmentId || value.departmentCode || value.code || value.departmentName || value.name || value.title || value.fullName)
+    }
+    return value.toString().trim().toLowerCase()
+  }, [])
+
+  const isManagerAssigned = React.useCallback((dept: any) => {
+    const managerValue = dept?.managerId || dept?.managerName || dept?.manager
+    if (!managerValue || managerValue === "none") return false
+    return Boolean(normalizeRelationValue(managerValue))
+  }, [normalizeRelationValue])
+
   const getPersonnelCountForDept = React.useCallback((dept: any) => {
-    const deptId = dept?.id
-    const deptCode = dept?.departmentCode
-    if (!deptId && !deptCode) return 0
+    const deptKeys = [
+      dept?.id,
+      dept?.departmentId,
+      dept?.departmentCode,
+      dept?.code,
+      dept?.departmentName,
+      dept?.name,
+      dept?.title,
+    ].map(normalizeRelationValue).filter(Boolean)
+    if (deptKeys.length === 0) return 0
     const list = Array.isArray(localPersonnel) ? localPersonnel : []
     return list.filter((p) => {
       if (p?.isDeleted) return false
-      const val = p?.departmentId
-      return val && (val === deptId || val === deptCode)
+      const personDeptKeys = [
+        p?.departmentId,
+        p?.department,
+        p?.departmentName,
+      ].map(normalizeRelationValue).filter(Boolean)
+      return personDeptKeys.some((key) => deptKeys.includes(key))
     }).length
-  }, [localPersonnel])
+  }, [localPersonnel, normalizeRelationValue])
+
+  const totalDepartmentPersonnel = React.useMemo(() => {
+    return departments.reduce((total, dept) => total + getPersonnelCountForDept(dept), 0)
+  }, [departments, getPersonnelCountForDept])
+
+  const assignedManagerCount = React.useMemo(() => {
+    return departments.filter(isManagerAssigned).length
+  }, [departments, isManagerAssigned])
 
   const resetForm = React.useCallback(() => {
     setDeptName("")
@@ -290,8 +327,8 @@ export default function DepartmentsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KPICard title="Toplam Departman" value={departments.length.toString()} icon={FolderTree} color="text-primary" bg="bg-primary/5" />
         <KPICard title="Aktif Departman" value={departments.filter((d) => d.status === "Active").length.toString()} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
-        <KPICard title="Toplam Personel" value="0" icon={Users2} color="text-blue-600" bg="bg-blue-50" />
-        <KPICard title="Yönetici Atanmış" value="0" icon={UserCircle2} color="text-orange-600" bg="bg-orange-50" />
+        <KPICard title="Toplam Personel" value={totalDepartmentPersonnel.toString()} icon={Users2} color="text-blue-600" bg="bg-blue-50" />
+        <KPICard title="Yönetici Atanmış" value={assignedManagerCount.toString()} icon={UserCircle2} color="text-orange-600" bg="bg-orange-50" />
       </div>
 
       {/* Tablo Alanı */}
@@ -338,7 +375,7 @@ export default function DepartmentsPage() {
                   <TableRow key={dept.id} className="group hover:bg-slate-50/80 transition-all">
                     <TableCell className="pl-6 font-bold text-primary">{dept.departmentName}</TableCell>
                     <TableCell className="font-mono text-xs text-slate-500">{dept.departmentCode}</TableCell>
-                    <TableCell className="text-sm text-slate-600">{getManagerLabel(dept.managerId)}</TableCell>
+                    <TableCell className="text-sm text-slate-600">{getManagerLabel(dept.managerId || dept.managerName || dept.manager)}</TableCell>
                     <TableCell className="text-sm text-slate-600">{getPersonnelCountForDept(dept)}</TableCell>
                     <TableCell className="text-sm text-slate-600">{getBranchLabel(dept.branchId)}</TableCell>
                     <TableCell>
@@ -395,7 +432,7 @@ export default function DepartmentsPage() {
                 <InfoRow label="Departman Adı" value={selectedDept.departmentName || "-"} />
                 <InfoRow label="Departman Kodu" value={selectedDept.departmentCode || "-"} />
                 <InfoRow label="Şube" value={getBranchLabel(selectedDept.branchId)} />
-                <InfoRow label="Yönetici" value={getManagerLabel(selectedDept.managerId)} />
+                <InfoRow label="Yönetici" value={getManagerLabel(selectedDept.managerId || selectedDept.managerName || selectedDept.manager)} />
                 <InfoRow label="Durum" value={selectedDept.status === "Active" ? "Aktif" : "Pasif"} />
                 <InfoRow label="Personel Sayısı" value={getPersonnelCountForDept(selectedDept).toString()} />
               </>

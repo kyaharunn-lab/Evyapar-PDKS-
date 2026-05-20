@@ -76,9 +76,11 @@ export default function PositionsPage() {
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
   const [localBranches, setLocalBranches] = React.useState<any[]>([])
   const [localDepartments, setLocalDepartments] = React.useState<any[]>([])
+  const [localPersonnel, setLocalPersonnel] = React.useState<any[]>([])
   const [positions, setPositions] = React.useState<any[]>([])
   const [selectedPos, setSelectedPos] = React.useState<any | null>(null)
   const [editingPosId, setEditingPosId] = React.useState<string | null>(null)
+  const createDialogRef = React.useRef<HTMLDivElement | null>(null)
 
   // Form state
   const [posName, setPosName] = React.useState("")
@@ -92,6 +94,7 @@ export default function PositionsPage() {
   const [posStatus, setPosStatus] = React.useState("active")
 
   const POSITIONS_STORAGE_KEY = "app_positions"
+  const PERSONNEL_STORAGE_KEY = "app_personnel"
 
   React.useEffect(() => {
     const readFromLocalStorage = (keysToTry: string[]) => {
@@ -110,6 +113,7 @@ export default function PositionsPage() {
 
     setLocalBranches(readFromLocalStorage(["app_branches", "evyapar_pdks_branches_local_v1"]));
     setLocalDepartments(readFromLocalStorage(["app_departments", "evyapar_pdks_departments_local_v1"]));
+    setLocalPersonnel(readFromLocalStorage([PERSONNEL_STORAGE_KEY]));
   }, []);
 
   React.useEffect(() => {
@@ -142,6 +146,61 @@ export default function PositionsPage() {
     const match = localDepartments.find((d) => (d?.id || d?.departmentCode || d?.code) === departmentId)
     return match?.departmentName || match?.name || departmentId
   }, [localDepartments])
+
+  const getPersonnelName = React.useCallback((person: any) => {
+    return (
+      person?.fullName ||
+      person?.personnelName ||
+      [person?.firstName || person?.name, person?.lastName || person?.surname].filter(Boolean).join(" ") ||
+      person?.name ||
+      person?.personnelCode ||
+      person?.id ||
+      "Personel"
+    ).toString()
+  }, [])
+
+  const activePersonnel = React.useMemo(() => {
+    return localPersonnel.filter((person) => {
+      if (person?.isDeleted) return false
+      const status = (person?.status || "Active").toString().toLowerCase()
+      return !["inactive", "passive", "pasif", "deleted"].includes(status)
+    })
+  }, [localPersonnel])
+
+  const selectedManagerName = React.useMemo(() => {
+    if (!posManagerId || posManagerId === "none") return undefined
+    const person = localPersonnel.find((item) => item?.id === posManagerId)
+    return person ? getPersonnelName(person) : undefined
+  }, [getPersonnelName, localPersonnel, posManagerId])
+
+  const getManagerLabel = React.useCallback((position: any) => {
+    if (!position?.managerId && !position?.managerName) return "HenÃ¼z AtanmadÄ±"
+    const person = localPersonnel.find((item) => item?.id === position?.managerId)
+    return position?.managerName || (person ? getPersonnelName(person) : position?.managerId) || "HenÃ¼z AtanmadÄ±"
+  }, [getPersonnelName, localPersonnel])
+
+  const hasAssignedPersonnel = React.useCallback((position: any) => {
+    const hasValue = (value: any) => {
+      if (!value) return false
+      if (Array.isArray(value)) return value.length > 0
+      if (typeof value === "object") return Object.keys(value).length > 0
+      return value.toString().trim().length > 0
+    }
+
+    const count = Number(position?.personnelCount || 0)
+    return hasValue(position?.personnelId)
+      || hasValue(position?.assignedPersonnel)
+      || hasValue(position?.personnel)
+      || count > 0
+  }, [])
+
+  const assignedPositionCount = React.useMemo(() => {
+    return positions.filter(hasAssignedPersonnel).length
+  }, [hasAssignedPersonnel, positions])
+
+  const emptyPositionCount = React.useMemo(() => {
+    return positions.filter((position) => !hasAssignedPersonnel(position)).length
+  }, [hasAssignedPersonnel, positions])
 
   const handleCreatePosition = React.useCallback(() => {
     if (!posName.trim()) {
@@ -177,6 +236,7 @@ export default function PositionsPage() {
       departmentId: posDepartmentId,
       branchId: posBranchId || undefined,
       managerId: posManagerId && posManagerId !== "none" ? posManagerId : undefined,
+      managerName: selectedManagerName,
       permissionLevel: posPermissionLevel,
       workType: posWorkType,
       description: posDescription,
@@ -206,7 +266,7 @@ export default function PositionsPage() {
       title: "Başarılı",
       description: "Pozisyon oluşturuldu.",
     })
-  }, [persistPositions, posBranchId, posCode, posDepartmentId, posDescription, posManagerId, posName, posPermissionLevel, posStatus, posWorkType, toast])
+  }, [persistPositions, posBranchId, posCode, posDepartmentId, posDescription, posManagerId, posName, posPermissionLevel, posStatus, posWorkType, selectedManagerName, toast])
 
   const handleOpenDetail = React.useCallback((pos: any) => {
     setSelectedPos(pos)
@@ -274,6 +334,7 @@ export default function PositionsPage() {
       departmentId: posDepartmentId,
       branchId: posBranchId || undefined,
       managerId: posManagerId && posManagerId !== "none" ? posManagerId : undefined,
+      managerName: selectedManagerName,
       permissionLevel: posPermissionLevel,
       workType: posWorkType,
       description: posDescription,
@@ -312,7 +373,7 @@ export default function PositionsPage() {
     setPosStatus("active")
 
     toast({ title: "Başarılı", description: editingPosId ? "Pozisyon güncellendi." : "Pozisyon oluşturuldu." })
-  }, [editingPosId, persistPositions, posBranchId, posCode, posDepartmentId, posDescription, posManagerId, posName, posPermissionLevel, posStatus, posWorkType, toast])
+  }, [editingPosId, persistPositions, posBranchId, posCode, posDepartmentId, posDescription, posManagerId, posName, posPermissionLevel, posStatus, posWorkType, selectedManagerName, toast])
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -344,8 +405,8 @@ export default function PositionsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KPICard title="Toplam Pozisyon" value={positions.length.toString()} icon={LayoutGrid} color="text-primary" bg="bg-primary/5" />
         <KPICard title="Aktif Pozisyon" value={positions.filter((p) => p.status === "Active").length.toString()} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
-        <KPICard title="Personel Atanmış" value="0" icon={Users2} color="text-blue-600" bg="bg-blue-50" />
-        <KPICard title="Boş Pozisyon" value="0" icon={UserCircle2} color="text-orange-600" bg="bg-orange-50" />
+        <KPICard title="Personel Atanmış" value={assignedPositionCount.toString()} icon={Users2} color="text-blue-600" bg="bg-blue-50" />
+        <KPICard title="Boş Pozisyon" value={emptyPositionCount.toString()} icon={UserCircle2} color="text-orange-600" bg="bg-orange-50" />
       </div>
 
       {/* Tablo Alanı */}
@@ -402,7 +463,7 @@ export default function PositionsPage() {
                     <TableCell className="font-mono text-xs text-slate-500">{pos.positionCode}</TableCell>
                     <TableCell className="text-sm text-slate-600">{getDepartmentLabel(pos.departmentId)}</TableCell>
                     <TableCell className="text-sm text-slate-600">{getBranchLabel(pos.branchId)}</TableCell>
-                    <TableCell className="text-sm text-slate-600">{pos.managerId ? pos.managerId : "Henüz Atanmadı"}</TableCell>
+                    <TableCell className="text-sm text-slate-600">{getManagerLabel(pos)}</TableCell>
                     <TableCell className="text-sm text-slate-600">0</TableCell>
                     <TableCell className="text-sm font-bold text-slate-700">{pos.permissionLevel || "-"}</TableCell>
                     <TableCell>
@@ -446,7 +507,7 @@ export default function PositionsPage() {
           if (!open) setEditingPosId(null)
         }}
       >
-        <DialogContent className="sm:max-w-[750px] p-0 border-none rounded-[32px] overflow-hidden shadow-2xl">
+        <DialogContent ref={createDialogRef} className="sm:max-w-[750px] p-0 border-none rounded-[32px] overflow-hidden shadow-2xl">
           <DialogHeader className="p-8 bg-primary text-white">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-white/10 rounded-xl">
@@ -496,7 +557,7 @@ export default function PositionsPage() {
                     <SelectTrigger className="rounded-xl border-slate-200">
                       <SelectValue placeholder="Seçiniz..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent container={createDialogRef.current} className="z-[80]">
                       {localDepartments?.length > 0 ? (
                         localDepartments.map((d: any) => {
                           const value = (d?.id || d?.departmentCode || d?.code || "").toString();
@@ -520,7 +581,7 @@ export default function PositionsPage() {
                     <SelectTrigger className="rounded-xl border-slate-200">
                       <SelectValue placeholder="Seçiniz..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent container={createDialogRef.current} className="z-[80]">
                       {localBranches?.length > 0 ? (
                         localBranches.map((b: any) => {
                           const value = (b?.id || b?.branchCode || "").toString();
@@ -546,8 +607,17 @@ export default function PositionsPage() {
                   <SelectTrigger className="rounded-xl border-slate-200">
                     <SelectValue placeholder="Yönetici seçin..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent container={createDialogRef.current} className="z-[80]">
                     <SelectItem value="none">Henüz Atanmadı</SelectItem>
+                    {activePersonnel.map((person) => {
+                      const value = (person?.id || "").toString()
+                      if (!value) return null
+                      return (
+                        <SelectItem key={value} value={value}>
+                          {getPersonnelName(person)}
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -559,7 +629,7 @@ export default function PositionsPage() {
                     <SelectTrigger className="rounded-xl border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent container={createDialogRef.current} className="z-[80]">
                       <SelectItem value="1">Seviye 1 (Personel)</SelectItem>
                       <SelectItem value="2">Seviye 2 (Şef/Takım Lideri)</SelectItem>
                       <SelectItem value="3">Seviye 3 (Müdür)</SelectItem>
@@ -574,7 +644,7 @@ export default function PositionsPage() {
                     <SelectTrigger className="rounded-xl border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent container={createDialogRef.current} className="z-[80]">
                       <SelectItem value="office">Ofis</SelectItem>
                       <SelectItem value="field">Saha</SelectItem>
                       <SelectItem value="remote">Uzaktan</SelectItem>
@@ -643,7 +713,7 @@ export default function PositionsPage() {
                   <SelectTrigger className="rounded-xl border-slate-200">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent container={createDialogRef.current} className="z-[80]">
                     <SelectItem value="active">Aktif</SelectItem>
                     <SelectItem value="inactive">Pasif</SelectItem>
                   </SelectContent>
