@@ -84,6 +84,19 @@ const getPersonnelName = (person: any) => {
 
 const getRoleId = (role: any) => (role?.id || role?.roleCode || role?.code || "").toString()
 const getRoleName = (role: any) => (role?.roleName || role?.name || role?.roleCode || "Rol").toString()
+const getRolePermissions = (role: any) => {
+  const managerRole = /müdür|mudur/i.test(getRoleName(role))
+  const permissions = role?.permissions || {}
+  return {
+    panelAccess: Boolean(permissions.panelAccess ?? role?.panelAccess ?? managerRole),
+    mobileAccess: Boolean(permissions.mobileAccess ?? role?.mobileAccess ?? true),
+    pageAccess: Array.from(new Set([
+      ...(Array.isArray(permissions.pageAccess) ? permissions.pageAccess : []),
+      ...(managerRole ? ["organization", "leave_requests", "requests"] : []),
+    ])),
+    branchAccess: Array.isArray(permissions.branchAccess) ? permissions.branchAccess : [],
+  }
+}
 
 export default function AccessControlPage() {
   const { toast } = useToast()
@@ -107,11 +120,18 @@ export default function AccessControlPage() {
 
   React.useEffect(() => {
     loadData()
+    window.addEventListener("app-access-updated", loadData)
+    window.addEventListener("focus", loadData)
+    return () => {
+      window.removeEventListener("app-access-updated", loadData)
+      window.removeEventListener("focus", loadData)
+    }
   }, [loadData])
 
   const persistAccess = React.useCallback((next: any[]) => {
     localStorage.setItem(ACCESS_KEY, JSON.stringify(next))
     setAccessRecords(next)
+    window.dispatchEvent(new Event("app-access-updated"))
   }, [])
 
   const getRoleLabel = React.useCallback((roleId: string) => {
@@ -123,17 +143,22 @@ export default function AccessControlPage() {
   const rows = React.useMemo(() => {
     return personnel.map((person) => {
       const record = accessRecords.find((item) => item?.personnelId === person?.id)
+      const roleId = record?.roleId || person?.role || ""
+      const role = roles.find((item) => getRoleId(item) === roleId)
+      const rolePermissions = getRolePermissions(role)
       return {
         personnel: person,
         personnelId: person?.id,
-        roleId: record?.roleId || person?.role || "",
-        panelAccess: typeof record?.panelAccess === "boolean" ? record.panelAccess : Boolean(person?.hasAdminAccess),
-        mobileAccess: typeof record?.mobileAccess === "boolean" ? record.mobileAccess : person?.hasMobileAccess !== false,
+        roleId,
+        panelAccess: typeof record?.panelAccess === "boolean" ? record.panelAccess : role ? rolePermissions.panelAccess : Boolean(person?.hasAdminAccess),
+        mobileAccess: typeof record?.mobileAccess === "boolean" ? record.mobileAccess : role ? rolePermissions.mobileAccess : person?.hasMobileAccess !== false,
+        pageAccess: record?.pageAccess || person?.pageAccess || (role ? rolePermissions.pageAccess : []),
+        branchAccess: record?.branchAccess || person?.branchAccess || (role ? rolePermissions.branchAccess : []),
         status: record?.status || (person?.status === "Inactive" ? "Inactive" : "Active"),
         updatedAt: record?.updatedAt,
       }
     })
-  }, [accessRecords, personnel])
+  }, [accessRecords, personnel, roles])
 
   const stats = React.useMemo(() => {
     return {
@@ -159,12 +184,17 @@ export default function AccessControlPage() {
     const now = Date.now()
     const existing = accessRecords.find((item) => item?.personnelId === patch.personnelId)
     const base = rows.find((row) => row.personnelId === patch.personnelId)
+    const roleId = patch.roleId ?? existing?.roleId ?? base?.roleId ?? ""
+    const role = roles.find((item) => getRoleId(item) === roleId)
+    const rolePermissions = getRolePermissions(role)
     const nextRecord = {
       id: existing?.id || `access-${now}-${Math.random().toString(16).slice(2)}`,
       personnelId: patch.personnelId,
-      roleId: patch.roleId ?? existing?.roleId ?? base?.roleId ?? "",
-      panelAccess: patch.panelAccess ?? existing?.panelAccess ?? base?.panelAccess ?? false,
-      mobileAccess: patch.mobileAccess ?? existing?.mobileAccess ?? base?.mobileAccess ?? true,
+      roleId,
+      panelAccess: patch.panelAccess ?? rolePermissions.panelAccess ?? existing?.panelAccess ?? base?.panelAccess ?? false,
+      mobileAccess: patch.mobileAccess ?? rolePermissions.mobileAccess ?? existing?.mobileAccess ?? base?.mobileAccess ?? true,
+      pageAccess: (patch as any).pageAccess ?? rolePermissions.pageAccess ?? existing?.pageAccess ?? base?.pageAccess ?? [],
+      branchAccess: (patch as any).branchAccess ?? rolePermissions.branchAccess ?? existing?.branchAccess ?? base?.branchAccess ?? [],
       status: patch.status ?? existing?.status ?? base?.status ?? "Active",
       createdAt: existing?.createdAt || now,
       updatedAt: now,
@@ -175,6 +205,25 @@ export default function AccessControlPage() {
       : [nextRecord, ...accessRecords]
 
     persistAccess(next)
+    try {
+      const nextPersonnel = personnel.map((person) => person?.id === patch.personnelId
+        ? {
+            ...person,
+            role: roleId,
+            hasAdminAccess: nextRecord.panelAccess,
+            hasMobileAccess: nextRecord.mobileAccess,
+            pageAccess: nextRecord.pageAccess,
+            branchAccess: nextRecord.branchAccess,
+            rolePermissions,
+            updatedAt: now,
+          }
+        : person)
+      localStorage.setItem(PERSONNEL_KEY, JSON.stringify(nextPersonnel))
+      setPersonnel(nextPersonnel)
+      window.dispatchEvent(new Event("app-access-updated"))
+    } catch {
+      // ignore personnel sync errors
+    }
   }
 
   const handleSave = () => {
@@ -341,7 +390,11 @@ export default function AccessControlPage() {
 
             <div className="space-y-1.5">
               <Label className="text-[11px] font-bold text-slate-500 uppercase">Rol seç</Label>
-              <Select value={formData.roleId} onValueChange={(value) => setFormData((prev) => ({ ...prev, roleId: value }))}>
+              <Select value={formData.roleId} onValueChange={(value) => {
+                const role = roles.find((item) => getRoleId(item) === value)
+                const permissions = getRolePermissions(role)
+                setFormData((prev) => ({ ...prev, roleId: value, panelAccess: permissions.panelAccess, mobileAccess: permissions.mobileAccess }))
+              }}>
                 <SelectTrigger className="rounded-xl h-11 border-slate-200 bg-white">
                   <SelectValue placeholder="Rol seçin" />
                 </SelectTrigger>

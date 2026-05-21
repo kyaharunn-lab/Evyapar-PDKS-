@@ -11,11 +11,8 @@ import {
   CalendarClock, 
   Coffee,
   ClipboardList,
-  FileText,
-  Bell,
   ShieldCheck,
   Fingerprint,
-  History,
   BarChart3,
   BrainCircuit,
   Settings2,
@@ -44,10 +41,12 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
+import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 
 const s = translations.sidebar;
 const c = translations.common;
 const APPROVAL_STORAGE_KEYS = ["app_leave_requests", "app_advance_requests"] as const;
+const PERMISSION_STORAGE_KEYS = ["app_personnel", ...ACCESS_STORAGE_KEYS] as const;
 
 const navigation = [
   {
@@ -69,9 +68,7 @@ const navigation = [
   {
     title: "TALEPLER",
     items: [
-      { title: "İzin Talepleri", url: "/leaves", icon: ClipboardList },
-      { title: "Avans Talepleri", url: "/advances", icon: FileText },
-      { title: "Onay Bekleyenler", url: "/approvals", icon: Bell, badge: "8" },
+      { title: "Talep Merkezi", url: "/requests", icon: ClipboardList, badge: "8", activePaths: ["/requests", "/leaves", "/advances", "/approvals", "/leave-requests"] },
     ],
   },
   {
@@ -85,21 +82,20 @@ const navigation = [
   {
     title: "GÜVENLİK",
     items: [
-      { title: "KVKK Onayları", url: "/kvkk", icon: Fingerprint },
-      { title: "Denetim Logları", url: "/audit", icon: History },
+      { title: "KVKK & Denetim Merkezi", url: "/kvkk", icon: Fingerprint, activePaths: ["/kvkk", "/audit"] },
     ],
   },
   {
     title: "ANALİZ & RAPOR",
     items: [
-      { title: "Raporlar", url: "/reports", icon: BarChart3, activePaths: ["/reports", "/reports/overtime", "/reports/absence"] },
+      { title: "Rapor Merkezi", url: "/reports", icon: BarChart3, activePaths: ["/reports", "/reports/overtime", "/reports/absence"] },
       { title: "Yapay Zekâ Analizleri", url: "/ai-insights", icon: BrainCircuit },
     ],
   },
   {
     title: "SİSTEM",
     items: [
-      { title: "Ayarlar", url: "/settings", icon: Settings2, activePaths: ["/settings", "/settings/company", "/settings/notifications"] },
+      { title: "Sistem Ayarları", url: "/settings", icon: Settings2, activePaths: ["/settings", "/settings/company", "/settings/notifications"] },
     ],
   },
   {
@@ -167,17 +163,41 @@ export function MainSidebar() {
   const pathname = usePathname()
   const { state } = useSidebar()
   const [pendingApprovalsCount, setPendingApprovalsCount] = React.useState(0)
+  const [hasPanelAccess, setHasPanelAccess] = React.useState(() => readCurrentAccess().panelAccess)
+  const visibleNavigation = React.useMemo(() => {
+    if (hasPanelAccess) return navigation
+    return navigation
+      .map((group) => ({ ...group, items: group.items.filter((item) => item.url === "/dashboard") }))
+      .filter((group) => group.items.length > 0)
+  }, [hasPanelAccess])
   const activeGroups = React.useMemo(() => {
-    return navigation.reduce<Record<string, boolean>>((acc, group) => {
+    return visibleNavigation.reduce<Record<string, boolean>>((acc, group) => {
       acc[group.title] = group.items.some((item) => isItemActive(pathname, item))
       return acc
     }, {})
-  }, [pathname])
+  }, [pathname, visibleNavigation])
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})
 
   React.useEffect(() => {
     setOpenGroups((current) => ({ ...current, ...activeGroups }))
   }, [activeGroups])
+
+  React.useEffect(() => {
+    const refreshAccess = () => setHasPanelAccess(readCurrentAccess().panelAccess)
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || PERMISSION_STORAGE_KEYS.includes(event.key as any)) refreshAccess()
+    }
+
+    refreshAccess()
+    window.addEventListener("storage", handleStorage)
+    window.addEventListener("focus", refreshAccess)
+    window.addEventListener("app-access-updated", refreshAccess)
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener("focus", refreshAccess)
+      window.removeEventListener("app-access-updated", refreshAccess)
+    }
+  }, [])
 
   React.useEffect(() => {
     const refreshApprovalCount = () => setPendingApprovalsCount(readApprovalCount())
@@ -226,7 +246,7 @@ export function MainSidebar() {
       </SidebarHeader>
       
       <SidebarContent className="px-3 py-4 custom-scrollbar">
-        {navigation.map((group) => (
+        {visibleNavigation.map((group) => (
           <Collapsible
             key={group.title}
             open={state === "collapsed" ? true : openGroups[group.title] ?? activeGroups[group.title] ?? group.title === "ANA MENÜ"}
@@ -248,7 +268,7 @@ export function MainSidebar() {
                   <SidebarMenu className="gap-1">
                     {group.items.map((item) => {
                       const active = isItemActive(pathname, item)
-                      const badge = item.url === "/approvals" ? String(pendingApprovalsCount) : "badge" in item ? item.badge : undefined
+                      const badge = item.url === "/requests" ? String(pendingApprovalsCount) : "badge" in item ? item.badge : undefined
                       return (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton

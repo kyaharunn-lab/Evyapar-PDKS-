@@ -111,6 +111,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
   // NOTE: Select/dropdown sources are intentionally localStorage-backed (no Firestore reads).
 
   const PERSONNEL_STORAGE_KEY = "app_personnel"
+  const ACCESS_STORAGE_KEY = "app_access_control"
 
   const getBranchLabel = React.useCallback((branchId: string | undefined) => {
     if (!branchId) return "-"
@@ -129,6 +130,26 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
     const match = localRoles.find((r) => [r?.id, r?.roleCode, r?.code].filter(Boolean).map(String).includes(roleId))
     return match?.roleName || match?.name || match?.title || roleId
   }, [localRoles])
+
+  const getRoleById = React.useCallback((roleId: string | undefined) => {
+    if (!roleId) return undefined
+    return localRoles.find((role) => [role?.id, role?.roleCode, role?.code].filter(Boolean).map(String).includes(roleId))
+  }, [localRoles])
+
+  const getRolePermissions = React.useCallback((roleId: string | undefined) => {
+    const role = getRoleById(roleId)
+    const managerRole = /müdür|mudur/i.test((role?.roleName || role?.name || role?.title || "").toString())
+    const permissions = role?.permissions || {}
+    return {
+      panelAccess: Boolean(permissions.panelAccess ?? role?.panelAccess ?? managerRole),
+      mobileAccess: Boolean(permissions.mobileAccess ?? role?.mobileAccess ?? true),
+      pageAccess: Array.from(new Set([
+        ...((Array.isArray(permissions.pageAccess) ? permissions.pageAccess : [])),
+        ...(managerRole ? ["organization", "leave_requests", "requests"] : []),
+      ])),
+      branchAccess: Array.isArray(permissions.branchAccess) ? permissions.branchAccess : [],
+    }
+  }, [getRoleById])
 
   React.useEffect(() => {
     const readBranchesFromLocalStorage = () => {
@@ -224,6 +245,14 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
     },
   })
 
+  const selectedRoleId = form.watch("role")
+
+  React.useEffect(() => {
+    const permissions = getRolePermissions(selectedRoleId)
+    form.setValue("hasAdminAccess", permissions.panelAccess, { shouldDirty: true })
+    form.setValue("hasMobileAccess", permissions.mobileAccess, { shouldDirty: true })
+  }, [form, getRolePermissions, selectedRoleId])
+
   const onSubmit = async (values: PersonnelFormValues) => {
     setIsSubmitting(true)
     try {
@@ -232,9 +261,15 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
       const personnelCode = `EMP-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
 
       const createdAt = Date.now()
+      const rolePermissions = getRolePermissions(values.role)
       const newPersonnel = {
         id: `personnel-${createdAt}-${Math.random().toString(16).slice(2)}`,
         ...values,
+        hasAdminAccess: rolePermissions.panelAccess,
+        hasMobileAccess: rolePermissions.mobileAccess,
+        pageAccess: rolePermissions.pageAccess,
+        branchAccess: rolePermissions.branchAccess,
+        rolePermissions,
         // keep department optional; normalize empty to undefined
         departmentId: values.departmentId || undefined,
         registryNo,
@@ -275,6 +310,23 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
       next = [newPersonnel, ...next]
       try {
         localStorage.setItem(PERSONNEL_STORAGE_KEY, JSON.stringify(next))
+        const accessRaw = localStorage.getItem(ACCESS_STORAGE_KEY)
+        const accessParsed = accessRaw ? JSON.parse(accessRaw) : []
+        const accessList = Array.isArray(accessParsed) ? accessParsed : []
+        const accessRecord = {
+          id: `access-${createdAt}-${Math.random().toString(16).slice(2)}`,
+          personnelId: newPersonnel.id,
+          roleId: values.role,
+          panelAccess: rolePermissions.panelAccess,
+          mobileAccess: rolePermissions.mobileAccess,
+          pageAccess: rolePermissions.pageAccess,
+          branchAccess: rolePermissions.branchAccess,
+          status: "Active",
+          createdAt,
+          updatedAt: createdAt,
+        }
+        localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify([accessRecord, ...accessList]))
+        window.dispatchEvent(new Event("app-access-updated"))
       } catch {
         // allow flow to continue even if storage is blocked
       }

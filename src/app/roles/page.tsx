@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import {
   Table,
   TableBody,
@@ -35,11 +36,66 @@ import {
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 
+const PERSONNEL_STORAGE_KEY = "app_personnel"
+const ACCESS_STORAGE_KEYS = ["app_access_control", "app_access_controls", "app_access_management", "app_user_access", "accessControls"] as const
+const ROLE_MATCH_FIELDS = ["id", "name", "roleName", "code", "roleCode"] as const
+const ASSIGNED_ROLE_FIELDS = ["roleId", "role", "roleName", "assignedRole", "accessRole", "permissionRole"] as const
+
+function readLocalArray(key: string) {
+  if (typeof window === "undefined") return []
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "[]")
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function normalizeRoleValue(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-z0-9]+/g, "")
+}
+
+function roleTokens(role: any) {
+  return ROLE_MATCH_FIELDS
+    .map((field) => normalizeRoleValue(role?.[field]))
+    .filter(Boolean)
+}
+
+function assignedRoleTokens(record: any) {
+  return ASSIGNED_ROLE_FIELDS
+    .flatMap((field) => {
+      const value = record?.[field]
+      if (value && typeof value === "object") {
+        return ROLE_MATCH_FIELDS.map((roleField) => normalizeRoleValue(value?.[roleField]))
+      }
+      return [normalizeRoleValue(value)]
+    })
+    .filter(Boolean)
+}
+
+function matchesRole(record: any, role: any) {
+  const targets = roleTokens(role)
+  if (!targets.length) return false
+  return assignedRoleTokens(record).some((token) => targets.includes(token))
+}
+
+function getPersonnelKey(record: any, fallback: string) {
+  return String(record?.personnelId || record?.employeeId || record?.userId || record?.id || fallback)
+}
+
 export default function RolesPage() {
   const { toast } = useToast()
   const [isAddOpen, setIsAddOpen] = React.useState(false)
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
   const [roles, setRoles] = React.useState<any[]>([])
+  const [personnel, setPersonnel] = React.useState<any[]>([])
+  const [accessRecords, setAccessRecords] = React.useState<any[]>([])
   const [selectedRole, setSelectedRole] = React.useState<any | null>(null)
   const [editingRoleId, setEditingRoleId] = React.useState<string | null>(null)
   
@@ -47,23 +103,104 @@ export default function RolesPage() {
   const [roleName, setRoleName] = React.useState("")
   const [roleCode, setRoleCode] = React.useState("")
   const [roleDescription, setRoleDescription] = React.useState("")
+  const [rolePanelAccess, setRolePanelAccess] = React.useState(false)
+  const [roleMobileAccess, setRoleMobileAccess] = React.useState(true)
+  const [roleOrganizationAccess, setRoleOrganizationAccess] = React.useState(false)
+  const [roleLeaveAccess, setRoleLeaveAccess] = React.useState(false)
+  const [roleBranchAccess, setRoleBranchAccess] = React.useState("")
 
   const ROLES_STORAGE_KEY = "app_roles"
 
+  const resetForm = React.useCallback(() => {
+    setRoleName("")
+    setRoleCode("")
+    setRoleDescription("")
+    setRolePanelAccess(false)
+    setRoleMobileAccess(true)
+    setRoleOrganizationAccess(false)
+    setRoleLeaveAccess(false)
+    setRoleBranchAccess("")
+    setEditingRoleId(null)
+  }, [])
+
+  const buildRolePermissions = React.useCallback(() => {
+    const managerRole = /müdür|mudur/i.test(roleName)
+    return {
+      panelAccess: rolePanelAccess || managerRole,
+      mobileAccess: roleMobileAccess || managerRole,
+      pageAccess: [
+        ...((roleOrganizationAccess || managerRole) ? ["organization"] : []),
+        ...((roleLeaveAccess || managerRole) ? ["leave_requests", "requests"] : []),
+      ],
+      branchAccess: roleBranchAccess.split(",").map((item) => item.trim()).filter(Boolean),
+    }
+  }, [roleBranchAccess, roleLeaveAccess, roleMobileAccess, roleName, roleOrganizationAccess, rolePanelAccess])
+
   React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem(ROLES_STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) setRoles(parsed)
-    } catch {
-      // ignore corrupted local data
+    const loadRoleData = () => {
+      try {
+        const raw = localStorage.getItem(ROLES_STORAGE_KEY)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (Array.isArray(parsed)) setRoles(parsed)
+        }
+      } catch {
+        // ignore corrupted local data
+      }
+      setPersonnel(readLocalArray(PERSONNEL_STORAGE_KEY).filter((person: any) => !person?.isDeleted))
+      setAccessRecords(ACCESS_STORAGE_KEYS.flatMap((key) => readLocalArray(key)))
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      const watchedKeys = [ROLES_STORAGE_KEY, PERSONNEL_STORAGE_KEY, ...ACCESS_STORAGE_KEYS]
+      if (!event.key || watchedKeys.includes(event.key as any)) loadRoleData()
+    }
+
+    loadRoleData()
+    window.addEventListener("storage", handleStorage)
+    window.addEventListener("focus", loadRoleData)
+    window.addEventListener("app-access-updated", loadRoleData)
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener("focus", loadRoleData)
+      window.removeEventListener("app-access-updated", loadRoleData)
     }
   }, [])
+
+  const rolePersonnelCounts = React.useMemo(() => {
+    const counts: Record<string, number> = {}
+
+    roles.forEach((role) => {
+      const assignedPersonnel = new Set<string>()
+      personnel.forEach((person, index) => {
+        if (matchesRole(person, role)) assignedPersonnel.add(getPersonnelKey(person, `person-${index}`))
+      })
+      accessRecords.forEach((record, index) => {
+        if (matchesRole(record, role)) assignedPersonnel.add(getPersonnelKey(record, `access-${index}`))
+      })
+      counts[String(role?.id || role?.roleCode || role?.code || role?.roleName || role?.name || "")] = assignedPersonnel.size
+    })
+
+    return counts
+  }, [accessRecords, personnel, roles])
+
+  const assignedPersonnelCount = React.useMemo(() => {
+    const assignedPersonnel = new Set<string>()
+    roles.forEach((role) => {
+      personnel.forEach((person, index) => {
+        if (matchesRole(person, role)) assignedPersonnel.add(getPersonnelKey(person, `person-${index}`))
+      })
+      accessRecords.forEach((record, index) => {
+        if (matchesRole(record, role)) assignedPersonnel.add(getPersonnelKey(record, `access-${index}`))
+      })
+    })
+    return assignedPersonnel.size
+  }, [accessRecords, personnel, roles])
 
   const persistRoles = React.useCallback((next: any[]) => {
     try {
       localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(next))
+      window.dispatchEvent(new Event("app-access-updated"))
     } catch {
       // ignore storage errors (quota, blocked, etc.)
     }
@@ -88,10 +225,14 @@ export default function RolesPage() {
     }
 
     const now = Date.now()
+    const permissions = buildRolePermissions()
     const base = {
       roleName: roleName.trim(),
       roleCode: roleCode.trim(),
       description: roleDescription,
+      permissions,
+      panelAccess: permissions.panelAccess,
+      mobileAccess: permissions.mobileAccess,
       level: 1,
       status: "Active",
       updatedAt: now,
@@ -116,10 +257,7 @@ export default function RolesPage() {
     })
     
     // Reset and close
-    setRoleName("");
-    setRoleCode("");
-    setRoleDescription("");
-    setEditingRoleId(null)
+    resetForm()
     setIsAddOpen(false);
 
     toast({
@@ -138,6 +276,13 @@ export default function RolesPage() {
     setRoleName(role?.roleName || "")
     setRoleCode(role?.roleCode || "")
     setRoleDescription(role?.description || "")
+    const permissions = role?.permissions || {}
+    const pageAccess = Array.isArray(permissions.pageAccess) ? permissions.pageAccess : []
+    setRolePanelAccess(Boolean(permissions.panelAccess ?? role?.panelAccess))
+    setRoleMobileAccess(permissions.mobileAccess ?? role?.mobileAccess ?? true)
+    setRoleOrganizationAccess(pageAccess.includes("organization"))
+    setRoleLeaveAccess(pageAccess.includes("leave_requests") || pageAccess.includes("requests"))
+    setRoleBranchAccess(Array.isArray(permissions.branchAccess) ? permissions.branchAccess.join(", ") : "")
     setIsAddOpen(true)
   }
 
@@ -195,7 +340,7 @@ export default function RolesPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <KPICard title="Toplam Rol" value={roles.length.toString()} icon={ShieldCheck} color="text-primary" bg="bg-primary/5" />
         <KPICard title="Aktif Rol" value={roles.filter(r => r.status === "Active").length.toString()} icon={ShieldCheck} color="text-green-600" bg="bg-green-50" />
-        <KPICard title="Atanan Personel" value="0" icon={Users} color="text-blue-600" bg="bg-blue-50" />
+        <KPICard title="Atanan Personel" value={assignedPersonnelCount.toString()} icon={Users} color="text-blue-600" bg="bg-blue-50" />
       </div>
 
       {/* Liste veya Empty State */}
@@ -232,13 +377,15 @@ export default function RolesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {roles.map((role) => (
+                {roles.map((role) => {
+                  const roleKey = String(role?.id || role?.roleCode || role?.code || role?.roleName || role?.name || "")
+                  return (
                   <TableRow key={role.id} className="group hover:bg-slate-50/80 transition-all">
                     <TableCell className="pl-6 font-bold text-primary">{role.roleName}</TableCell>
                     <TableCell className="font-mono text-xs text-slate-500">{role.roleCode}</TableCell>
                     <TableCell className="text-xs text-slate-600 max-w-[200px] truncate">{role.description || "-"}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-700">0</Badge>
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-700">{rolePersonnelCounts[roleKey] || 0}</Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className="bg-green-50 text-green-700 border-green-100 font-bold">Aktif</Badge>
@@ -270,7 +417,8 @@ export default function RolesPage() {
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -283,10 +431,7 @@ export default function RolesPage() {
         onOpenChange={(open) => {
           setIsAddOpen(open)
           if (!open) {
-            setEditingRoleId(null)
-            setRoleName("")
-            setRoleCode("")
-            setRoleDescription("")
+            resetForm()
           }
         }}
       >
@@ -361,6 +506,22 @@ export default function RolesPage() {
                     Rol oluşturulduktan sonra "Yetki Yönetimi" ekranından bu role özel sayfa ve işlem izinlerini atayabilirsiniz.
                   </p>
                 </div>
+                <div className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
+                  <ToggleRow title="Panel erişimi" checked={rolePanelAccess} onCheckedChange={setRolePanelAccess} />
+                  <ToggleRow title="Mobil erişim" checked={roleMobileAccess} onCheckedChange={setRoleMobileAccess} />
+                  <ToggleRow title="Organizasyon erişimi" checked={roleOrganizationAccess} onCheckedChange={setRoleOrganizationAccess} />
+                  <ToggleRow title="İzin talepleri erişimi" checked={roleLeaveAccess} onCheckedChange={setRoleLeaveAccess} />
+                  <div className="space-y-1.5">
+                    <Label htmlFor="role-branches" className="text-[11px] font-bold text-slate-500 uppercase">Şube erişimleri</Label>
+                    <Input
+                      id="role-branches"
+                      placeholder="Tüm şubeler veya şube kodları"
+                      className="rounded-xl border-slate-200 h-11 text-sm"
+                      value={roleBranchAccess}
+                      onChange={(event) => setRoleBranchAccess(event.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
             </ScrollArea>
 
@@ -404,6 +565,8 @@ export default function RolesPage() {
                     <InfoRow label="Rol Adı" value={selectedRole.roleName || "-"} />
                     <InfoRow label="Rol Kodu" value={selectedRole.roleCode || "-"} />
                     <InfoRow label="Açıklama" value={selectedRole.description || "-"} />
+                    <InfoRow label="Panel Erişimi" value={(selectedRole.permissions?.panelAccess ?? selectedRole.panelAccess) ? "Açık" : "Kapalı"} />
+                    <InfoRow label="Mobil Erişim" value={(selectedRole.permissions?.mobileAccess ?? selectedRole.mobileAccess) ? "Açık" : "Kapalı"} />
                     <InfoRow label="Seviye" value={(selectedRole.level || 1).toString()} />
                     <InfoRow label="Durum" value={selectedRole.status === "Active" ? "Aktif" : "Pasif"} />
                   </>
@@ -422,6 +585,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-4 border border-slate-100 bg-white rounded-xl px-4 py-3">
       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{label}</span>
       <span className="text-sm font-semibold text-slate-700 text-right">{value}</span>
+    </div>
+  )
+}
+
+function ToggleRow({ title, checked, onCheckedChange }: { title: string; checked: boolean; onCheckedChange: (checked: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <Label className="text-sm font-bold text-slate-700">{title}</Label>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   )
 }

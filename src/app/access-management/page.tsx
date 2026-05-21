@@ -23,12 +23,22 @@ export default function AccessManagementPage() {
   const [stats, setStats] = React.useState({ roles: 0, access: 0, personnel: 0, branches: 0 })
 
   React.useEffect(() => {
-    setStats({
-      roles: readArray("app_roles").length,
-      access: [...readArray("app_access_controls"), ...readArray("accessControls")].length,
-      personnel: readArray("app_personnel").filter((person: any) => !person?.isDeleted).length,
-      branches: readArray("app_branches").length,
-    })
+    const refreshStats = () => {
+      setStats({
+        roles: readArray("app_roles").length,
+        access: [...readArray("app_access_control"), ...readArray("app_access_controls"), ...readArray("accessControls")].length,
+        personnel: readArray("app_personnel").filter((person: any) => !person?.isDeleted).length,
+        branches: readArray("app_branches").length,
+      })
+    }
+
+    refreshStats()
+    window.addEventListener("app-access-updated", refreshStats)
+    window.addEventListener("focus", refreshStats)
+    return () => {
+      window.removeEventListener("app-access-updated", refreshStats)
+      window.removeEventListener("focus", refreshStats)
+    }
   }, [])
 
   return (
@@ -80,8 +90,18 @@ function Tab({ value, icon: Icon, label }: { value: string; icon: any; label: st
 function AccessMatrix({ title, description, mode }: { title: string; description: string; mode: string }) {
   const [rows, setRows] = React.useState<any[]>([])
   React.useEffect(() => {
-    const access = [...readArray("app_access_controls"), ...readArray("accessControls")]
-    setRows(access)
+    const refreshRows = () => {
+      const access = [...readArray("app_access_control"), ...readArray("app_access_controls"), ...readArray("accessControls")]
+      setRows(access)
+    }
+
+    refreshRows()
+    window.addEventListener("app-access-updated", refreshRows)
+    window.addEventListener("focus", refreshRows)
+    return () => {
+      window.removeEventListener("app-access-updated", refreshRows)
+      window.removeEventListener("focus", refreshRows)
+    }
   }, [])
   return (
     <Card className="rounded-[28px] border-white/70 bg-white/80 shadow-xl shadow-slate-200/60 backdrop-blur-xl">

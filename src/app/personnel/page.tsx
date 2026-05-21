@@ -171,6 +171,21 @@ export default function PersonnelPage() {
     return match?.roleName || match?.name || match?.title || roleId
   }, [localRoles])
 
+  const getRolePermissions = React.useCallback((roleId: string | undefined) => {
+    const role = localRoles.find((item) => [item?.id, item?.roleCode, item?.code].filter(Boolean).map(String).includes(roleId || ""))
+    const managerRole = /müdür|mudur/i.test((role?.roleName || role?.name || role?.title || "").toString())
+    const permissions = role?.permissions || {}
+    return {
+      panelAccess: Boolean(permissions.panelAccess ?? role?.panelAccess ?? managerRole),
+      mobileAccess: Boolean(permissions.mobileAccess ?? role?.mobileAccess ?? true),
+      pageAccess: Array.from(new Set([
+        ...(Array.isArray(permissions.pageAccess) ? permissions.pageAccess : []),
+        ...(managerRole ? ["organization", "leave_requests", "requests"] : []),
+      ])),
+      branchAccess: Array.isArray(permissions.branchAccess) ? permissions.branchAccess : [],
+    }
+  }, [localRoles])
+
   const filteredEmployees = React.useMemo(() => {
     if (!employees) return [];
     return employees.filter((emp: any) => 
@@ -293,17 +308,47 @@ export default function PersonnelPage() {
       return
     }
 
+    const rolePermissions = getRolePermissions(editForm.role)
     const updated = {
       ...selectedEmployee,
       ...editForm,
       departmentId: editForm.departmentId || undefined,
+      hasAdminAccess: rolePermissions.panelAccess,
+      hasMobileAccess: rolePermissions.mobileAccess,
+      pageAccess: rolePermissions.pageAccess,
+      branchAccess: rolePermissions.branchAccess,
+      rolePermissions,
       fullName: `${editForm.name} ${editForm.surname}`,
       updatedAt: Date.now(),
     }
     upsertEmployee(updated)
+    try {
+      const raw = localStorage.getItem("app_access_control")
+      const parsed = raw ? JSON.parse(raw) : []
+      const list = Array.isArray(parsed) ? parsed : []
+      const existing = list.find((item: any) => item?.personnelId === updated.id)
+      const now = Date.now()
+      const accessRecord = {
+        id: existing?.id || `access-${now}-${Math.random().toString(16).slice(2)}`,
+        personnelId: updated.id,
+        roleId: editForm.role,
+        panelAccess: rolePermissions.panelAccess,
+        mobileAccess: rolePermissions.mobileAccess,
+        pageAccess: rolePermissions.pageAccess,
+        branchAccess: rolePermissions.branchAccess,
+        status: updated.status === "Inactive" ? "Inactive" : "Active",
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      }
+      const nextAccess = existing ? list.map((item: any) => item.personnelId === updated.id ? accessRecord : item) : [accessRecord, ...list]
+      localStorage.setItem("app_access_control", JSON.stringify(nextAccess))
+      window.dispatchEvent(new Event("app-access-updated"))
+    } catch {
+      // ignore access sync errors
+    }
     setIsEditOpen(false)
     toast({ title: "Başarılı", description: "Personel bilgileri güncellendi." })
-  }, [editForm, selectedEmployee, toast, upsertEmployee])
+  }, [editForm, getRolePermissions, selectedEmployee, toast, upsertEmployee])
 
   return (
     <div className="space-y-8 animate-fade-in">

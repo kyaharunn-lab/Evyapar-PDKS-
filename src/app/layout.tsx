@@ -3,6 +3,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { MainSidebar } from "@/components/layout/main-sidebar";
+import { AccessGuard } from "@/components/layout/access-guard";
 import { Toaster } from "@/components/ui/toaster";
 import { translations } from "@/lib/translations";
 import { Badge } from "@/components/ui/badge";
@@ -105,7 +106,7 @@ export default function RootLayout({
                   </div>
                 </header>
                 <main className="flex-1 p-5 md:p-8 max-w-[1600px] mx-auto w-full">
-                  {children}
+                  <AccessGuard>{children}</AccessGuard>
                 </main>
               </SidebarInset>
             </div>

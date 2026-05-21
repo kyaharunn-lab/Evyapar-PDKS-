@@ -31,12 +31,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_KEY = "app_mobile_preview_settings"
 const ATTENDANCE_KEY = "app_mobile_attendance_preview"
 const AUDIT_KEY = "app_audit_logs"
 const NONE = "__none__"
+const MOBILE_ACCESS_STORAGE_KEYS = ["app_personnel", ...ACCESS_STORAGE_KEYS] as const
 
 const screens = ["Ana", "Giriş", "QR", "GPS", "Vardiya", "İzin", "Mola", "Bildirim", "Profil"]
 const themes = ["Koyu Premium", "Açık Kurumsal", "Evyapar Kırmızı", "Mavi/Mor Premium"]
@@ -144,6 +146,7 @@ function saveFile(filename: string, content: string) {
 
 export default function MobilePreviewPage() {
   const { toast } = useToast()
+  const [hasMobileAccess, setHasMobileAccess] = React.useState(() => readCurrentAccess().mobileAccess)
   const [data, setData] = React.useState<any>({
     personnel: [],
     branches: [],
@@ -204,6 +207,23 @@ export default function MobilePreviewPage() {
   React.useEffect(() => {
     load()
   }, [load])
+
+  React.useEffect(() => {
+    const refreshAccess = () => setHasMobileAccess(readCurrentAccess().mobileAccess)
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || MOBILE_ACCESS_STORAGE_KEYS.includes(event.key as any)) refreshAccess()
+    }
+
+    refreshAccess()
+    window.addEventListener("storage", handleStorage)
+    window.addEventListener("focus", refreshAccess)
+    window.addEventListener("app-access-updated", refreshAccess)
+    return () => {
+      window.removeEventListener("storage", handleStorage)
+      window.removeEventListener("focus", refreshAccess)
+      window.removeEventListener("app-access-updated", refreshAccess)
+    }
+  }, [])
 
   const selectedPerson = data.personnel.find((person: any) => getId(person) === settings.personnelId)
   const selectedBranch =
@@ -343,6 +363,10 @@ export default function MobilePreviewPage() {
     load()
   }
 
+  if (!hasMobileAccess) {
+    return <MobileAccessDenied />
+  }
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.28),transparent_28rem),linear-gradient(135deg,#06101f_0%,#111a3b_50%,#312e81_100%)] p-8 text-white shadow-2xl shadow-slate-300/40">
@@ -403,6 +427,27 @@ export default function MobilePreviewPage() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  )
+}
+
+function MobileAccessDenied() {
+  return (
+    <div className="flex min-h-[calc(100vh-180px)] items-center justify-center">
+      <Card className="premium-card w-full max-w-xl overflow-hidden border-none">
+        <CardContent className="p-10 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-amber-50 text-amber-600">
+            <Smartphone className="h-8 w-8" />
+          </div>
+          <Badge className="mb-4 rounded-full bg-amber-50 px-3 py-1 text-amber-700 hover:bg-amber-50">
+            Mobil Yetki
+          </Badge>
+          <h2 className="text-2xl font-extrabold tracking-tight text-primary">Bu kullanıcının mobil erişim izni yok.</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm font-medium leading-6 text-muted-foreground">
+            Mobil önizleme, aktif kullanıcı için mobileAccess izni açıldığında tekrar kullanılabilir.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   )
 }
