@@ -32,13 +32,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
+import { DATE_INPUT_PROPS, formatDateTR } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_KEY = "app_mobile_preview_settings"
 const ATTENDANCE_KEY = "app_mobile_attendance_preview"
+const ATTENDANCE_RECORDS_KEY = "app_attendance_records"
+const LIVE_PRESENCE_KEY = "app_live_presence"
 const AUDIT_KEY = "app_audit_logs"
 const NONE = "__none__"
 const MOBILE_ACCESS_STORAGE_KEYS = ["app_personnel", ...ACCESS_STORAGE_KEYS] as const
+const MAX_GPS_DISTANCE_METERS = 150
 
 const screens = ["Ana", "Giriş", "QR", "GPS", "Vardiya", "İzin", "Mola", "Bildirim", "Profil"]
 const themes = ["Koyu Premium", "Açık Kurumsal", "Evyapar Kırmızı", "Mavi/Mor Premium"]
@@ -110,6 +114,39 @@ function hasBranchLocation(branch: any) {
   return Boolean(branch?.latitude || branch?.lat || branch?.location?.latitude) && Boolean(branch?.longitude || branch?.lng || branch?.location?.longitude)
 }
 
+function toCoordinate(value: any) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function getCoordinates(item: any) {
+  const latitude = toCoordinate(item?.latitude ?? item?.lat ?? item?.location?.latitude ?? item?.location?.lat ?? item?.gps?.latitude ?? item?.gps?.lat)
+  const longitude = toCoordinate(item?.longitude ?? item?.lng ?? item?.lon ?? item?.location?.longitude ?? item?.location?.lng ?? item?.location?.lon ?? item?.gps?.longitude ?? item?.gps?.lng)
+  return latitude === null || longitude === null ? null : { latitude, longitude }
+}
+
+function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  const earthRadius = 6371000
+  const toRad = (value: number) => (value * Math.PI) / 180
+  const dLat = toRad(b.latitude - a.latitude)
+  const dLon = toRad(b.longitude - a.longitude)
+  const lat1 = toRad(a.latitude)
+  const lat2 = toRad(b.latitude)
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2
+  return earthRadius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+}
+
+function verifyGpsDistance(branch: any, person: any, settings: any) {
+  const branchCoordinates = getCoordinates(branch)
+  if (!branchCoordinates) return { ok: true, status: "Şube konumu tanımlı değil", distance: null }
+
+  const currentCoordinates = getCoordinates(settings) || getCoordinates(person)
+  if (!currentCoordinates) return { ok: true, status: "Kullanıcı konumu tanımlı değil", distance: null }
+  const distance = distanceMeters(currentCoordinates, branchCoordinates)
+  const ok = distance <= MAX_GPS_DISTANCE_METERS
+  return { ok, status: ok ? "GPS başarılı" : "GPS başarısız", distance }
+}
+
 function normalizeScreen(screen: any) {
   const raw = valueText(screen, "Ana")
   const map: Record<string, string> = {
@@ -126,12 +163,82 @@ function normalizeScreen(screen: any) {
 }
 
 function matchesPerson(record: any, personId: string) {
-  const ids = [record?.personnelId, record?.personId, record?.employeeId, record?.userId].map((v) => valueText(v, ""))
+  const ids = [record?.personnelId, record?.personelId, record?.personId, record?.employeeId, record?.userId].map((v) => valueText(v, ""))
   return ids.includes(personId) || (Array.isArray(record?.personnelIds) && record.personnelIds.map(String).includes(personId))
 }
 
 function matchesBranch(record: any, branchId: string) {
   return [record?.branchId, record?.branchCode, record?.locationId].map((v) => valueText(v, "")).includes(branchId)
+}
+
+function timeToMinutes(value: any) {
+  const text = valueText(value, "").slice(0, 5)
+  const [hour, minute] = text.split(":").map(Number)
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null
+  return hour * 60 + minute
+}
+
+function calculateLateInfo(shifts: any[], personId: string, branchId: string, checkIn: Date) {
+  const today = checkIn.toISOString().slice(0, 10)
+  const shift = shifts.find((item: any) => {
+    const shiftDate = valueText(item?.startDate || item?.date, "").slice(0, 10)
+    return (!shiftDate || shiftDate === today) && (matchesPerson(item, personId) || matchesBranch(item, branchId))
+  })
+  if (!shift) return null
+  const shiftMinutes = timeToMinutes(shift?.shift?.startTime || shift?.startTime || shift?.entryTime)
+  if (shiftMinutes === null) return null
+  const checkInMinutes = checkIn.getHours() * 60 + checkIn.getMinutes()
+  const lateToleranceMinutes = 10
+  const rawLateMinutes = Math.max(0, checkInMinutes - shiftMinutes)
+  const isLate = rawLateMinutes > lateToleranceMinutes
+  return { isLate, lateMinutes: isLate ? rawLateMinutes : 0, lateToleranceMinutes }
+}
+
+function calculateOvertimeInfo(shifts: any[], personId: string, branchId: string, checkOut: Date) {
+  const today = checkOut.toISOString().slice(0, 10)
+  const shift = shifts.find((item: any) => {
+    const shiftDate = valueText(item?.startDate || item?.date, "").slice(0, 10)
+    return (!shiftDate || shiftDate === today) && (matchesPerson(item, personId) || matchesBranch(item, branchId))
+  })
+  const shiftEndMinutes = timeToMinutes(shift?.shift?.endTime || shift?.endTime || shift?.exitTime)
+  if (shiftEndMinutes === null) return { isOvertime: false, overtimeMinutes: 0 }
+
+  const checkOutMinutes = checkOut.getHours() * 60 + checkOut.getMinutes()
+  const rawOvertimeMinutes = Math.max(0, checkOutMinutes - shiftEndMinutes)
+  const overtimeMinutes = rawOvertimeMinutes > 15 ? rawOvertimeMinutes : 0
+  return {
+    isOvertime: overtimeMinutes > 0,
+    overtimeMinutes,
+    ...(overtimeMinutes > 0 ? { overtimeStatus: "uyarı" } : {}),
+  }
+}
+
+function attendancePersonId(record: any) {
+  return String(record?.personnelId ?? record?.personelId ?? record?.personId ?? "")
+}
+
+function attendanceDate(record: any) {
+  return String(record?.date || record?.tarih || record?.checkInTime || record?.entryTime || "").slice(0, 10)
+}
+
+function attendanceTime(record: any) {
+  const value = record?.checkInTime || record?.entryTime || record?.createdAt || record?.updatedAt || record?.date || record?.tarih || ""
+  const time = new Date(value).getTime()
+  return Number.isNaN(time) ? 0 : time
+}
+
+function isOpenAttendance(record: any, personId: string) {
+  const status = String(record?.status || "").toLowerCase()
+  return attendancePersonId(record) === String(personId)
+    && (status === "inside" || status === "fazla mesai" || record?.status === "Fazla Mesai")
+    && !record?.checkOutTime
+    && !record?.exitTime
+}
+
+function latestOpenAttendance(records: any[], personId: string) {
+  return records
+    .filter((record) => isOpenAttendance(record, personId))
+    .sort((a, b) => attendanceTime(b) - attendanceTime(a))[0]
 }
 
 function saveFile(filename: string, content: string) {
@@ -142,6 +249,13 @@ function saveFile(filename: string, content: string) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+function notifyAttendanceSync() {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new Event("app-mobile-attendance-updated"))
+  window.dispatchEvent(new Event("app-attendance-records-updated"))
+  window.dispatchEvent(new Event("app-live-presence-updated"))
 }
 
 export default function MobilePreviewPage() {
@@ -239,8 +353,101 @@ export default function MobilePreviewPage() {
   const personDevice = data.devices.find((device: any) => matchesPerson(device, personId))
   const personKvkk = data.kvkk.find((item: any) => matchesPerson(item, personId))
   const branchQrPoints = data.qrPoints.filter((point: any) => matchesBranch(point, branchId))
+  const livePresence = readArray(LIVE_PRESENCE_KEY)
+  const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
+  const liveRecord = livePresence.find((item: any) => matchesPerson(item, personId))
+  const openAttendance = latestOpenAttendance(attendanceRecords, personId)
+  const isPersonInside = Boolean(liveRecord || openAttendance)
 
   const updateSettings = (patch: any) => {
+    if (patch?.screen === "QR" && patch?.qrStatus === "Başarılı" && selectedPerson && !patch?.attendanceHandled) {
+      const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
+      if (activePoint) {
+        const now = new Date()
+        const nowIso = now.toISOString()
+        const today = nowIso.slice(0, 10)
+        const samePersonnel = (item: any) => String(item?.personnelId ?? item?.personelId ?? item?.personId ?? "") === String(personId)
+        const recordDate = (item: any) => String(item?.date || item?.tarih || item?.checkInTime || item?.entryTime || "").slice(0, 10)
+        const hasNoCheckout = (item: any) => item?.checkOutTime === undefined || item?.checkOutTime === null || item?.checkOutTime === ""
+        const isInside = (item: any) => String(item?.status || "").toLowerCase() === "inside"
+        const isOpenRecord = (item: any) =>
+          samePersonnel(item) &&
+          recordDate(item) === today &&
+          isInside(item) &&
+          !item?.exitTime &&
+          !item?.["çıkışSaati"] &&
+          !item?.["cikisSaati"]
+        const isActiveAttendanceRecord = (item: any) =>
+          samePersonnel(item) &&
+          recordDate(item) === today &&
+          isInside(item) &&
+          hasNoCheckout(item)
+        const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
+        const livePresence = readArray(LIVE_PRESENCE_KEY)
+        const liveRecord = livePresence.find((item: any) => samePersonnel(item))
+        const currentMinute = nowIso.slice(0, 16)
+        const sameMinuteQr = [...attendanceRecords, ...readArray(ATTENDANCE_KEY)].some((item: any) => {
+          const actionMinute = String(item?.checkInTime || item?.checkOutTime || item?.entryTime || item?.exitTime || item?.createdAt || item?.updatedAt || "").slice(0, 16)
+          const method = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doğrulamaYöntemi"] || "").toLowerCase()
+          return samePersonnel(item) && actionMinute === currentMinute && method.includes("qr")
+        })
+        if (liveRecord?.status === "inside" || sameMinuteQr) return
+        const hasOpenAttendance = false
+        const lateInfo = calculateLateInfo(data.shifts, personId, branchId, now)
+        const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
+        if (!gpsCheck.ok) {
+          updateSettings({ screen: "QR", qrStatus: "Başarısız", gpsStatus: gpsCheck.status, state: "GPS dışında" })
+          toast({ variant: "destructive", title: "Şube konumu dışında", description: `GPS başarısız. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
+          return
+        }
+
+        if (hasOpenAttendance) {
+          const closePatch = {
+            checkOutTime: nowIso,
+            exitTime: nowIso,
+            status: "outside",
+            statusLabel: "Çıkış yaptı",
+            durum: "Çıkış yaptı",
+            updatedAt: nowIso,
+          }
+          writeArray(ATTENDANCE_RECORDS_KEY, attendanceRecords.map((item: any) => isActiveAttendanceRecord(item) ? { ...item, ...closePatch } : item))
+          writeArray(LIVE_PRESENCE_KEY, livePresence.filter((item: any) => !samePersonnel(item)))
+          notifyAttendanceSync()
+        } else {
+          const record = {
+          id: `qr-att-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          personnelId: personId,
+          personnelName: personName(selectedPerson),
+          branchId,
+          branchName: selectedBranch ? branchName(selectedBranch) : "",
+          checkInTime: nowIso,
+          date: nowIso.slice(0, 10),
+          method: "QR",
+          qrPointId: getId(activePoint),
+          qrPointName: activePoint?.pointName || activePoint?.name || "QR",
+          status: "inside",
+          ...(lateInfo || {}),
+                    gpsStatus: gpsCheck.status,
+          deviceStatus: personDevice ? "Tanımlı" : "Tanımsız",
+          personelId: personId,
+          personelAdi: personName(selectedPerson),
+          branchLabel: selectedBranch ? branchName(selectedBranch) : "",
+          tarih: nowIso.slice(0, 10),
+          saat: now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+          islemTipi: "Giriş",
+          dogrulamaYontemi: "QR",
+          entryTime: nowIso,
+          verificationMethod: "QR",
+          deviceId: personDevice?.deviceId || personDevice?.id || "",
+          qrStatus: "Başarılı",
+        }
+        writeArray(ATTENDANCE_KEY, [record, ...readArray(ATTENDANCE_KEY)])
+        writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
+        writeArray(LIVE_PRESENCE_KEY, [record, ...readArray(LIVE_PRESENCE_KEY).filter((item: any) => !matchesPerson(item, personId))])
+          notifyAttendanceSync()
+        }
+      }
+    }
     setSettings((current: any) => {
       const next = { ...current, ...patch, updatedAt: new Date().toISOString() }
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
@@ -274,69 +481,225 @@ export default function MobilePreviewPage() {
   const handleAttendance = (type: "Giriş" | "Çıkış") => {
     if (!selectedPerson) return
     const now = new Date()
+    const nowIso = now.toISOString()
+    const time = now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+    const isEntry = type.toLowerCase().startsWith("giri")
     const qrStatus = settings.qrStatus === "Başarılı" || branchQrPoints.some((point: any) => isActive(point?.status)) ? "Başarılı" : "QR bekleniyor"
     const gpsStatus = settings.state === "GPS dışında" ? "GPS dışında" : hasBranchLocation(selectedBranch) ? "Doğrulandı" : "Şube konumu tanımlı değil"
+    const method = qrStatus === "QR bekleniyor" ? (gpsStatus.includes("GPS") || gpsStatus.includes("konumu") ? "Mobil" : "GPS") : "QR"
+    const livePresence = readArray(LIVE_PRESENCE_KEY)
+    const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
+    const liveRecord = livePresence.find((item: any) => matchesPerson(item, personId))
+    const openAttendance = latestOpenAttendance(attendanceRecords, personId)
+    const isCurrentlyInside = Boolean(liveRecord || openAttendance)
+    if (isEntry && isCurrentlyInside) {
+      toast({ title: "Personel zaten içeride." })
+      return
+    }
+    if (!isEntry && !isCurrentlyInside) {
+      toast({ title: "Personel zaten dışarıda." })
+      return
+    }
+    if (isEntry && method === "QR") {
+      const currentMinute = nowIso.slice(0, 16)
+      const sameMinuteQr = [...readArray(ATTENDANCE_RECORDS_KEY), ...readArray(ATTENDANCE_KEY)].some((item: any) => {
+        const actionMinute = String(item?.checkInTime || item?.checkOutTime || item?.entryTime || item?.exitTime || item?.createdAt || item?.updatedAt || "").slice(0, 16)
+        const recordMethod = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doğrulamaYöntemi"] || "").toLowerCase()
+        return matchesPerson(item, personId) && actionMinute === currentMinute && recordMethod.includes("qr")
+      })
+      if (sameMinuteQr) {
+        toast({ variant: "destructive", title: "Duplicate QR engellendi", description: "Aynı dakika içinde QR işlemi zaten yapıldı." })
+        return
+      }
+    }
+    const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
+    if (isEntry && method === "QR" && !gpsCheck.ok) {
+      updateSettings({ screen: "QR", qrStatus: "Başarısız", gpsStatus: gpsCheck.status, state: "GPS dışında" })
+      toast({ variant: "destructive", title: "Şube konumu dışında", description: `GPS başarısız. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
+      return
+    }
+    const effectiveGpsStatus = isEntry && method === "QR" ? gpsCheck.status : gpsStatus
+    const lateInfo = isEntry ? calculateLateInfo(data.shifts, personId, branchId, now) : null
+    const overtimeInfo = !isEntry ? calculateOvertimeInfo(data.shifts, personId, branchId, now) : { isOvertime: false, overtimeMinutes: 0 }
+    if (!isEntry) {
+      const closePatch = {
+        ...overtimeInfo,
+        status: "Çıkış yaptı",
+        checkOutTime: nowIso,
+        exitTime: nowIso,
+        updatedAt: nowIso,
+      }
+      writeArray(ATTENDANCE_RECORDS_KEY, attendanceRecords.map((item: any) => isOpenAttendance(item, personId) ? { ...item, ...closePatch } : item))
+      writeArray(ATTENDANCE_KEY, readArray(ATTENDANCE_KEY).map((item: any) => isOpenAttendance(item, personId) ? { ...item, ...closePatch } : item))
+      writeArray(LIVE_PRESENCE_KEY, livePresence.filter((item: any) => !matchesPerson(item, personId)))
+      notifyAttendanceSync()
+      updateSettings({ state: "Çıkış yaptı", screen: "Giriş", gpsStatus: effectiveGpsStatus, qrStatus })
+      addAudit("Mobil çıkış simülasyonu yapıldı", `${personName(selectedPerson)} için çıkış kaydı kapatıldı.`)
+      return
+    }
     const record = {
       id: `mobile-att-${Date.now()}`,
+      personnelId: personId,
+      personnelName: personName(selectedPerson),
+      branchId,
+      branchName: selectedBranch ? branchName(selectedBranch) : "",
+      checkInTime: isEntry ? nowIso : undefined,
+      checkOutTime: isEntry ? undefined : nowIso,
+      date: nowIso.slice(0, 10),
+      method,
+      status: isEntry ? "inside" : "outside",
+      ...(lateInfo || {}),
+      ...overtimeInfo,
+      deviceStatus: personDevice ? "Tanımlı" : "Tanımsız",
       personelId: personId,
-      personelAdı: personName(selectedPerson),
-      şube: selectedBranch ? branchName(selectedBranch) : "",
+      "personelAdı": personName(selectedPerson),
+      "şube": selectedBranch ? branchName(selectedBranch) : "",
       tarih: now.toISOString().slice(0, 10),
       saat: now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
-      işlemTipi: type,
-      doğrulamaYöntemi: qrStatus === "Başarılı" ? "QR" : gpsStatus === "Doğrulandı" ? "GPS" : "Mobil",
+      "işlemTipi": type,
+      "doğrulamaYöntemi": qrStatus === "Başarılı" ? "QR" : effectiveGpsStatus === "Doğrulandı" || effectiveGpsStatus === "GPS başarılı" ? "GPS" : "Mobil",
+      entryTime: isEntry ? nowIso : undefined,
+      exitTime: isEntry ? undefined : nowIso,
+      verificationMethod: method,
       deviceId: personDevice?.deviceId || personDevice?.id || "",
-      gpsStatus,
+      gpsStatus: effectiveGpsStatus,
       qrStatus,
     }
     writeArray(ATTENDANCE_KEY, [record, ...readArray(ATTENDANCE_KEY)])
-    updateSettings({ state: type === "Giriş" ? "İçeride" : "Çıkış yaptı", screen: "Giriş", gpsStatus, qrStatus })
+    writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
+    if (record.status === "inside") {
+      writeArray(LIVE_PRESENCE_KEY, [record, ...livePresence.filter((item: any) => !matchesPerson(item, personId))])
+    } else {
+      writeArray(LIVE_PRESENCE_KEY, livePresence.map((item: any) =>
+        matchesPerson(item, personId) ? { ...item, ...overtimeInfo, status: "outside", checkOutTime: nowIso, exitTime: nowIso, updatedAt: nowIso } : item
+      ))
+    }
+    notifyAttendanceSync()
+    updateSettings({ state: type === "Giriş" ? "İçeride" : "Çıkış yaptı", screen: "Giriş", gpsStatus: effectiveGpsStatus, qrStatus })
     addAudit(`Mobil ${type.toLowerCase()} simülasyonu yapıldı`, `${personName(selectedPerson)} için ${type.toLowerCase()} kaydı oluşturuldu.`)
   }
 
   const handleQrSimulation = () => {
     const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
-    const success = Boolean(activePoint)
-    updateSettings({ screen: "QR", qrStatus: success ? "Başarılı" : "Başarısız", state: success ? "Mesai başladı" : "QR bekleniyor" })
+    const success = Boolean(activePoint && selectedPerson)
+    if (success) {
+      const livePresence = readArray(LIVE_PRESENCE_KEY)
+      const liveRecord = livePresence.find((item: any) => matchesPerson(item, personId))
+      const currentMinute = new Date().toISOString().slice(0, 16)
+      const sameMinuteQr = [...readArray(ATTENDANCE_RECORDS_KEY), ...readArray(ATTENDANCE_KEY)].some((item: any) => {
+        const actionMinute = String(item?.checkInTime || item?.checkOutTime || item?.entryTime || item?.exitTime || item?.createdAt || item?.updatedAt || "").slice(0, 16)
+        const method = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doğrulamaYöntemi"] || "").toLowerCase()
+        return matchesPerson(item, personId) && actionMinute === currentMinute && method.includes("qr")
+      })
+      if (liveRecord?.status === "inside") {
+        toast({ title: "Personel zaten içeride." })
+        return
+      }
+      if (sameMinuteQr) {
+        toast({ variant: "destructive", title: "Duplicate QR engellendi", description: "Aynı dakika içinde QR işlemi zaten yapıldı." })
+        return
+      }
+      const now = new Date()
+      const nowIso = now.toISOString()
+      const lateInfo = calculateLateInfo(data.shifts, personId, branchId, now)
+      const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
+      if (!gpsCheck.ok) {
+        updateSettings({ screen: "QR", qrStatus: "Başarısız", gpsStatus: gpsCheck.status, state: "GPS dışında", attendanceHandled: true })
+        addAudit("QR doğrulama simülasyonu yapıldı", "Şube konumu dışında olduğu için QR girişi engellendi.", "QR")
+        toast({ variant: "destructive", title: "Şube konumu dışında", description: `GPS başarısız. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
+        return
+      }
+      const record = {
+        id: `qr-att-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        personnelId: personId,
+        personnelName: personName(selectedPerson),
+        branchId,
+        branchName: selectedBranch ? branchName(selectedBranch) : "",
+        checkInTime: nowIso,
+        date: nowIso.slice(0, 10),
+        method: "QR",
+        qrPointId: getId(activePoint),
+        qrPointName: activePoint?.pointName || activePoint?.name || "QR",
+        status: "inside",
+        ...(lateInfo || {}),
+        gpsStatus: gpsCheck.status,
+        deviceStatus: personDevice ? "Tanımlı" : "Tanımsız",
+        personelId: personId,
+        personelAdi: personName(selectedPerson),
+        branchLabel: selectedBranch ? branchName(selectedBranch) : "",
+        tarih: nowIso.slice(0, 10),
+        saat: now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+        islemTipi: "Giriş",
+        dogrulamaYontemi: "QR",
+        entryTime: nowIso,
+        verificationMethod: "QR",
+        deviceId: personDevice?.deviceId || personDevice?.id || "",
+        qrStatus: "Başarılı",
+      }
+      writeArray(ATTENDANCE_KEY, [record, ...readArray(ATTENDANCE_KEY)])
+      writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
+      writeArray(LIVE_PRESENCE_KEY, [record, ...livePresence.filter((item: any) => !matchesPerson(item, personId))])
+      notifyAttendanceSync()
+    }
+    updateSettings({ screen: "QR", qrStatus: success ? "Başarılı" : "Başarısız", state: success ? "Mesai başladı" : "QR bekleniyor", gpsStatus: success ? "GPS başarılı" : settings.gpsStatus, attendanceHandled: success })
     addAudit("QR doğrulama simülasyonu yapıldı", success ? `${branchName(selectedBranch)} QR noktası doğrulandı.` : "Seçili şubede aktif QR noktası bulunamadı.", "QR")
     toast({ variant: success ? "default" : "destructive", title: success ? "QR doğrulandı" : "QR doğrulanamadı", description: success ? activePoint?.pointName || activePoint?.name : "Bu şubeye ait aktif QR noktası bulunamadı." })
   }
 
   const handleGpsSimulation = () => {
-    const success = settings.state !== "GPS dışında" && hasBranchLocation(selectedBranch)
-    const gpsStatus = success ? "Doğrulandı" : settings.state === "GPS dışında" ? "GPS dışında" : "Şube konumu tanımlı değil"
+    const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
+    const success = gpsCheck.ok && hasBranchLocation(selectedBranch)
+    const gpsStatus = success ? "GPS başarılı" : gpsCheck.status
     updateSettings({ screen: "GPS", gpsStatus, state: success ? "Mesai başladı" : "GPS dışında" })
     addAudit("GPS doğrulama simülasyonu yapıldı", `${branchName(selectedBranch)} için sonuç: ${gpsStatus}.`, "GPS")
+    toast({ variant: success ? "default" : "destructive", title: success ? "GPS başarılı" : "GPS başarısız", description: success ? "Personel şube konumu içinde." : "Şube konumu dışında" })
   }
 
   const handleBreak = () => {
     if (!selectedPerson) return
-    const active = readArray("app_break_records").find((item: any) => matchesPerson(item, personId) && !item.endTime)
+    const livePresence = readArray("app_live_presence")
+    const liveRecord = livePresence.find((item: any) => matchesPerson(item, personId))
+    const active = readArray("app_break_records").find((item: any) => matchesPerson(item, personId) && item?.status === "on_break" && !item.endTime && !item.breakEnd)
     if (active) {
       const ended = new Date()
-      const next = readArray("app_break_records").map((item: any) => {
-        if (item.id !== active.id) return item
-        const startedAt = new Date(item.startedAt || item.createdAt || Date.now()).getTime()
-        return { ...item, endTime: ended.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }), endedAt: ended.toISOString(), durationMinutes: Math.max(1, Math.round((ended.getTime() - startedAt) / 60000)) }
-      })
-      writeArray("app_break_records", next)
+      const breakStart = active.breakStart || active.startTime || active.startedAt || active.createdAt || ended.toISOString()
+      const startedAt = new Date(breakStart).getTime()
+      const durationMinutes = Math.max(1, Math.round((ended.getTime() - (Number.isNaN(startedAt) ? ended.getTime() : startedAt)) / 60000))
+      writeArray("app_break_records", readArray("app_break_records").map((item: any) =>
+        item.id === active.id ? { ...item, breakEnd: ended.toISOString(), endTime: ended.toISOString(), durationMinutes, status: "completed", updatedAt: ended.toISOString() } : item
+      ))
+      writeArray("app_live_presence", livePresence.map((item: any) => matchesPerson(item, personId) ? { ...item, status: "inside", updatedAt: ended.toISOString() } : item))
+      notifyAttendanceSync()
+      window.dispatchEvent(new Event("app-break-records-updated"))
       updateSettings({ state: "İçeride", screen: "Mola" })
       addAudit("Mobil mola bitirildi", `${personName(selectedPerson)} mola kaydını bitirdi.`, "Mobil")
       load()
+      return
+    }
+    const isInsideForBreak = liveRecord?.status === "inside"
+    if (!isInsideForBreak) {
+      toast({ variant: "destructive", title: "Mola başlatılamadı", description: "Personel içeride değil." })
       return
     }
     const now = new Date()
     const record = {
       id: `mobile-break-${Date.now()}`,
       personnelId: personId,
-      personelAdı: personName(selectedPerson),
+      personnelName: personName(selectedPerson),
       branchId,
-      startTime: now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
+      branchName: selectedBranch ? branchName(selectedBranch) : "",
+      breakStart: now.toISOString(),
+      breakType: "Standart Mola",
+      status: "on_break",
+      startTime: now.toISOString(),
       startedAt: now.toISOString(),
       date: now.toISOString().slice(0, 10),
       source: "mobile-preview",
     }
     writeArray("app_break_records", [record, ...readArray("app_break_records")])
+    writeArray("app_live_presence", livePresence.map((item: any) => matchesPerson(item, personId) ? { ...item, status: "on_break", breakStart: record.breakStart, updatedAt: record.breakStart } : item))
+    notifyAttendanceSync()
+    window.dispatchEvent(new Event("app-break-records-updated"))
     updateSettings({ state: "Molada", screen: "Mola" })
     addAudit("Mobil mola başlatıldı", `${personName(selectedPerson)} için mola kaydı oluşturuldu.`)
     load()
@@ -347,7 +710,7 @@ export default function MobilePreviewPage() {
     const record = {
       id: `mobile-leave-${Date.now()}`,
       personnelId: personId,
-      personelAdı: personName(selectedPerson),
+      "personelAdı": personName(selectedPerson),
       type: form.type,
       leaveType: form.type,
       startDate: form.startDate,
@@ -414,6 +777,7 @@ export default function MobilePreviewPage() {
                 device={personDevice}
                 kvkk={personKvkk}
                 qrPoints={branchQrPoints}
+                isPersonInside={isPersonInside}
                 notificationSettings={data.notificationSettings}
                 company={data.companySettings}
                 setScreen={(screen: string) => updateSettings({ screen })}
@@ -538,11 +902,11 @@ function MobileStatusBar({ isAndroid }: { isAndroid: boolean }) {
 function MobileScreen(props: any) {
   const map: Record<string, React.ReactNode> = {
     Ana: <HomeScreen {...props} />,
-    Giriş: <CheckScreen {...props} />,
+    "Giriş": <CheckScreen {...props} />,
     QR: <QrScreen {...props} />,
     GPS: <GpsScreen {...props} />,
     Vardiya: <ShiftScreen {...props} />,
-    İzin: <LeaveScreen {...props} />,
+    "İzin": <LeaveScreen {...props} />,
     Mola: <BreakScreen {...props} />,
     Bildirim: <NotificationScreen {...props} />,
     Profil: <ProfileScreen {...props} />,
@@ -595,7 +959,7 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
   )
 }
 
-function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts, palette, onAttendance }: any) {
+function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts, palette, onAttendance, isPersonInside }: any) {
   const [time, setTime] = React.useState("")
   React.useEffect(() => {
     const tick = () => setTime(new Date().toLocaleTimeString("tr-TR"))
@@ -603,7 +967,7 @@ function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts,
     const timer = window.setInterval(tick, 1000)
     return () => window.clearInterval(timer)
   }, [])
-  const inside = settings.state === "İçeride" || settings.state === "Molada"
+  const inside = isPersonInside || settings.state === "İçeride" || settings.state === "Molada" || settings.state === "Fazla Mesai"
   const activeQr = qrPoints.some((point: any) => isActive(point?.status))
   return (
     <div className="pt-4 text-center">
@@ -653,9 +1017,12 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
   )
 }
 
-function GpsScreen({ branch, settings, palette, onGps }: any) {
+function GpsScreen({ branch, person, settings, palette, onGps }: any) {
   const outside = settings.state === "GPS dışında"
   const hasLocation = hasBranchLocation(branch)
+  const branchCoordinates = getCoordinates(branch)
+  const userCoordinates = getCoordinates(settings) || getCoordinates(person)
+  const debugDistance = branchCoordinates && userCoordinates ? distanceMeters(userCoordinates, branchCoordinates) : null
   return (
     <div>
       <MobileHeader person={{ fullName: "GPS Konum" }} palette={palette} title="Konum doğrulama" />
@@ -667,6 +1034,11 @@ function GpsScreen({ branch, settings, palette, onGps }: any) {
       </div>
       <Button data-mobile-action="gps-sim" onClick={onGps} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>GPS ile giriş</Button>
       <MobileCard className="mt-4">
+        <div className="mb-3 rounded-2xl bg-white/10 p-3 font-mono text-[10px] leading-5 text-white/60">
+          <div>branch lat/lng: {branchCoordinates ? `${branchCoordinates.latitude}, ${branchCoordinates.longitude}` : "-"}</div>
+          <div>user lat/lng: {userCoordinates ? `${userCoordinates.latitude}, ${userCoordinates.longitude}` : "-"}</div>
+          <div>calculated distance: {debugDistance === null ? "-" : `${Math.round(debugDistance)} m`}</div>
+        </div>
         <VerifyRow label="Şube lokasyonu" value={hasLocation ? branchName(branch) : "Şube konumu tanımlı değil"} danger={!hasLocation} />
         <VerifyRow label="Personel konumu" value={outside ? "Şube dışında" : hasLocation ? "Şube alanında" : "Simülasyon bekliyor"} danger={outside || !hasLocation} />
         <VerifyRow label="Mesafe" value={outside ? "850 m" : hasLocation ? "42 m" : "-"} danger={outside || !hasLocation} />
@@ -679,7 +1051,7 @@ function GpsScreen({ branch, settings, palette, onGps }: any) {
 function ShiftScreen({ shifts, branch, palette }: any) {
   const cards = shifts.slice(0, 7).map((shift: any) => ({
     title: shift.name || "Vardiya",
-    detail: `${shift.startDate || "Tarih yok"} · ${shift.startTime || shift.entryTime || "--:--"} - ${shift.endTime || shift.exitTime || "--:--"}`,
+    detail: `${formatDateTR(shift.startDate) || "Tarih yok"} · ${shift.startTime || shift.entryTime || "--:--"} - ${shift.endTime || shift.exitTime || "--:--"}`,
     badge: shift.shiftType || shift.type || "Planlı",
     meta: `${branch ? branchName(branch) : "Şube yok"} · Mola: ${shift.breakMinutes || shift.breakTime || "Tanımlı değil"}`,
   }))
@@ -697,7 +1069,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
   }
   const items = leaves.slice(0, 8).map((leave: any) => ({
     title: leave.type || leave.leaveType || "İzin",
-    detail: `${leave.startDate || "-"} / ${leave.endDate || "-"}`,
+    detail: `${formatDateTR(leave.startDate)} / ${formatDateTR(leave.endDate)}`,
     badge: normalizeStatus(leave.status),
     meta: leave.description || "",
   }))
@@ -709,8 +1081,8 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
         <MobileCard className="mb-4 space-y-3">
           <Input value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
           <div className="grid grid-cols-2 gap-2">
-            <Input type="date" value={form.startDate} onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
-            <Input type="date" value={form.endDate} onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
+            <Input {...DATE_INPUT_PROPS} value={form.startDate} onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
+            <Input {...DATE_INPUT_PROPS} value={form.endDate} onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
           </div>
           <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Açıklama" className="min-h-16 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
           <Button data-mobile-action="leave-save" onClick={submit} className="h-10 w-full rounded-2xl bg-white text-slate-950 hover:bg-white/90">Kaydet</Button>
@@ -736,7 +1108,7 @@ function BreakScreen({ breaks, settings, palette, onBreak }: any) {
 function NotificationScreen({ leaves, shifts, settings, notificationSettings, palette }: any) {
   const now = new Date().toLocaleString("tr-TR")
   const items = [
-    ...leaves.slice(0, 3).map((leave: any) => ({ title: "İzin durumu", detail: `${leave.startDate || "-"} · ${normalizeStatus(leave.status)}`, badge: "İzin", time: leave.createdAt || now, unread: normalizeStatus(leave.status) === "Bekliyor" })),
+    ...leaves.slice(0, 3).map((leave: any) => ({ title: "İzin durumu", detail: `${formatDateTR(leave.startDate)} · ${normalizeStatus(leave.status)}`, badge: "İzin", time: leave.createdAt || now, unread: normalizeStatus(leave.status) === "Bekliyor" })),
     ...shifts.slice(0, 3).map((shift: any) => ({ title: "Vardiya hatırlatması", detail: `${shift.name || "Vardiya"} ${shift.startTime || "--:--"}`, badge: "Vardiya", time: shift.startDate || now })),
     ...(settings.qrStatus === "Başarısız" ? [{ title: "QR güvenlik uyarısı", detail: "Aktif QR noktası bulunamadı.", badge: "QR", time: now, unread: true }] : []),
     ...(settings.state === "GPS dışında" ? [{ title: "GPS güvenlik uyarısı", detail: "Personel şube lokasyonu dışında.", badge: "GPS", time: now, unread: true }] : []),
@@ -763,7 +1135,7 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
         <Info label="Role" value={valueText(person?.role || person?.roleId, "Rol yok")} />
         <Info label="Device ID" value={device?.deviceId || device?.id || "Tanımlı değil"} />
         <Info label="KVKK" value={kvkk?.status || kvkk?.kvkkStatus || kvkk?.consentStatus || "Bekliyor"} />
-        <Info label="İşe giriş" value={valueText(person?.startDate || person?.hireDate || person?.employmentStartDate, "Tarih yok")} />
+        <Info label="İşe giriş" value={formatDateTR(person?.startDate || person?.hireDate || person?.employmentStartDate)} />
       </MobileCard>
     </div>
   )

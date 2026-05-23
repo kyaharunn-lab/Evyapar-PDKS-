@@ -14,6 +14,14 @@ export const TIME_INPUT_PROPS = {
   "data-hour12": "false",
 } as const;
 
+export const DATE_INPUT_PROPS = {
+  type: "date",
+  lang: TR_LOCALE,
+  placeholder: "dd/mm/yyyy",
+  "data-locale": TR_LOCALE,
+  "data-date-format": "dd/mm/yyyy",
+} as const;
+
 export function toDate(value: any): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -49,6 +57,24 @@ export function formatDateTimeTR(value: any) {
     minute: "2-digit",
     hour12: false,
     hourCycle: "h23",
+    timeZone: TURKEY_TIME_ZONE,
+  }).format(date);
+}
+
+export function formatDateTR(value: any) {
+  if (!value) return "-";
+  if (typeof value === "string") {
+    const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoDate) return `${isoDate[3]}/${isoDate[2]}/${isoDate[1]}`;
+  }
+
+  const date = toDate(value);
+  if (!date) return "-";
+
+  return new Intl.DateTimeFormat(TR_LOCALE, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
     timeZone: TURKEY_TIME_ZONE,
   }).format(date);
 }

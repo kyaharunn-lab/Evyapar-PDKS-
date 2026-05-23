@@ -74,6 +74,7 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
+import { DATE_INPUT_PROPS, formatDateTR } from "@/lib/date-time"
 
 const t = translations.common;
 const l = translations.leaves;
@@ -406,8 +407,8 @@ export default function LeaveRequestsPage() {
                         {getLeaveTypeLabel(req.leaveType)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm font-medium">{req.startDate || "-"}</TableCell>
-                    <TableCell className="text-sm font-medium">{req.endDate || "-"}</TableCell>
+                    <TableCell className="text-sm font-medium">{formatDateTR(req.startDate)}</TableCell>
+                    <TableCell className="text-sm font-medium">{formatDateTR(req.endDate)}</TableCell>
                     <TableCell>
                       <span className="text-sm font-bold text-primary">{req.totalDays || "0"} Gün</span>
                     </TableCell>
@@ -518,7 +519,7 @@ export default function LeaveRequestsPage() {
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold text-slate-500 uppercase">Başlangıç tarihi</Label>
                 <Input
-                  type="date"
+                  {...DATE_INPUT_PROPS}
                   value={formData.startDate}
                   onChange={(e) => {
                     setFormData((prev) => ({ ...prev, startDate: e.target.value }));
@@ -531,7 +532,7 @@ export default function LeaveRequestsPage() {
               <div className="space-y-1.5">
                 <Label className="text-[11px] font-bold text-slate-500 uppercase">Bitiş tarihi</Label>
                 <Input
-                  type="date"
+                  {...DATE_INPUT_PROPS}
                   value={formData.endDate}
                   onChange={(e) => {
                     setFormData((prev) => ({ ...prev, endDate: e.target.value }));
@@ -598,8 +599,8 @@ export default function LeaveRequestsPage() {
                 <div className="grid grid-cols-2 gap-6">
                   <DetailItem label={l.leaveType} value={l.types[selectedRequest.leaveType as keyof typeof l.types] || selectedRequest.leaveType} />
                   <DetailItem label={l.totalDays} value={`${selectedRequest.totalDays || 0} Gün`} />
-                  <DetailItem label={l.startDate} value={selectedRequest.startDate || "-"} />
-                  <DetailItem label={l.endDate} value={selectedRequest.endDate || "-"} />
+                  <DetailItem label={l.startDate} value={formatDateTR(selectedRequest.startDate)} />
+                  <DetailItem label={l.endDate} value={formatDateTR(selectedRequest.endDate)} />
                   <DetailItem label="Şube" value={selectedRequest.person?.branchId || "-"} />
                   <DetailItem label="Departman" value={selectedRequest.person?.departmentId || "-"} />
                 </div>

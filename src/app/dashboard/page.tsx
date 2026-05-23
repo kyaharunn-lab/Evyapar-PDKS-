@@ -54,6 +54,8 @@ const STORAGE_KEYS = [
   "app_shifts",
   "app_leave_requests",
   "app_break_records",
+  "app_live_presence",
+  "app_attendance_records",
   "app_mobile_attendance_preview",
   "app_qr_points",
   "app_device_ids",
@@ -186,6 +188,7 @@ export default function DashboardPage() {
     shifts: [],
     leaves: [],
     breaks: [],
+    livePresence: [],
     attendance: [],
     qrPoints: [],
     devices: [],
@@ -201,7 +204,8 @@ export default function DashboardPage() {
       shifts: readArray("app_shifts"),
       leaves: readArray("app_leave_requests"),
       breaks: readArray("app_break_records"),
-      attendance: readArray("app_mobile_attendance_preview"),
+      livePresence: readArray("app_live_presence"),
+      attendance: readArray("app_attendance_records"),
       qrPoints: readArray("app_qr_points"),
       devices: readArray("app_device_ids"),
       auditLogs: readArray("app_audit_logs"),
@@ -215,7 +219,13 @@ export default function DashboardPage() {
       if (!event.key || STORAGE_KEYS.includes(event.key)) load()
     }
     window.addEventListener("storage", onStorage)
-    return () => window.removeEventListener("storage", onStorage)
+    window.addEventListener("app-live-presence-updated", load)
+    window.addEventListener("app-break-records-updated", load)
+    return () => {
+      window.removeEventListener("storage", onStorage)
+      window.removeEventListener("app-live-presence-updated", load)
+      window.removeEventListener("app-break-records-updated", load)
+    }
   }, [load])
 
   const today = React.useMemo(() => dateKey(new Date()), [])
@@ -240,15 +250,16 @@ export default function DashboardPage() {
       const person = data.personnel.find((item: any) => getId(item) === attendancePersonId(record))
       const branchId = (person?.branchId || record?.branchId || "").toString()
       const shift = person ? getShiftForPerson(data.shifts, person, branchId, today) : null
-      return isLateEntry(record, shift)
+      return record?.isLate === true || isLateEntry(record, shift)
     }).map(attendancePersonId))
   }, [data.personnel, data.shifts, today, todayEntries])
 
   const insidePersonIds = React.useMemo(() => {
-    return new Set(Array.from(latestAttendanceByPerson.entries()).filter(([, record]) => isEntry(record) && !isExit(record)).map(([personId]) => personId))
-  }, [latestAttendanceByPerson])
+    const liveInside = data.livePresence.filter((item: any) => statusText(item?.status) === "inside").map(attendancePersonId).filter(Boolean)
+    return new Set(liveInside)
+  }, [data.livePresence])
 
-  const activeBreaks = React.useMemo(() => data.breaks.filter((item: any) => !item?.endTime && !item?.endedAt && statusText(item?.status) !== "completed"), [data.breaks])
+  const activeBreaks = React.useMemo(() => data.livePresence.filter((item: any) => statusText(item?.status) === "on_break"), [data.livePresence])
   const leaveToday = React.useMemo(() => data.leaves.filter((leave: any) => isTodayInRange(leave, today) && (isApproved(leave?.status) || statusText(leave?.status).includes("bekliyor"))), [data.leaves, today])
 
   const qrStats = React.useMemo(() => {
@@ -262,6 +273,10 @@ export default function DashboardPage() {
     const success = records.filter((record: any) => statusText(record.gpsStatus).includes("doğrul") || statusText(record.gpsStatus).includes("dogrul") || statusText(record.gpsStatus).includes("valid")).length
     return { total: records.length, success, rate: records.length ? Math.round((success / records.length) * 100) : 0 }
   }, [data.attendance])
+
+  const overtimeRisk = React.useMemo(() => {
+    return data.attendance.filter((record: any) => getRecordDate(record) === today && Number(record?.overtimeMinutes || 0) > 0).length
+  }, [data.attendance, today])
 
   const kpis = React.useMemo(() => {
     const totalStaff = data.personnel.length
@@ -285,7 +300,7 @@ export default function DashboardPage() {
         const person = data.personnel.find((item: any) => getId(item) === attendancePersonId(record))
         const branchId = (person?.branchId || record?.branchId || "").toString()
         const shift = person ? getShiftForPerson(data.shifts, person, branchId, key) : null
-        return isLateEntry(record, shift)
+        return record?.isLate === true || isLateEntry(record, shift)
       }).length
       return {
         day: day.toLocaleDateString("tr-TR", { weekday: "short" }),
@@ -322,6 +337,7 @@ export default function DashboardPage() {
     { label: "İzinli", value: leaveToday.length, icon: CalendarPlus, tone: "text-indigo-600 bg-indigo-50" },
     { label: "QR Başarı", value: `%${qrStats.rate}`, icon: QrCode, tone: "text-sky-600 bg-sky-50" },
     { label: "GPS Oranı", value: `%${gpsStats.rate}`, icon: MapPin, tone: "text-teal-600 bg-teal-50" },
+    { label: "Fazla Mesai Riski", value: overtimeRisk, icon: Radar, tone: "text-amber-600 bg-amber-50" },
   ]
 
   const recentActivities = React.useMemo(() => {

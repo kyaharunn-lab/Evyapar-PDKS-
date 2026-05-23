@@ -71,7 +71,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
-import { formatDateTimeTR, formatTimeValueTR } from "@/lib/date-time"
+import { DATE_INPUT_PROPS, formatDateTimeTR, formatDateTR, formatTimeValueTR } from "@/lib/date-time"
 
 const LEAVE_REQUESTS_KEY = "app_leave_requests"
 const PERSONNEL_KEY = "app_personnel"
@@ -530,8 +530,8 @@ export default function LeaveRequestsPage() {
                 <TableBody>
                   {filteredRequests.map((request) => {
                     const statusOpt = getStatusOption(request.status)
-                    const startFormatted = format(parseISO(request.startDate), "dd MMM yyyy", { locale: tr })
-                    const endFormatted = format(parseISO(request.endDate), "dd MMM yyyy", { locale: tr })
+                    const startFormatted = formatDateTR(request.startDate)
+                    const endFormatted = formatDateTR(request.endDate)
 
                     return (
                       <TableRow key={request.id} className="border-slate-100 hover:bg-slate-50/50">
@@ -698,7 +698,7 @@ export default function LeaveRequestsPage() {
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700">Başlangıç Tarihi *</Label>
                 <Input
-                  type="date"
+                  {...DATE_INPUT_PROPS}
                   value={formData.startDate}
                   onChange={(e) => {
                     setFormData({ ...formData, startDate: e.target.value })
@@ -717,7 +717,7 @@ export default function LeaveRequestsPage() {
               <div className="space-y-2">
                 <Label className="font-bold text-slate-700">Bitiş Tarihi *</Label>
                 <Input
-                  type="date"
+                  {...DATE_INPUT_PROPS}
                   value={formData.endDate}
                   onChange={(e) => {
                     setFormData({ ...formData, endDate: e.target.value })
@@ -859,13 +859,13 @@ export default function LeaveRequestsPage() {
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-primary" />
                     <span className="font-bold text-slate-900">
-                      {format(parseISO(selectedRequest.startDate), "dd MMMM yyyy", { locale: tr })}
+                      {formatDateTR(selectedRequest.startDate)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-primary" />
                     <span className="font-bold text-slate-900">
-                      {format(parseISO(selectedRequest.endDate), "dd MMMM yyyy", { locale: tr })}
+                      {formatDateTR(selectedRequest.endDate)}
                     </span>
                   </div>
                 </div>

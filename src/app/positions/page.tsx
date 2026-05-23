@@ -174,9 +174,9 @@ export default function PositionsPage() {
   }, [getPersonnelName, localPersonnel, posManagerId])
 
   const getManagerLabel = React.useCallback((position: any) => {
-    if (!position?.managerId && !position?.managerName) return "HenÃ¼z AtanmadÄ±"
+    if (!position?.managerId && !position?.managerName) return "Henüz Atanmadı"
     const person = localPersonnel.find((item) => item?.id === position?.managerId)
-    return position?.managerName || (person ? getPersonnelName(person) : position?.managerId) || "HenÃ¼z AtanmadÄ±"
+    return position?.managerName || (person ? getPersonnelName(person) : position?.managerId) || "Henüz Atanmadı"
   }, [getPersonnelName, localPersonnel])
 
   const hasAssignedPersonnel = React.useCallback((position: any) => {

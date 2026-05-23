@@ -19,8 +19,7 @@ import {
   Map as MapIcon,
   Loader2
 } from "lucide-react"
-import { format, differenceInMinutes, parseISO } from "date-fns"
-import { tr } from "date-fns/locale"
+import { differenceInMinutes } from "date-fns"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,17 +49,6 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useFirestore, useCollection, useUser } from "@/firebase"
-import { 
-  collection, 
-  query, 
-  where, 
-  Timestamp, 
-  doc, 
-  updateDoc, 
-  addDoc, 
-  serverTimestamp 
-} from "firebase/firestore"
 import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
@@ -70,10 +58,110 @@ import { formatTimeTR } from "@/lib/date-time"
 
 const t = translations.common;
 const l = translations.live;
+const LIVE_PRESENCE_KEY = "app_live_presence";
+const ATTENDANCE_RECORDS_KEY = "app_attendance_records";
+const SHIFTS_KEY = "app_shifts";
+
+function readArray(key: string) {
+  if (typeof window === "undefined") return [];
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeArray(key: string, value: any[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function itemId(item: any) {
+  return (item?.personnelId || item?.personelId || item?.personId || item?.id || "").toString();
+}
+
+function recordDate(item: any) {
+  return String(item?.date || item?.tarih || item?.checkInTime || item?.entryTime || "").slice(0, 10);
+}
+
+function recordTime(item: any) {
+  const value = item?.checkInTime || item?.entryTime || item?.createdAt || item?.updatedAt || item?.date || item?.tarih || "";
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function recordBranchId(item: any) {
+  return String(item?.branchId || item?.branch || item?.branchCode || "");
+}
+
+function timeToMinutes(value: any) {
+  const text = String(value || "").slice(0, 5);
+  const [hour, minute] = text.split(":").map(Number);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  return hour * 60 + minute;
+}
+
+function shiftMatchesRecord(shift: any, record: any) {
+  const personId = itemId(record);
+  const branchId = recordBranchId(record);
+  const shiftDate = String(shift?.startDate || shift?.date || "").slice(0, 10);
+  const date = recordDate(record);
+  const personnelIds = Array.isArray(shift?.personnelIds) ? shift.personnelIds.map(String) : [];
+  const shiftPersonIds = [shift?.personnelId, shift?.personId].map((value) => String(value || "")).filter(Boolean);
+  const shiftBranchIds = [shift?.branchId, shift?.branch, shift?.branchCode].map((value) => String(value || "")).filter(Boolean);
+  return (!shiftDate || !date || shiftDate === date) && (
+    (!!personId && (personnelIds.includes(personId) || shiftPersonIds.includes(personId))) ||
+    (!!branchId && shiftBranchIds.includes(branchId))
+  );
+}
+
+function shiftEndMinutes(shifts: any[], record: any) {
+  const shift = shifts.find((item) => shiftMatchesRecord(item, record));
+  return timeToMinutes(shift?.shift?.endTime || shift?.endTime || shift?.exitTime);
+}
+
+function liveOvertimeMinutes(record: any, shifts: any[], now = new Date()) {
+  if (String(record?.status || "").toLowerCase() !== "inside") return 0;
+  const endMinutes = shiftEndMinutes(shifts, record);
+  if (endMinutes === null) return 0;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return Math.max(0, nowMinutes - endMinutes);
+}
+
+function exitOvertimeInfo(shifts: any[], record: any, exitedAt = new Date()) {
+  const endMinutes = shiftEndMinutes(shifts, record);
+  if (endMinutes === null) return { isOvertime: false, overtimeMinutes: 0 };
+  const exitMinutes = exitedAt.getHours() * 60 + exitedAt.getMinutes();
+  const overtimeMinutes = Math.max(0, exitMinutes - endMinutes);
+  return {
+    isOvertime: overtimeMinutes > 0,
+    overtimeMinutes,
+    ...(overtimeMinutes > 0 ? { overtimeStatus: "uyarı" } : {}),
+  };
+}
+
+function latestInsideByPersonDay(records: any[]) {
+  const latest = new Map<string, any>();
+  records
+    .filter((item: any) => String(item?.status || "").toLowerCase() === "inside")
+    .forEach((item: any) => {
+      const key = `${itemId(item)}-${recordDate(item)}`;
+      const current = latest.get(key);
+      if (!current || recordTime(item) >= recordTime(current)) latest.set(key, item);
+    });
+  return Array.from(latest.values());
+}
+
+function personFullName(person: any, fallback = "Personel") {
+  return (person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || person?.displayName || fallback).toString();
+}
+
+function initials(name: string) {
+  return name.split(" ").filter(Boolean).slice(0, 2).map((part) => part.charAt(0)).join("").toUpperCase() || "P";
+}
 
 export default function LiveAttendancePage() {
-  const db = useFirestore()
-  const { user } = useUser()
   const { toast } = useToast()
   
   const [searchTerm, setSearchTerm] = React.useState("")
@@ -83,6 +171,11 @@ export default function LiveAttendancePage() {
   const [exitReason, setExitReason] = React.useState("")
   const [lastRefresh, setLastRefresh] = React.useState(new Date())
   const [now, setNow] = React.useState(new Date())
+  const [rawLogs, setRawLogs] = React.useState<any[]>([])
+  const [personnel, setPersonnel] = React.useState<any[]>([])
+  const [branches, setBranches] = React.useState<any[]>([])
+  const [shifts, setShifts] = React.useState<any[]>([])
+  const [loadingLogs, setLoadingLogs] = React.useState(true)
 
   // Update "now" every minute to refresh durations
   React.useEffect(() => {
@@ -90,46 +183,49 @@ export default function LiveAttendancePage() {
     return () => clearInterval(timer)
   }, [])
 
-  // Today's date string (YYYY-MM-DD)
-  const todayStr = format(new Date(), "yyyy-MM-dd")
+  const loadLocalData = React.useCallback(() => {
+    setRawLogs(latestInsideByPersonDay(readArray(LIVE_PRESENCE_KEY)))
+    setPersonnel(readArray("app_personnel").filter((person: any) => !person?.isDeleted))
+    setBranches(readArray("app_branches"))
+    setShifts(readArray(SHIFTS_KEY))
+    setLoadingLogs(false)
+    setLastRefresh(new Date())
+  }, [])
 
-  // Real-time queries
-  const logsQuery = React.useMemo(() => {
-    if (!db) return null;
-    // Get logs for today where exitTime is null
-    return query(
-      collection(db, "attendance_logs"), 
-      where("date", "==", todayStr),
-      where("exitTime", "==", null)
-    );
-  }, [db, todayStr]);
-
-  const personnelQuery = React.useMemo(() => {
-    return db ? collection(db, "personnel") : null;
-  }, [db]);
-
-  const branchesQuery = React.useMemo(() => {
-    return db ? collection(db, "branches") : null;
-  }, [db]);
-
-  const { data: rawLogs, loading: loadingLogs } = useCollection(logsQuery);
-  const { data: personnel } = useCollection(personnelQuery);
-  const { data: branches } = useCollection(branchesQuery);
+  React.useEffect(() => {
+    loadLocalData()
+    const refresh = () => loadLocalData()
+    window.addEventListener("storage", refresh)
+    window.addEventListener("focus", refresh)
+    window.addEventListener("app-live-presence-updated", refresh)
+    return () => {
+      window.removeEventListener("storage", refresh)
+      window.removeEventListener("focus", refresh)
+      window.removeEventListener("app-live-presence-updated", refresh)
+    }
+  }, [loadLocalData])
 
   // Merge log data with personnel data
   const liveLogs = React.useMemo(() => {
     if (!rawLogs || !personnel) return [];
     return rawLogs.map(log => {
-      const person = personnel.find(p => p.id === log.personnelId);
-      const branch = branches?.find(b => b.id === person?.branchId);
+      const personnelId = itemId(log);
+      const person = personnel.find(p => itemId(p) === personnelId);
+      const branchId = log.branchId || person?.branchId || "";
+      const branch = branches?.find(b => (b.id || b.branchCode || "").toString() === branchId.toString());
+      const displayName = log.personnelName || log["personelAdı"] || log["personelAdı"] || personFullName(person);
       return {
         ...log,
-        person,
-        branchName: branch?.name || person?.branchId || "-"
+        personnelId,
+        entryTime: log.entryTime || log.checkInTime,
+        person: person || { fullName: displayName, name: displayName, surname: "" },
+        branchName: log.branchName || log["şube"] || log["şube"] || branch?.branchName || branch?.name || person?.branchId || "-"
       };
     }).filter(log => 
       !searchTerm || 
+      log.personnelName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.person?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.person?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.person?.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.person?.registryNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.person?.departmentId?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -156,24 +252,27 @@ export default function LiveAttendancePage() {
     return `${hours} sa ${minutes} dk`;
   };
 
-  const handleManualExit = async () => {
-    if (!db || !selectedLog || !exitReason) return;
-    try {
-      const logRef = doc(db, "attendance_logs", selectedLog.id);
-      await updateDoc(logRef, {
-        exitTime: serverTimestamp(),
-        exitMethod: "Manual",
-        exitReason: exitReason,
-        updatedAt: serverTimestamp()
-      });
+  const liveStatus = (log: any) => {
+    if (liveOvertimeMinutes(log, shifts, now) > 0) return "Overtime";
+    return log.isLate ? "Late" : log.status;
+  };
 
-      await addDoc(collection(db, "audit_logs"), {
-        action: "Manual Exit",
-        personnelId: selectedLog.personnelId,
-        performedBy: user?.email || "System",
-        reason: exitReason,
-        timestamp: serverTimestamp()
-      });
+  const handleManualExit = async () => {
+    if (!selectedLog || !exitReason) return;
+    try {
+      const exitedAt = new Date();
+      const nowIso = exitedAt.toISOString();
+      const overtimeInfo = exitOvertimeInfo(shifts, selectedLog, exitedAt);
+      const matchesSelected = (item: any) => item?.id === selectedLog.id || itemId(item) === selectedLog.personnelId;
+      writeArray(LIVE_PRESENCE_KEY, readArray(LIVE_PRESENCE_KEY).map((item: any) =>
+        matchesSelected(item) ? { ...item, ...overtimeInfo, status: "outside", checkOutTime: nowIso, exitTime: nowIso, exitMethod: "Manual", exitReason, updatedAt: nowIso } : item
+      ));
+      writeArray(ATTENDANCE_RECORDS_KEY, readArray(ATTENDANCE_RECORDS_KEY).map((item: any) =>
+        matchesSelected(item) && item?.status === "inside" ? { ...item, ...overtimeInfo, status: "outside", checkOutTime: nowIso, exitTime: nowIso, exitMethod: "Manual", exitReason, updatedAt: nowIso } : item
+      ));
+      window.dispatchEvent(new Event("app-live-presence-updated"));
+      window.dispatchEvent(new Event("app-attendance-records-updated"));
+      loadLocalData();
 
       toast({
         title: "Başarılı",
@@ -210,7 +309,7 @@ export default function LiveAttendancePage() {
             variant="outline" 
             size="icon" 
             className="h-10 w-10 rounded-xl"
-            onClick={() => setLastRefresh(new Date())}
+            onClick={loadLocalData}
           >
             <RefreshCcw className="h-4 w-4" />
           </Button>
@@ -315,7 +414,7 @@ export default function LiveAttendancePage() {
                       <span className="text-sm font-bold text-primary">{formatDuration(log.entryTime)}</span>
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={log.status} isRemote={log.isRemote} />
+                      <StatusBadge status={liveStatus(log)} isRemote={log.isRemote} />
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center text-xs text-slate-500">
@@ -375,7 +474,7 @@ export default function LiveAttendancePage() {
                   <div className="space-y-1">
                     <h4 className="text-xl font-bold text-primary">{selectedLog.person?.name} {selectedLog.person?.surname}</h4>
                     <p className="text-sm font-medium text-slate-500">{selectedLog.person?.position}</p>
-                    <StatusBadge status={selectedLog.status} isRemote={selectedLog.isRemote} />
+                    <StatusBadge status={liveStatus(selectedLog)} isRemote={selectedLog.isRemote} />
                   </div>
                 </div>
 
@@ -480,6 +579,8 @@ function StatusBadge({ status, isRemote }: { status: string, isRemote?: boolean 
   switch (status) {
     case "OnTime":
       return <Badge className="bg-green-50 text-green-700 border-green-100 font-bold px-3 py-1 rounded-lg">İÇERİDE</Badge>;
+    case "Overtime":
+      return <Badge className="bg-amber-50 text-amber-700 border-amber-100 font-bold px-3 py-1 rounded-lg">FAZLA MESAİ</Badge>;
     case "Late":
       return <Badge className="bg-red-50 text-accent border-red-100 font-bold px-3 py-1 rounded-lg">GEÇ KALDI</Badge>;
     case "Break":

@@ -75,7 +75,7 @@ import {
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { formatDateTimeTR } from "@/lib/date-time"
+import { DATE_INPUT_PROPS, formatDateTimeTR } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
 
 const KVKK_KEY = "app_kvkk_consents"
@@ -834,7 +834,7 @@ function AuditLogs({ logs }: { logs: any[] }) {
         <div className="flex flex-col gap-4">
           <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Enterprise Audit Log</CardTitle>
           <div className="grid gap-3 md:grid-cols-4">
-            <Input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" />
+            <Input {...DATE_INPUT_PROPS} value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" />
             <Input value={userFilter} onChange={(event) => setUserFilter(event.target.value)} placeholder="Kullanıcı ara..." className="h-10 rounded-xl border-slate-200 bg-white" />
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white">
@@ -880,7 +880,8 @@ function RiskBadge({ risk }: { risk: string }) {
 }
 
 function FormInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <div className="space-y-1.5"><Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border-slate-200" /></div>
+  const inputProps = type === "date" ? DATE_INPUT_PROPS : { type }
+  return <div className="space-y-1.5"><Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label><Input {...inputProps} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border-slate-200" /></div>
 }
 
 function FormSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {

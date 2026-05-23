@@ -57,7 +57,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { TIME_INPUT_PROPS, formatTimeValueTR, normalizeTimeInputTR } from "@/lib/date-time"
+import { DATE_INPUT_PROPS, TIME_INPUT_PROPS, formatDateTR, formatTimeValueTR, normalizeTimeInputTR } from "@/lib/date-time"
 
 const s = translations.shifts;
 const t = translations.common;
@@ -496,7 +496,7 @@ export default function ShiftsPage() {
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Başlangıç Tarihi</label>
                 <Input
-                  type="date"
+                  {...DATE_INPUT_PROPS}
                   className="rounded-xl border-slate-200"
                   value={formData.startDate}
                   onChange={(e) => setFormData((prev) => ({ ...prev, startDate: e.target.value }))}
@@ -661,7 +661,7 @@ function ListShiftCard({ shift, personnel, branches }: { shift: any, personnel: 
         <div className="pt-2 border-t flex items-center justify-end text-[11px] font-medium text-slate-500">
           <div className="flex items-center gap-1.5">
             <CalendarIcon className="h-3.5 w-3.5" />
-            {shift.startDate}
+            {formatDateTR(shift.startDate)}
           </div>
         </div>
       </CardContent>

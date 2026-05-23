@@ -81,6 +81,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+import { DATE_INPUT_PROPS, formatDateTR } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_KEY = "app_reports_settings"
@@ -349,13 +350,14 @@ export default function ReportsPage() {
       const exitMinutes = toMinutes(exit)
       const workMinutes = entryMinutes !== null && exitMinutes !== null ? Math.max(0, exitMinutes - entryMinutes) : 0
       const isLate = entryMinutes !== null && entryMinutes > 9 * 60
-      const overtime = workMinutes > 9 * 60 ? workMinutes - 9 * 60 : 0
+      const storedOvertime = Number(firstLog?.overtimeMinutes || 0)
+      const overtime = storedOvertime > 0 ? storedOvertime : workMinutes > 9 * 60 ? workMinutes - 9 * 60 : 0
       const leave = filteredLeaves.find((item) => (item?.personnelId || item?.personId || "").toString() === personId)
       const branch = branchById.get(person?.branchId || "")
       const department = deptById.get(person?.departmentId || "")
       const device = deviceByPerson.get(personId)
       const channel = (firstLog?.verificationMethod || firstLog?.channel || "-").toString()
-      const risk = data.audit.some((log) => `${log.user || log.actor || ""}`.includes(getPersonnelName(person)) && (log.risk === "Kritik" || log.riskLevel === "Kritik")) ? "Kritik" : isLate ? "Orta" : "Düşük"
+      const risk = data.audit.some((log) => `${log.user || log.actor || ""}`.includes(getPersonnelName(person)) && (log.risk === "Kritik" || log.riskLevel === "Kritik")) ? "Kritik" : overtime > 0 || isLate ? "Orta" : "Düşük"
       return {
         person,
         personId,
@@ -685,7 +687,8 @@ function ReportCenterTab({ value, label, href }: { value: string; label: string;
 }
 
 function FilterInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <div className="space-y-1.5"><Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" /></div>
+  const inputProps = type === "date" ? DATE_INPUT_PROPS : { type }
+  return <div className="space-y-1.5"><Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label><Input {...inputProps} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" /></div>
 }
 
 function FilterSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
@@ -762,7 +765,7 @@ function LiveOpsPanel({ tableRows, shifts, audit, qrPoints }: any) {
       <CardContent className="p-4 space-y-4">
         <MiniList title="Şu an içeride olanlar" items={inside.map((row: any) => ({ label: getPersonnelName(row.person), value: row.entry }))} />
         <MiniList title="Geç kalanlar" items={late.map((row: any) => ({ label: getPersonnelName(row.person), value: row.entry }))} />
-        <MiniList title="Aktif vardiyalar" items={shifts.slice(0, 5).map((shift: any) => ({ label: shift.name || shift.id, value: shift.startDate || "-" }))} />
+        <MiniList title="Aktif vardiyalar" items={shifts.slice(0, 5).map((shift: any) => ({ label: shift.name || shift.id, value: formatDateTR(shift.startDate) }))} />
         <MiniList title="Kritik uyarılar / şüpheli girişler" items={critical.map((log: any) => ({ label: log.type || "Uyarı", value: log.user || log.actor || "-" }))} />
         <MiniList title="QR doğrulama hataları" items={qrPoints.filter((qr: any) => qr.status === "Passive").slice(0, 5).map((qr: any) => ({ label: qr.pointName || qr.qrCode, value: "Pasif" }))} />
         <MiniList title="Cihaz uyuşmazlıkları" items={mismatch.map((log: any) => ({ label: log.deviceId || "Device", value: log.user || log.actor || "-" }))} />
@@ -800,7 +803,8 @@ function MiniList({ title, items }: { title: string; items: any[] }) {
 }
 
 function FormInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <div className="space-y-1.5"><Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border-slate-200" /></div>
+  const inputProps = type === "date" ? DATE_INPUT_PROPS : { type }
+  return <div className="space-y-1.5"><Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label><Input {...inputProps} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border-slate-200" /></div>
 }
 
 function RiskBadge({ risk }: { risk: string }) {

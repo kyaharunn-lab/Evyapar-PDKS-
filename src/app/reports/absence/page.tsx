@@ -66,7 +66,7 @@ import {
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { formatDateTimeTR, formatTimeTR, formatTimeValueTR } from "@/lib/date-time"
+import { DATE_INPUT_PROPS, formatDateTimeTR, formatDateTR, formatTimeTR, formatTimeValueTR } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
 
 const PERSONNEL_KEY = "app_personnel"
@@ -609,7 +609,7 @@ export default function AbsenceReportPage() {
                   <InfoRow label="Çıkış Saati" value={selectedRow.exitTime || "-"} />
                   <InfoRow label="Durum" value={getStatusLabel(selectedRow.status)} />
                   <InfoRow label="Açıklama" value={selectedRow.description} />
-                  <InfoRow label="İzin Kaydı" value={selectedRow.leave ? `${selectedRow.leave.startDate || "-"} / ${selectedRow.leave.endDate || "-"}` : "-"} />
+                  <InfoRow label="İzin Kaydı" value={selectedRow.leave ? `${formatDateTR(selectedRow.leave.startDate)} / ${formatDateTR(selectedRow.leave.endDate)}` : "-"} />
                   <InfoRow label="Son Güncelleme" value={selectedRow.annotation?.updatedAt ? formatDateTimeTR(selectedRow.annotation.updatedAt) : "-"} />
                 </>
               )}
@@ -647,7 +647,7 @@ function FilterDate({ label, value, onChange }: { label: string; value: string; 
   return (
     <div className="space-y-1.5">
       <Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label>
-      <Input type="date" value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border-slate-200 bg-white" />
+      <Input {...DATE_INPUT_PROPS} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl border-slate-200 bg-white" />
     </div>
   )
 }

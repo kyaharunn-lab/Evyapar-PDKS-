@@ -11,7 +11,6 @@ import {
   CalendarClock,
   Clock3,
   Coffee,
-  DollarSign,
   Download,
   Eye,
   FileSpreadsheet,
@@ -73,14 +72,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
+import { DATE_INPUT_PROPS } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
 
 const OVERTIME_KEY = "app_overtime_reports"
 const ALL = "__all__"
-const HOURLY_RATE = 180
-const OVERTIME_MULTIPLIER = 1.5
-const NIGHT_MULTIPLIER = 1.75
-const WEEKEND_MULTIPLIER = 2
 
 const STORAGE_KEYS = {
   personnel: "app_personnel",
@@ -100,10 +96,10 @@ const STORAGE_KEYS = {
 const AUTO_REPORTS = [
   { title: "Günlük mesai özeti", description: "Bugünün çalışma ve fazla mesai görünümü.", icon: Activity },
   { title: "Haftalık çalışma raporu", description: "Haftalık yoğunluk ve denge analizi.", icon: LineChart },
-  { title: "Aylık fazla mesai", description: "Aylık toplam mesai ve maliyet kırılımı.", icon: BarChart3 },
+  { title: "Aylık fazla mesai", description: "Aylık toplam mesai ve uyarı kırılımı.", icon: BarChart3 },
   { title: "Kritik yoğunluk raporu", description: "Aşırı mesai ve riskli çalışan listesi.", icon: ShieldAlert },
-  { title: "Gece vardiyası raporu", description: "Gece mesaisi dağılımı ve maliyet etkisi.", icon: Moon },
-  { title: "Hafta sonu raporu", description: "Hafta sonu çalışma ve maliyet özeti.", icon: Sun },
+  { title: "Gece vardiyası raporu", description: "Gece mesaisi dağılımı ve uyarı etkisi.", icon: Moon },
+  { title: "Hafta sonu raporu", description: "Hafta sonu çalışma ve uyarı özeti.", icon: Sun },
 ]
 
 const readArray = (key: string) => {
@@ -270,7 +266,8 @@ export default function OvertimeReportsPage() {
       const totalMinutes = entryMinutes !== null && exitMinutes !== null ? Math.max(0, exitMinutes - entryMinutes) : 0
       const breakMinutes = getBreakMinutes(data.breaks, personnelId, date)
       const netMinutes = Math.max(0, totalMinutes - breakMinutes)
-      const overtimeMinutes = Math.max(0, netMinutes - scheduledMinutes)
+      const storedOvertime = Number(log?.overtimeMinutes || 0)
+      const overtimeMinutes = storedOvertime > 0 ? storedOvertime : Math.max(0, netMinutes - scheduledMinutes)
       const missingMinutes = Math.max(0, scheduledMinutes - netMinutes)
       const lateExit = exitMinutes !== null && exitMinutes > shiftEndMinutes
       const nightMinutes = calculateNightMinutes(entryMinutes, exitMinutes)
@@ -278,7 +275,6 @@ export default function OvertimeReportsPage() {
       const channel = (log?.verificationMethod || log?.channel || log?.platform || "").toString()
       const mobile = /mobil|mobile/i.test(channel)
       const qr = /qr/i.test(channel)
-      const cost = calculateCost(overtimeMinutes, nightMinutes, weekend)
       const risk = getRisk(overtimeMinutes, netMinutes, lateExit)
       const auditHistory = data.audit.filter((item) => `${item.user || item.actor || ""} ${item.target || ""}`.includes(getPersonnelName(person))).slice(0, 5)
       const leave = data.leaves.find((item) => (item?.personnelId || item?.personId || "").toString() === personnelId && date >= (item?.startDate || "") && date <= (item?.endDate || item?.startDate || ""))
@@ -302,7 +298,6 @@ export default function OvertimeReportsPage() {
         nightMinutes,
         weekend,
         breakMinutes,
-        cost,
         risk,
         channel,
         mobile,
@@ -348,7 +343,7 @@ export default function OvertimeReportsPage() {
       missing: rows.reduce((sum, row) => sum + row.missingMinutes, 0),
       lateExit: rows.filter((row) => row.lateExit).length,
       critical: rows.filter((row) => row.risk === "Kritik" || row.risk === "Aşırı Mesai").length,
-      cost: rows.reduce((sum, row) => sum + row.cost, 0),
+      warningCount: rows.filter((row) => row.overtimeMinutes > 0).length,
       night: rows.reduce((sum, row) => sum + row.nightMinutes, 0),
       weekend: rows.filter((row) => row.weekend).reduce((sum, row) => sum + row.overtimeMinutes, 0),
       active: rows.filter((row) => row.entry && !row.exit).length,
@@ -361,7 +356,6 @@ export default function OvertimeReportsPage() {
     branch: topBy(rows, (row) => row.branch ? getBranchName(row.branch) : "Bilinmeyen", (row) => row.netMinutes),
     weekly: topByWeek(rows),
     night: [{ label: "Gece", value: Math.round(stats.night / 60) }, { label: "Gündüz", value: Math.max(0, Math.round((rows.reduce((sum, row) => sum + row.netMinutes, 0) - stats.night) / 60)) }],
-    cost: topBy(rows, (row) => row.department ? getDepartmentName(row.department) : "Bilinmeyen", (row) => row.cost),
     person: topBy(rows, (row) => getPersonnelName(row.person), (row) => row.netMinutes),
     shift: topBy(rows, (row) => row.shift?.name || "Vardiya yok", (row) => row.netMinutes),
   }), [rows, stats.night])
@@ -382,7 +376,7 @@ export default function OvertimeReportsPage() {
   }
 
   const exportCsv = () => {
-    const header = ["Personel", "Sicil No", "Şube", "Departman", "Vardiya", "Giriş", "Çıkış", "Toplam Çalışma", "Fazla Mesai", "Eksik Mesai", "Geç Çıkış", "Gece Mesaisi", "Hafta Sonu", "Mola Süresi", "Fazla Mesai Maliyeti", "Risk Durumu"]
+    const header = ["Personel", "Sicil No", "Şube", "Departman", "Vardiya", "Giriş", "Çıkış", "Toplam Çalışma", "Fazla Mesai", "Eksik Mesai", "Geç Çıkış", "Gece Mesaisi", "Hafta Sonu", "Mola Süresi", "Fazla Mesai Uyarısı", "Risk Durumu"]
     const lines = rows.map((row) => [
       getPersonnelName(row.person),
       row.person?.registryNo || row.person?.personnelCode || row.personnelId,
@@ -398,7 +392,7 @@ export default function OvertimeReportsPage() {
       formatHours(row.nightMinutes),
       row.weekend ? "Evet" : "Hayır",
       formatHours(row.breakMinutes),
-      `${Math.round(row.cost)} TL`,
+      row.overtimeMinutes > 0 ? "uyarı" : "-",
       row.risk,
     ])
     const csv = [header, ...lines].map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(";")).join("\n")
@@ -420,7 +414,7 @@ export default function OvertimeReportsPage() {
               Mesai Raporu
             </h2>
             <p className="mt-2 max-w-3xl text-sm font-medium text-slate-300">
-              Fazla mesai, eksik mesai, gece çalışması ve maliyet analizlerini kurumsal workforce analytics seviyesinde izleyin.
+              Fazla mesai, eksik mesai, gece çalışması ve uyarı analizlerini kurumsal workforce analytics seviyesinde izleyin.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -439,7 +433,7 @@ export default function OvertimeReportsPage() {
         <OvertimeKpi title="Eksik Mesai" value={formatHours(stats.missing)} icon={AlertTriangle} gradient="from-amber-500 to-orange-950" />
         <OvertimeKpi title="Geç Çıkış Sayısı" value={stats.lateExit} icon={Zap} gradient="from-orange-500 to-slate-950" />
         <OvertimeKpi title="Kritik Mesai Yoğunluğu" value={stats.critical} icon={ShieldAlert} gradient="from-rose-500 to-slate-950" />
-        <OvertimeKpi title="Fazla Mesai Maliyeti" value={`${Math.round(stats.cost)} TL`} icon={DollarSign} gradient="from-emerald-500 to-teal-950" />
+        <OvertimeKpi title="Fazla Mesai Uyarısı" value={stats.warningCount} icon={ShieldAlert} gradient="from-emerald-500 to-teal-950" />
         <OvertimeKpi title="Gece Mesaisi" value={formatHours(stats.night)} icon={Moon} gradient="from-violet-500 to-slate-950" />
         <OvertimeKpi title="Hafta Sonu Mesaisi" value={formatHours(stats.weekend)} icon={Sun} gradient="from-yellow-500 to-slate-950" />
         <OvertimeKpi title="Aktif Mesai Durumu" value={stats.active} icon={Users} gradient="from-blue-500 to-violet-950" />
@@ -473,12 +467,12 @@ export default function OvertimeReportsPage() {
             <HeatmapChart title="Şube Bazlı Çalışma Yoğunluğu" data={charts.branch} />
             <AnalyticsChart title="Haftalık Çalışma Süreleri" subtitle="Stacked görünüm" icon={BarChart3} data={charts.weekly} unit="sa" />
             <DonutChart title="Gece Mesaisi Analizi" data={charts.night} />
-            <AnalyticsChart title="Fazla Mesai Maliyeti" subtitle="Finansal maliyet trendi" icon={DollarSign} data={charts.cost} unit="TL" />
+            <AnalyticsChart title="Fazla Mesai Uyarısı" subtitle="Uyarı trendi" icon={ShieldAlert} data={charts.daily} unit="sa" />
             <AnalyticsChart title="Personel Bazlı Çalışma Süresi" subtitle="Çalışma süresi liderleri" icon={UserRound} data={charts.person} unit="sa" />
             <AnalyticsChart title="Vardiya Yoğunluğu" subtitle="Vardiya karşılaştırması" icon={CalendarClock} data={charts.shift} unit="sa" />
           </div>
 
-          <FinanceCards rows={rows} />
+          <WarningCards rows={rows} />
 
           <Card className="premium-card overflow-hidden">
             <CardHeader className="border-b bg-slate-50/40">
@@ -504,7 +498,7 @@ export default function OvertimeReportsPage() {
                   <Table className="min-w-[1500px]">
                     <TableHeader className="enterprise-table-header">
                       <TableRow>
-                        {["Personel", "Sicil No", "Şube", "Departman", "Vardiya", "Giriş", "Çıkış", "Toplam Çalışma", "Fazla Mesai", "Eksik Mesai", "Geç Çıkış", "Gece Mesaisi", "Hafta Sonu", "Mola Süresi", "Fazla Mesai Maliyeti", "Risk Durumu", "İşlemler"].map((column, index) => <TableHead key={column} className={index === 0 ? "pl-6" : index === 16 ? "text-right pr-6" : ""}>{column}</TableHead>)}
+                        {["Personel", "Sicil No", "Şube", "Departman", "Vardiya", "Giriş", "Çıkış", "Toplam Çalışma", "Fazla Mesai", "Eksik Mesai", "Geç Çıkış", "Gece Mesaisi", "Hafta Sonu", "Mola Süresi", "Fazla Mesai Uyarısı", "Risk Durumu", "İşlemler"].map((column, index) => <TableHead key={column} className={index === 0 ? "pl-6" : index === 16 ? "text-right pr-6" : ""}>{column}</TableHead>)}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -524,7 +518,7 @@ export default function OvertimeReportsPage() {
                           <TableCell>{formatHours(row.nightMinutes)}</TableCell>
                           <TableCell>{row.weekend ? "Evet" : "-"}</TableCell>
                           <TableCell>{formatHours(row.breakMinutes)}</TableCell>
-                          <TableCell>{Math.round(row.cost)} TL</TableCell>
+                          <TableCell>{row.overtimeMinutes > 0 ? <Badge className="bg-amber-50 text-amber-700">uyarı</Badge> : "-"}</TableCell>
                           <TableCell><RiskBadge risk={row.risk} /></TableCell>
                           <TableCell className="text-right pr-6">
                             <DropdownMenu>
@@ -600,7 +594,8 @@ function OvertimeKpi({ title, value, icon: Icon, gradient }: any) {
 }
 
 function FilterInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <div className="space-y-1.5"><Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label><Input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" /></div>
+  const inputProps = type === "date" ? DATE_INPUT_PROPS : { type }
+  return <div className="space-y-1.5"><Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label><Input {...inputProps} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" /></div>
 }
 
 function FilterSelect({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
@@ -650,25 +645,25 @@ function DonutChart({ title, data }: { title: string; data: any[] }) {
   )
 }
 
-function FinanceCards({ rows }: { rows: any[] }) {
-  const total = rows.reduce((sum, row) => sum + row.cost, 0)
-  const night = rows.reduce((sum, row) => sum + calculateCost(0, row.nightMinutes, false), 0)
-  const weekend = rows.filter((row) => row.weekend).reduce((sum, row) => sum + row.cost, 0)
-  const dept = topBy(rows, (row) => row.department ? getDepartmentName(row.department) : "Bilinmeyen", (row) => row.cost)[0]
-  const branch = topBy(rows, (row) => row.branch ? getBranchName(row.branch) : "Bilinmeyen", (row) => row.cost)[0]
+function WarningCards({ rows }: { rows: any[] }) {
+  const total = rows.filter((row) => row.overtimeMinutes > 0).length
+  const lateExit = rows.filter((row) => row.lateExit).length
+  const weekend = rows.filter((row) => row.weekend).reduce((sum, row) => sum + row.overtimeMinutes, 0)
+  const dept = topBy(rows, (row) => row.department ? getDepartmentName(row.department) : "Bilinmeyen", (row) => row.overtimeMinutes)[0]
+  const branch = topBy(rows, (row) => row.branch ? getBranchName(row.branch) : "Bilinmeyen", (row) => row.overtimeMinutes)[0]
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-      <FinanceCard title="Toplam maliyet" value={`${Math.round(total)} TL`} />
-      <FinanceCard title="Departman bazlı maliyet" value={dept ? `${dept.label}: ${Math.round(dept.value)} TL` : "-"} />
-      <FinanceCard title="Şube bazlı maliyet" value={branch ? `${branch.label}: ${Math.round(branch.value)} TL` : "-"} />
-      <FinanceCard title="Gece mesaisi maliyeti" value={`${Math.round(night)} TL`} />
-      <FinanceCard title="Hafta sonu maliyeti" value={`${Math.round(weekend)} TL`} />
+      <WarningCard title="Toplam uyarı" value={String(total)} />
+      <WarningCard title="Departman bazlı uyarı" value={dept ? `${dept.label}: ${dept.value} sa` : "-"} />
+      <WarningCard title="Şube bazlı uyarı" value={branch ? `${branch.label}: ${branch.value} sa` : "-"} />
+      <WarningCard title="Geç çıkış uyarısı" value={String(lateExit)} />
+      <WarningCard title="Hafta sonu mesaisi" value={formatHours(weekend)} />
     </div>
   )
 }
 
-function FinanceCard({ title, value }: { title: string; value: string }) {
-  return <Card className="rounded-2xl border border-emerald-100 bg-white/80 shadow-xl"><CardContent className="p-5"><DollarSign className="h-5 w-5 text-emerald-600" /><div className="mt-4 text-lg font-extrabold text-primary">{value}</div><p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{title}</p></CardContent></Card>
+function WarningCard({ title, value }: { title: string; value: string }) {
+  return <Card className="rounded-2xl border border-emerald-100 bg-white/80 shadow-xl"><CardContent className="p-5"><ShieldAlert className="h-5 w-5 text-emerald-600" /><div className="mt-4 text-lg font-extrabold text-primary">{value}</div><p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">{title}</p></CardContent></Card>
 }
 
 function LiveOpsPanel({ rows }: { rows: any[] }) {
@@ -755,13 +750,6 @@ function calculateNightMinutes(entry: number | null, exit: number | null) {
     if (normalized >= nightStart || normalized < nightEnd) total += 1
   }
   return total
-}
-
-function calculateCost(overtimeMinutes: number, nightMinutes: number, weekend: boolean) {
-  const overtimeCost = (overtimeMinutes / 60) * HOURLY_RATE * OVERTIME_MULTIPLIER
-  const nightCost = (nightMinutes / 60) * HOURLY_RATE * (NIGHT_MULTIPLIER - 1)
-  const weekendCost = weekend ? (overtimeMinutes / 60) * HOURLY_RATE * (WEEKEND_MULTIPLIER - 1) : 0
-  return overtimeCost + nightCost + weekendCost
 }
 
 function getRisk(overtimeMinutes: number, netMinutes: number, lateExit: boolean) {

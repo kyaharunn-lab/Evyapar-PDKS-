@@ -67,7 +67,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { formatDateTimeTR } from "@/lib/date-time"
+import { DATE_INPUT_PROPS, formatDateTimeTR } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
 
 const AUDIT_KEY = "app_audit_logs"
@@ -582,10 +582,11 @@ function LiveActivityBar({ logs }: { logs: any[] }) {
 }
 
 function FilterInput({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+  const inputProps = type === "date" ? DATE_INPUT_PROPS : { type }
   return (
     <div className="space-y-1.5">
       <Label className="text-[11px] font-bold text-slate-500 uppercase">{label}</Label>
-      <Input type={type} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" />
+      <Input {...inputProps} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" />
     </div>
   )
 }

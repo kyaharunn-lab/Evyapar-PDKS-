@@ -73,7 +73,8 @@ import { TIME_INPUT_PROPS, formatTimeTR, getCurrentTimeInputValueTR, normalizeTi
 
 const b = translations.breaks;
 const t = translations.common;
-const BREAKS_STORAGE_KEY = "app_breaks";
+const BREAKS_STORAGE_KEY = "app_break_records";
+const LIVE_PRESENCE_STORAGE_KEY = "app_live_presence";
 const PERSONNEL_STORAGE_KEY = "app_personnel";
 const BRANCHES_STORAGE_KEYS = ["app_branches", "evyapar_pdks_branches_local_v1"];
 
@@ -125,9 +126,18 @@ export default function BreakLogsPage() {
   }, [])
 
   React.useEffect(() => {
-    setBreakLogs(readLocalArray([BREAKS_STORAGE_KEY]));
-    setPersonnel(readLocalArray([PERSONNEL_STORAGE_KEY]).filter((p: any) => !p?.isDeleted));
-    setBranches(readLocalArray(BRANCHES_STORAGE_KEYS));
+    const load = () => {
+      setBreakLogs(readLocalArray([BREAKS_STORAGE_KEY, "app_breaks"]));
+      setPersonnel(readLocalArray([PERSONNEL_STORAGE_KEY]).filter((p: any) => !p?.isDeleted));
+      setBranches(readLocalArray(BRANCHES_STORAGE_KEYS));
+    }
+    load()
+    window.addEventListener("app-break-records-updated", load)
+    window.addEventListener("storage", load)
+    return () => {
+      window.removeEventListener("app-break-records-updated", load)
+      window.removeEventListener("storage", load)
+    }
   }, [])
 
   const persistBreaks = React.useCallback((next: any[]) => {
@@ -153,23 +163,23 @@ export default function BreakLogsPage() {
   const mergedLogs = React.useMemo(() => {
     return breakLogs.map(log => ({
       ...log,
-      person: personnel.find(p => p.id === log.personnelId),
+      person: personnel.find(p => (p.id || p.personnelId || p.personnelCode || "").toString() === (log.personnelId || log.personelId || "").toString()) || { fullName: log.personnelName || log.personelAdı },
       branch: branches.find(branch => (branch?.id || branch?.branchCode) === log.branchId)
     })).filter(log => 
       !searchTerm || 
       getPersonnelName(log.person).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getBranchName(log.branch).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.person?.registryNo?.toLowerCase().includes(searchTerm.toLowerCase())
+      (log.branchName || getBranchName(log.branch)).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(log.person?.registryNo || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [breakLogs, branches, personnel, searchTerm]);
 
   // KPI Calculations
   const stats = React.useMemo(() => {
-    const active = mergedLogs.filter(log => log.status === "Active").length;
+    const active = mergedLogs.filter(log => log.status === "Active" || log.status === "on_break").length;
     const totalToday = mergedLogs.length;
     const exceeded = mergedLogs.filter(log => log.exceededLimit).length;
     const totalDuration = mergedLogs.reduce((total, log) => {
-      if (log.status === "Active") return total;
+      if (log.status === "Active" || log.status === "on_break") return total;
       return total + Number(log.duration || 0);
     }, 0);
     
@@ -197,7 +207,7 @@ export default function BreakLogsPage() {
     return types[type] || type;
   };
 
-  const getDurationMinutes = (startTime: string, endTime: string) => {
+const getDurationMinutes = (startTime: string, endTime: string) => {
     const diff = Math.max(0, differenceInSeconds(new Date(endTime), new Date(startTime)));
     return Math.ceil(diff / 60);
   };
@@ -246,20 +256,40 @@ export default function BreakLogsPage() {
 
   const handleEndBreak = (logId: string) => {
     const endedAt = new Date().toISOString();
+    const endedMs = new Date(endedAt).getTime();
+    let endedPersonnelId = "";
     setBreakLogs((prev) => {
       const next = prev.map((log) => {
         if (log.id !== logId) return log;
+        endedPersonnelId = (log.personnelId || log.personelId || "").toString();
+        const startedAt = log.breakStart || log.startTime || log.startedAt || endedAt;
+        const startedMs = new Date(startedAt).getTime();
+        const durationMinutes = Number.isNaN(startedMs) ? 1 : Math.max(1, Math.ceil((endedMs - startedMs) / 60000));
         return {
           ...log,
+          breakEnd: endedAt,
           endTime: endedAt,
-          duration: getDurationMinutes(log.startTime, endedAt),
-          status: "Completed",
+          duration: getDurationMinutes(startedAt, endedAt),
+          durationMinutes,
+          status: "completed",
           updatedAt: Date.now(),
         };
       });
       persistBreaks(next);
       return next;
     });
+    if (endedPersonnelId) {
+      try {
+        const livePresence = readLocalArray([LIVE_PRESENCE_STORAGE_KEY]);
+        localStorage.setItem(LIVE_PRESENCE_STORAGE_KEY, JSON.stringify(livePresence.map((item: any) =>
+          (item?.personnelId || item?.personelId || item?.personId || "").toString() === endedPersonnelId ? { ...item, status: "inside", updatedAt: endedAt } : item
+        )));
+        window.dispatchEvent(new Event("app-live-presence-updated"));
+        window.dispatchEvent(new Event("app-break-records-updated"));
+      } catch {
+        // ignore local sync errors
+      }
+    }
     toast({ title: "Başarılı", description: "Mola bitirildi." });
   };
 
@@ -287,7 +317,7 @@ export default function BreakLogsPage() {
             variant="outline"
             className="h-10 rounded-xl border-slate-200"
             onClick={() => {
-              setBreakLogs(readLocalArray([BREAKS_STORAGE_KEY]));
+              setBreakLogs(readLocalArray([BREAKS_STORAGE_KEY, "app_breaks"]));
               setPersonnel(readLocalArray([PERSONNEL_STORAGE_KEY]).filter((p: any) => !p?.isDeleted));
               setBranches(readLocalArray(BRANCHES_STORAGE_KEYS));
             }}
@@ -375,7 +405,7 @@ export default function BreakLogsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm font-semibold text-primary">{log.branch ? getBranchName(log.branch) : "-"}</span>
+                      <span className="text-sm font-semibold text-primary">{log.branchName || (log.branch ? getBranchName(log.branch) : "-")}</span>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="font-bold border-slate-200">
@@ -385,19 +415,19 @@ export default function BreakLogsPage() {
                     <TableCell>
                       <div className="flex items-center text-sm font-medium">
                         <Clock className="mr-2 h-3.5 w-3.5 text-slate-400" />
-                        {formatTimeTR(log.startTime)}
+                        {formatTimeTR(log.breakStart || log.startTime)}
                       </div>
                     </TableCell>
                     <TableCell>
-                      {log.status === "Active" ? (
+                      {log.status === "Active" || log.status === "on_break" ? (
                         <span className={cn(
                           "text-sm font-bold tabular-nums",
                           log.exceededLimit ? "text-accent animate-pulse" : "text-primary"
                         )}>
-                          {formatElapsedTime(log.startTime)}
+                          {formatElapsedTime(log.breakStart || log.startTime)}
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-500">{log.duration || "-"} dk</span>
+                        <span className="text-sm text-slate-500">{log.durationMinutes || log.duration || "-"} dk</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -415,7 +445,7 @@ export default function BreakLogsPage() {
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             Detayları Gör
                           </DropdownMenuItem>
-                          {log.status === "Active" && (
+                          {(log.status === "Active" || log.status === "on_break") && (
                             <DropdownMenuItem className="text-accent" onClick={() => handleEndBreak(log.id)}>
                               <LogOut className="mr-3 h-4 w-4" />
                               {b.manualEnd}
@@ -640,8 +670,10 @@ function BreakStatusBadge({ status, exceeded }: { status: string, exceeded?: boo
   
   switch (status) {
     case "Active":
+    case "on_break":
       return <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 font-bold px-3 py-1 rounded-lg">{b.status.active}</Badge>;
     case "Completed":
+    case "completed":
       return <Badge className="bg-green-50 text-green-700 border-green-100 font-bold px-3 py-1 rounded-lg">{b.status.completed}</Badge>;
     default:
       return <Badge className="bg-slate-50 text-slate-600 border-slate-200 font-bold px-3 py-1 rounded-lg">{status}</Badge>;

@@ -28,22 +28,237 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useFirestore, useCollection } from "@/firebase"
-import { collection, query, orderBy } from "firebase/firestore"
 import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
-import { formatTimeTR } from "@/lib/date-time"
+import { formatDateTR, formatTimeTR } from "@/lib/date-time"
 
 const t = translations.common;
+const ATTENDANCE_RECORDS_KEY = "app_attendance_records";
+const SHIFTS_KEY = "app_shifts";
+
+function readArray(key: string) {
+  if (typeof window === "undefined") return [];
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function displayTime(value: any) {
+  if (!value) return "-";
+  const text = String(value);
+  if (/^\d{2}:\d{2}/.test(text)) return text.slice(0, 5);
+  return formatTimeTR(value);
+}
+
+function displayStatus(status: any) {
+  if (status === "inside") return "İçeride";
+  if (status === "outside") return "Çıkış yaptı";
+  if (status === "OnTime") return "Zamanında";
+  return "Gecikme";
+}
+
+function attendanceRow(log: any, shifts: any[] = [], now = new Date()) {
+  const status = attendanceStatus(log, shifts, now);
+  const overtimeMinutes = attendanceOvertimeMinutes(log, shifts, now);
+  return {
+    personel: log.personnelName || log["personelAdı"] || log["personelAdı"] || log.personnelId || log.personelId || "-",
+    tarih: formatDateTR(log.date || log.tarih),
+    giris: displayTime(log.entryTime || log.checkInTime || log.saat),
+    cikis: displayTime(log.exitTime || log.checkOutTime),
+    yontem: log.method || log.verificationMethod || log["doğrulamaYöntemi"] || log.dogrulamaYontemi || "QR",
+    durum: status,
+    fazlaMesai: overtimeMinutes > 0 ? `${overtimeMinutes} dk` : "-",
+    konum: log.branchName || log.location || "-",
+  };
+}
+
+function csvCell(value: any) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function htmlCell(value: any) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function downloadTextFile(filename: string, content: string, type: string) {
+  const blob = new Blob(["\uFEFF", content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function personnelKey(item: any) {
+  return String(item?.personnelId ?? item?.personelId ?? item?.personId ?? "");
+}
+
+function recordDate(item: any) {
+  return String(item?.date || item?.tarih || item?.checkInTime || item?.entryTime || "").slice(0, 10);
+}
+
+function recordTime(item: any) {
+  const value = item?.checkInTime || item?.entryTime || item?.createdAt || item?.updatedAt || item?.date || item?.tarih || "";
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function recordBranchId(item: any) {
+  return String(item?.branchId || item?.branch || item?.branchCode || "");
+}
+
+function timeToMinutes(value: any) {
+  const text = String(value || "").slice(0, 5);
+  const [hour, minute] = text.split(":").map(Number);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  return hour * 60 + minute;
+}
+
+function shiftMatchesRecord(shift: any, record: any) {
+  const personId = personnelKey(record);
+  const branchId = recordBranchId(record);
+  const shiftDate = String(shift?.startDate || shift?.date || "").slice(0, 10);
+  const date = recordDate(record);
+  const personnelIds = Array.isArray(shift?.personnelIds) ? shift.personnelIds.map(String) : [];
+  const shiftPersonIds = [shift?.personnelId, shift?.personId].map((value) => String(value || "")).filter(Boolean);
+  const shiftBranchIds = [shift?.branchId, shift?.branch, shift?.branchCode].map((value) => String(value || "")).filter(Boolean);
+  return (!shiftDate || !date || shiftDate === date) && (
+    (!!personId && (personnelIds.includes(personId) || shiftPersonIds.includes(personId))) ||
+    (!!branchId && shiftBranchIds.includes(branchId))
+  );
+}
+
+function shiftEndMinutes(shifts: any[], record: any) {
+  const shift = shifts.find((item) => shiftMatchesRecord(item, record));
+  return timeToMinutes(shift?.shift?.endTime || shift?.endTime || shift?.exitTime);
+}
+
+function liveOvertimeMinutes(record: any, shifts: any[], now = new Date()) {
+  if (String(record?.status || "").toLowerCase() !== "inside") return 0;
+  const endMinutes = shiftEndMinutes(shifts, record);
+  if (endMinutes === null) return 0;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  return Math.max(0, nowMinutes - endMinutes);
+}
+
+function savedOvertimeMinutes(record: any) {
+  return Math.max(0, Number(record?.overtimeMinutes || 0));
+}
+
+function attendanceOvertimeMinutes(record: any, shifts: any[], now = new Date()) {
+  return savedOvertimeMinutes(record) || liveOvertimeMinutes(record, shifts, now);
+}
+
+function attendanceStatus(record: any, shifts: any[], now = new Date()) {
+  if (record?.checkOutTime || record?.exitTime || String(record?.status || "").toLowerCase() === "outside" || record?.status === "Çıkış yaptı") return "Çıkış yaptı";
+  if (liveOvertimeMinutes(record, shifts, now) > 0) return "Fazla Mesai";
+  if (record?.isLate) return "Gecikme";
+  if (String(record?.status || "").toLowerCase() === "inside") return "İçeride";
+  return displayStatus(record?.status);
+}
+
+function isActiveInside(item: any) {
+  return String(item?.status || "").toLowerCase() === "inside" && !item?.checkOutTime && !item?.exitTime;
+}
+
+function filterDuplicateInside(records: any[]) {
+  const latestInside = new Map<string, any>();
+  records.filter(isActiveInside).forEach((item: any) => {
+    const key = `${personnelKey(item)}-${recordDate(item)}`;
+    const current = latestInside.get(key);
+    if (!current || recordTime(item) >= recordTime(current)) latestInside.set(key, item);
+  });
+
+  return records.filter((item: any) => {
+    if (!isActiveInside(item)) return true;
+    const key = `${personnelKey(item)}-${recordDate(item)}`;
+    return latestInside.get(key) === item;
+  });
+}
 
 export default function AttendanceLogsPage() {
-  const db = useFirestore();
-  const logsQuery = React.useMemo(() => {
-    if (!db) return null;
-    return query(collection(db, "attendance_logs"), orderBy("entryTime", "desc"));
-  }, [db]);
+  const [logs, setLogs] = React.useState<any[]>([]);
+  const [shifts, setShifts] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-  const { data: logs, loading } = useCollection(logsQuery);
+  const loadLogs = React.useCallback(() => {
+    setLogs(filterDuplicateInside(readArray(ATTENDANCE_RECORDS_KEY)));
+    setShifts(readArray(SHIFTS_KEY));
+    setLoading(false);
+  }, []);
+
+  React.useEffect(() => {
+    loadLogs();
+    const refresh = () => loadLogs();
+    window.addEventListener("storage", refresh);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("app-attendance-records-updated", refresh);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("app-attendance-records-updated", refresh);
+    };
+  }, [loadLogs]);
+
+  const handleExcelExport = React.useCallback(() => {
+    const headers = ["Personel", "Tarih", "Giriş", "Çıkış", "Yöntem", "Durum", "Fazla Mesai", "Konum"];
+    const rows = logs.map((log) => {
+      const row = attendanceRow(log, shifts);
+      return [row.personel, row.tarih, row.giris, row.cikis, row.yontem, row.durum, row.fazlaMesai, row.konum].map(csvCell).join(",");
+    });
+    const content = [headers.map(csvCell).join(","), ...rows].join("\n");
+    downloadTextFile(`attendance-${new Date().toISOString().slice(0, 10)}.csv`, content, "text/csv;charset=utf-8");
+  }, [logs, shifts]);
+
+  const handlePdfReport = React.useCallback(() => {
+    const rows = logs.map((log) => attendanceRow(log, shifts));
+    const reportWindow = window.open("", "_blank", "width=1100,height=800");
+    if (!reportWindow) {
+      window.print();
+      return;
+    }
+
+    reportWindow.document.write(`
+      <!doctype html>
+      <html lang="tr">
+        <head>
+          <meta charset="utf-8" />
+          <title>Attendance Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #0f172a; padding: 32px; }
+            h1 { margin: 0 0 6px; font-size: 24px; }
+            p { margin: 0 0 24px; color: #64748b; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+            th { background: #f8fafc; color: #334155; }
+          </style>
+        </head>
+        <body>
+          <h1>PDKS Attendance Report</h1>
+          <p>Kayıt sayısı: ${rows.length} | Tarih: ${new Date().toLocaleDateString("tr-TR")}</p>
+          <table>
+            <thead>
+              <tr><th>Personel</th><th>Tarih</th><th>Giriş</th><th>Çıkış</th><th>Yöntem</th><th>Durum</th><th>Fazla Mesai</th><th>Konum</th></tr>
+            </thead>
+            <tbody>
+              ${rows.map((row) => `<tr><td>${htmlCell(row.personel)}</td><td>${htmlCell(row.tarih)}</td><td>${htmlCell(row.giris)}</td><td>${htmlCell(row.cikis)}</td><td>${htmlCell(row.yontem)}</td><td>${htmlCell(row.durum)}</td><td>${htmlCell(row.fazlaMesai)}</td><td>${htmlCell(row.konum)}</td></tr>`).join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    reportWindow.document.close();
+    reportWindow.focus();
+    reportWindow.print();
+  }, [logs, shifts]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -53,11 +268,11 @@ export default function AttendanceLogsPage() {
           <p className="text-muted-foreground">Sistemdeki tüm giriş/çıkış hareketleri gerçek zamanlı listelenir.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="text-green-600 border-green-200 bg-green-50/50 hover:bg-green-50">
+          <Button variant="outline" className="text-green-600 border-green-200 bg-green-50/50 hover:bg-green-50" onClick={handleExcelExport}>
             <FileSpreadsheet className="mr-2 h-4 w-4" />
             Excel Export
           </Button>
-          <Button variant="outline" className="text-red-600 border-red-200 bg-red-50/50 hover:bg-red-50">
+          <Button variant="outline" className="text-red-600 border-red-200 bg-red-50/50 hover:bg-red-50" onClick={handlePdfReport}>
             <Download className="mr-2 h-4 w-4" />
             PDF Report
           </Button>
@@ -105,54 +320,69 @@ export default function AttendanceLogsPage() {
                   <TableHead>Çıkış</TableHead>
                   <TableHead>Yöntem</TableHead>
                   <TableHead>Durum</TableHead>
+                  <TableHead>Fazla Mesai</TableHead>
                   <TableHead>Konum</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {logs.map((log: any) => (
+                {logs.map((log: any) => {
+                  const statusLabel = attendanceStatus(log, shifts);
+                  const overtimeMinutes = attendanceOvertimeMinutes(log, shifts);
+                  const isOvertimeStatus = statusLabel === "Fazla Mesai";
+                  const isLateStatus = statusLabel.startsWith("Geç");
+                  const statusClass = isOvertimeStatus ? "text-amber-600" : isLateStatus ? "text-accent" : "text-green-600";
+                  return (
                   <TableRow key={log.id} className="hover:bg-secondary/20 transition-colors">
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <UserCircle className="h-4 w-4 text-primary" />
-                        <span className="font-semibold">{log.personnelId}</span>
+                        <span className="font-semibold">{log.personnelName || log["personelAdı"] || log["personelAdı"] || log.personnelId || log.personelId || "-"}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{log.date || "-"}</TableCell>
+                    <TableCell className="text-sm">{formatDateTR(log.date || log.tarih)}</TableCell>
                     <TableCell>
                       <div className="flex items-center text-sm">
                         <Clock className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                        {formatTimeTR(log.entryTime)}
+                        {displayTime(log.entryTime || log.checkInTime || log.saat)}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center text-sm">
                         <Clock className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
-                        {formatTimeTR(log.exitTime)}
+                        {displayTime(log.exitTime || log.checkOutTime)}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-[10px] font-medium bg-secondary px-1.5 py-0.5 rounded">{log.verificationMethod || "QR"}</span>
+                      <span className="text-[10px] font-medium bg-secondary px-1.5 py-0.5 rounded">{log.method || log.verificationMethod || log["doğrulamaYöntemi"] || log.dogrulamaYontemi || "QR"}</span>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
-                        {log.status === 'OnTime' ? (
+                        {!isLateStatus && !isOvertimeStatus ? (
                           <CheckCircle2 className="h-4 w-4 text-green-500" />
+                        ) : isOvertimeStatus ? (
+                          <Clock className="h-4 w-4 text-amber-500" />
                         ) : (
                           <XCircle className="h-4 w-4 text-accent" />
                         )}
-                        <span className={`text-xs font-semibold ${log.status === 'OnTime' ? 'text-green-600' : 'text-accent'}`}>
-                          {log.status === 'OnTime' ? 'Zamanında' : 'Gecikme'}
+                        <span className={`text-xs font-semibold ${statusClass}`}>
+                          {statusLabel}
                         </span>
                       </div>
                     </TableCell>
                     <TableCell>
+                      <Badge variant="outline" className={overtimeMinutes > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-500"}>
+                        {overtimeMinutes > 0 ? `${overtimeMinutes} dk` : "-"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="text-xs flex items-center gap-1.5 text-muted-foreground">
                         <MapPin className="h-3 w-3" />
-                        {log.location || "-"}
+                        {log.branchName || log.location || "-"}
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}

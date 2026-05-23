@@ -77,7 +77,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
-import { formatDateTimeTR } from "@/lib/date-time"
+import { formatDateTimeTR, formatDateTR } from "@/lib/date-time"
 import { Textarea } from "@/components/ui/textarea"
 
 const t = translations.common;
@@ -113,10 +113,12 @@ export default function AdvanceRequestsPage() {
   // Merge request data with personnel data
   const mergedRequests = React.useMemo(() => {
     if (!rawRequests || !personnel) return [];
-    return rawRequests.map(req => ({
+    const requests = rawRequests as any[];
+    const people = personnel as any[];
+    return requests.map((req: any) => ({
       ...req,
-      person: personnel.find(p => p.id === req.personnelId)
-    })).filter(req => 
+      person: people.find((p: any) => p.id === req.personnelId)
+    })).filter((req: any) =>
       !searchTerm || 
       req.person?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       req.person?.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -370,7 +372,7 @@ export default function AdvanceRequestsPage() {
                   <DetailItem label={a.amount} value={`${(parseFloat(selectedRequest.amount) || 0).toLocaleString()} ${selectedRequest.currency || "₺"}`} />
                   <DetailItem label={a.limit} value={`${(selectedRequest.person?.salary?.advanceLimit || 0).toLocaleString()} ₺`} />
                   <DetailItem label="Talep Tarihi" value={formatDateTimeTR(selectedRequest.createdAt)} />
-                  <DetailItem label={a.paymentDate} value={selectedRequest.paymentDate?.toDate ? format(selectedRequest.paymentDate.toDate(), "dd.MM.yyyy") : (selectedRequest.status === "Approved" ? "Ödeme Bekleniyor" : "-")} />
+                  <DetailItem label={a.paymentDate} value={selectedRequest.paymentDate?.toDate ? formatDateTR(selectedRequest.paymentDate.toDate()) : (selectedRequest.status === "Approved" ? "Ödeme Bekleniyor" : "-")} />
                   <DetailItem label="IBAN" value={selectedRequest.iban || selectedRequest.person?.salary?.iban || "-"} />
                   <DetailItem label="Ödeme Yöntemi" value={selectedRequest.paymentMethod || "Banka Havalesi"} />
                 </div>
