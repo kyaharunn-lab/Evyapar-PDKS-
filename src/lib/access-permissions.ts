@@ -51,6 +51,11 @@ function personRoleValues(person: any) {
   return [person?.roleId, person?.role, person?.roleName, person?.assignedRole, person?.accessRole, person?.permissionRole].filter(Boolean).map(normalize)
 }
 
+function boolValue(...values: unknown[]) {
+  const found = values.find((value) => typeof value === "boolean")
+  return typeof found === "boolean" ? found : undefined
+}
+
 function recordTime(record: any) {
   const raw = record?.updatedAt || record?.createdAt || record?.timestamp || 0
   if (typeof raw === "number") return raw
@@ -115,22 +120,10 @@ export function readCurrentAccess() {
   const rolePermissions = activeRole?.permissions || activeRole || {}
 
   const panelAccess =
-    typeof accessRecord?.panelAccess === "boolean"
-      ? accessRecord.panelAccess
-      : typeof activePerson?.hasAdminAccess === "boolean"
-        ? activePerson.hasAdminAccess
-        : typeof rolePermissions?.panelAccess === "boolean"
-          ? rolePermissions.panelAccess
-          : true
+    boolValue(accessRecord?.panelAccess, accessRecord?.adminAccess, rolePermissions?.panelAccess, rolePermissions?.adminAccess, activePerson?.hasAdminAccess, activePerson?.panelAccess) ?? true
 
   const mobileAccess =
-    typeof accessRecord?.mobileAccess === "boolean"
-      ? accessRecord.mobileAccess
-      : typeof activePerson?.hasMobileAccess === "boolean"
-        ? activePerson.hasMobileAccess
-        : typeof rolePermissions?.mobileAccess === "boolean"
-          ? rolePermissions.mobileAccess
-          : true
+    boolValue(accessRecord?.mobileAccess, accessRecord?.mobilAccess, rolePermissions?.mobileAccess, rolePermissions?.mobilAccess, activePerson?.hasMobileAccess, activePerson?.mobileAccess, activePerson?.mobilAccess) ?? true
 
   return { panelAccess, mobileAccess, user: activePerson, record: accessRecord, role: activeRole, session }
 }

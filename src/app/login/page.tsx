@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import { LockKeyhole, LogIn, ShieldCheck } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -20,15 +19,16 @@ function getPostLoginPath(access: { panelAccess: boolean; mobileAccess: boolean 
 }
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [error, setError] = React.useState("")
   const [loading, setLoading] = React.useState(false)
 
   React.useEffect(() => {
-    if (readAuthSession()) router.replace(getPostLoginPath(readCurrentAccess()))
-  }, [router])
+    if (readAuthSession()) {
+      window.location.replace(getPostLoginPath(readCurrentAccess()))
+    }
+  }, [])
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -44,7 +44,7 @@ export default function LoginPage() {
     }
 
     const access = readCurrentAccess()
-    router.replace(getPostLoginPath(access))
+    window.location.replace(getPostLoginPath(access))
   }
 
   return (
