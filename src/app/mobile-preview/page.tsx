@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
-import { DATE_INPUT_PROPS, formatDateTR } from "@/lib/date-time"
+import { formatDateTR } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_KEY = "app_mobile_preview_settings"
@@ -1061,11 +1061,29 @@ function ShiftScreen({ shifts, branch, palette }: any) {
 function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
   const [open, setOpen] = React.useState(false)
   const [form, setForm] = React.useState({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
+  const [startDateText, setStartDateText] = React.useState("")
+  const [endDateText, setEndDateText] = React.useState("")
+  const normalizeDateText = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 8)
+    if (digits.length <= 2) return digits
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
+  }
+  const toIsoDate = (value: string) => {
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    if (!match) return ""
+    const [, day, month, year] = match
+    return `${year}-${month}-${day}`
+  }
   const submit = () => {
-    if (!form.startDate || !form.endDate) return
-    onLeaveCreate(form)
+    const startDate = toIsoDate(startDateText)
+    const endDate = toIsoDate(endDateText)
+    if (!startDate || !endDate) return
+    onLeaveCreate({ ...form, startDate, endDate })
     setOpen(false)
     setForm({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
+    setStartDateText("")
+    setEndDateText("")
   }
   const items = leaves.slice(0, 8).map((leave: any) => ({
     title: leave.type || leave.leaveType || "İzin",
@@ -1081,8 +1099,8 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
         <MobileCard className="mb-4 space-y-3">
           <Input value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
           <div className="grid grid-cols-2 gap-2">
-            <Input {...DATE_INPUT_PROPS} value={form.startDate} onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
-            <Input {...DATE_INPUT_PROPS} value={form.endDate} onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
+            <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={startDateText} onChange={(e) => setStartDateText(normalizeDateText(e.target.value))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
+            <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={endDateText} onChange={(e) => setEndDateText(normalizeDateText(e.target.value))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
           </div>
           <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Açıklama" className="min-h-16 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
           <Button data-mobile-action="leave-save" onClick={submit} className="h-10 w-full rounded-2xl bg-white text-slate-950 hover:bg-white/90">Kaydet</Button>

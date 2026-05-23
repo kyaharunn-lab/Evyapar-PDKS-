@@ -5,6 +5,7 @@ import { Bell, CheckCircle2, ClipboardList, FileText, Wallet } from "lucide-reac
 
 import LeavesPage from "@/app/leaves/page"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -31,12 +32,16 @@ export default function RequestsPage() {
   const [counts, setCounts] = React.useState({ leaves: 0, advances: 0, approvals: 0 })
   const [leaves, setLeaves] = React.useState<any[]>([])
   const [advances, setAdvances] = React.useState<any[]>([])
+  const [personnel, setPersonnel] = React.useState<any[]>([])
+  const [leavesVersion, setLeavesVersion] = React.useState(0)
 
   const refreshCounts = React.useCallback(() => {
     const nextLeaves = readLocalArray("app_leave_requests")
     const nextAdvances = readLocalArray("app_advance_requests")
+    const nextPersonnel = readLocalArray("app_personnel")
     setLeaves(nextLeaves)
     setAdvances(nextAdvances)
+    setPersonnel(nextPersonnel)
     setCounts({
       leaves: nextLeaves.length,
       advances: nextAdvances.length,
@@ -47,7 +52,7 @@ export default function RequestsPage() {
   React.useEffect(() => {
     refreshCounts()
     const handleStorage = (event: StorageEvent) => {
-      if (["app_leave_requests", "app_advance_requests"].includes(event.key || "")) {
+      if (["app_leave_requests", "app_advance_requests", "app_personnel"].includes(event.key || "")) {
         refreshCounts()
       }
     }
@@ -58,6 +63,40 @@ export default function RequestsPage() {
       window.removeEventListener("focus", refreshCounts)
     }
   }, [refreshCounts])
+
+  const updateRequestStatus = React.useCallback((request: any, status: "approved" | "rejected") => {
+    const storageKey = request?.requestType === "Avans" ? "app_advance_requests" : "app_leave_requests"
+    const currentRequests = readLocalArray(storageKey)
+    const nextRequests = currentRequests.map((item) => {
+      const sameId = request?.id && item?.id === request.id
+      if (!sameId) return item
+      return {
+        ...item,
+        status,
+        updatedAt: new Date().toISOString(),
+      }
+    })
+
+    localStorage.setItem(storageKey, JSON.stringify(nextRequests))
+
+    if (storageKey === "app_leave_requests") {
+      setLeaves(nextRequests)
+      setLeavesVersion((version) => version + 1)
+      setCounts((current) => ({
+        ...current,
+        leaves: nextRequests.length,
+        approvals: [...nextRequests, ...advances].filter((item) => isPendingStatus(item?.status)).length,
+      }))
+      return
+    }
+
+    setAdvances(nextRequests)
+    setCounts((current) => ({
+      ...current,
+      advances: nextRequests.length,
+      approvals: [...leaves, ...nextRequests].filter((item) => isPendingStatus(item?.status)).length,
+    }))
+  }, [advances, leaves])
 
   return (
     <div className="space-y-8 pt-8 md:pt-10 animate-fade-in">
@@ -78,27 +117,75 @@ export default function RequestsPage() {
         </div>
 
         <TabsContent value="leaves" className="mt-0 min-h-[520px]">
-          <LeavesPage />
+          <LeavesPage key={leavesVersion} />
         </TabsContent>
         <TabsContent value="advances" className="mt-0 min-h-[520px]">
-          <AdvancesPanel advances={advances} />
+          <AdvancesPanel advances={advances} personnel={personnel} />
         </TabsContent>
         <TabsContent value="approvals" className="mt-0 min-h-[520px]">
-          <PendingApprovalsPanel leaves={leaves} advances={advances} />
+          <PendingApprovalsPanel leaves={leaves} advances={advances} personnel={personnel} onStatusChange={updateRequestStatus} />
         </TabsContent>
       </Tabs>
     </div>
   )
 }
 
-function getPersonName(request: any) {
+function compactName(...parts: unknown[]) {
+  return parts.map((part) => String(part || "").trim()).filter(Boolean).join(" ").trim()
+}
+
+function getPersonDisplayName(person: any) {
   return (
+    compactName(person?.firstName, person?.lastName) ||
+    compactName(person?.name, person?.surname) ||
+    String(person?.fullName || person?.personnelName || person?.employeeName || person?.displayName || person?.personnelFullName || "").trim()
+  )
+}
+
+function getPersonName(request: any, personnel: any[] = []) {
+  const directName = (
     request?.personName ||
     request?.personnelName ||
     request?.employeeName ||
-    [request?.firstName || request?.name, request?.lastName || request?.surname].filter(Boolean).join(" ") ||
-    "Personel"
-  ).toString()
+    request?.fullName ||
+    request?.personnelFullName ||
+    getPersonDisplayName(request?.personnel) ||
+    getPersonDisplayName(request?.employee) ||
+    compactName(request?.firstName || request?.name, request?.lastName || request?.surname)
+  ).toString().trim()
+
+  if (directName && directName.toLowerCase() !== "personel") return directName
+
+  const requestPersonId = String(
+    request?.personnelId ||
+    request?.personelId ||
+    request?.personId ||
+    request?.employeeId ||
+    request?.userId ||
+    request?.personnel?.id ||
+    request?.employee?.id ||
+    ""
+  ).trim()
+
+  if (requestPersonId) {
+    const matchedPerson = personnel.find((person) =>
+      [
+        person?.id,
+        person?.personnelId,
+        person?.personelId,
+        person?.personId,
+        person?.employeeId,
+        person?.userId,
+        person?.registryNo,
+        person?.personnelCode,
+      ].some((value) => String(value || "").trim() === requestPersonId)
+    )
+
+    const matchedName = getPersonDisplayName(matchedPerson)
+    if (matchedName) return matchedName
+  }
+
+  return "Personel"
 }
 
 function getDateLabel(request: any) {
@@ -118,7 +205,7 @@ function statusLabel(status: unknown) {
   return status ? String(status) : "-"
 }
 
-function AdvancesPanel({ advances }: { advances: any[] }) {
+function AdvancesPanel({ advances, personnel }: { advances: any[]; personnel: any[] }) {
   return (
     <Card className="premium-card overflow-hidden">
       <CardHeader className="border-b bg-slate-50/30">
@@ -146,7 +233,7 @@ function AdvancesPanel({ advances }: { advances: any[] }) {
             <TableBody>
               {advances.map((request, index) => (
                 <TableRow key={request?.id || `advance-${index}`} className="hover:bg-slate-50/80">
-                  <TableCell className="pl-6 font-bold text-primary">{getPersonName(request)}</TableCell>
+                  <TableCell className="pl-6 font-bold text-primary">{getPersonName(request, personnel)}</TableCell>
                   <TableCell className="text-sm font-bold text-primary">{Number(request?.amount || 0).toLocaleString("tr-TR")} {request?.currency || "₺"}</TableCell>
                   <TableCell className="max-w-[220px] truncate text-xs text-slate-600">{request?.reason || request?.description || "-"}</TableCell>
                   <TableCell><StatusPill status={request?.status} /></TableCell>
@@ -161,7 +248,7 @@ function AdvancesPanel({ advances }: { advances: any[] }) {
   )
 }
 
-function PendingApprovalsPanel({ leaves, advances }: { leaves: any[]; advances: any[] }) {
+function PendingApprovalsPanel({ leaves, advances, personnel, onStatusChange }: { leaves: any[]; advances: any[]; personnel: any[]; onStatusChange: (request: any, status: "approved" | "rejected") => void }) {
   const pendingRequests = React.useMemo(() => [
     ...leaves.filter((request) => isPendingStatus(request?.status)).map((request) => ({ ...request, requestType: "İzin" })),
     ...advances.filter((request) => isPendingStatus(request?.status)).map((request) => ({ ...request, requestType: "Avans" })),
@@ -189,6 +276,7 @@ function PendingApprovalsPanel({ leaves, advances }: { leaves: any[]; advances: 
                 <TableHead>Özet</TableHead>
                 <TableHead>Durum</TableHead>
                 <TableHead>Tarih</TableHead>
+                <TableHead className="pr-6 text-right">Aksiyon</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -197,7 +285,7 @@ function PendingApprovalsPanel({ leaves, advances }: { leaves: any[]; advances: 
                   <TableCell className="pl-6">
                     <Badge variant="outline" className="border-primary/15 bg-primary/5 text-xs font-bold text-primary">{request.requestType}</Badge>
                   </TableCell>
-                  <TableCell className="font-bold text-primary">{getPersonName(request)}</TableCell>
+                  <TableCell className="font-bold text-primary">{getPersonName(request, personnel)}</TableCell>
                   <TableCell className="max-w-[260px] truncate text-xs text-slate-600">
                     {request.requestType === "Avans"
                       ? `${Number(request?.amount || 0).toLocaleString("tr-TR")} ${request?.currency || "₺"}`
@@ -205,6 +293,16 @@ function PendingApprovalsPanel({ leaves, advances }: { leaves: any[]; advances: 
                   </TableCell>
                   <TableCell><StatusPill status={request?.status} /></TableCell>
                   <TableCell className="text-xs text-slate-500">{getDateLabel(request)}</TableCell>
+                  <TableCell className="pr-6 text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" className="h-8 rounded-lg bg-green-600 px-3 text-xs font-bold hover:bg-green-700" onClick={() => onStatusChange(request, "approved")}>
+                        Onayla
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 rounded-lg border-red-100 px-3 text-xs font-bold text-accent hover:bg-red-50 hover:text-accent" onClick={() => onStatusChange(request, "rejected")}>
+                        Reddet
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

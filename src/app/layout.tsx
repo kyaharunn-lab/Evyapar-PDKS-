@@ -17,6 +17,13 @@ const h = translations.header;
 export const metadata: Metadata = {
   title: 'Evyapar PDKS | Profesyonel Personel Devam Yönetimi',
   description: 'Kurumsal düzeyde personel devam kontrol ve vardiya yönetim sistemi.',
+  manifest: '/manifest.json',
+  themeColor: '#071426',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Evyapar PDKS',
+  },
 };
 
 export default function RootLayout({
@@ -30,6 +37,14 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/icons/icon-192.svg" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+        <meta name="theme-color" content="#071426" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Evyapar PDKS" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <style>{`
           body { font-family: 'Plus Jakarta Sans', sans-serif; }
         `}</style>

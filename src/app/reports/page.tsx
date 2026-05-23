@@ -94,7 +94,9 @@ const STORAGE_KEYS = {
   positions: "app_positions",
   shifts: "app_shifts",
   leaves: "app_leave_requests",
-  attendance: "app_attendance_logs",
+  attendance: "app_attendance_records",
+  attendanceLegacy: "app_attendance_logs",
+  livePresence: "app_live_presence",
   breaks: "app_break_records",
   devices: "app_device_ids",
   access: "app_access_controls",
@@ -185,6 +187,29 @@ const getDepartmentName = (department: any) => (department?.departmentName || de
 const getPositionId = (position: any) => (position?.id || position?.positionCode || position?.code || "").toString()
 const getPositionName = (position: any) => (position?.positionName || position?.name || position?.title || position?.positionCode || "Pozisyon").toString()
 
+const getAttendancePersonId = (log: any) => (log?.personnelId || log?.personelId || log?.personId || "").toString()
+
+const hasEntry = (log: any) => Boolean(log?.checkInTime || log?.entryTime || log?.saat)
+
+const isClosedAttendance = (log: any) => Boolean(log?.checkOutTime || log?.exitTime || log?.status === "Çıkış yaptı" || String(log?.status || "").toLowerCase() === "outside")
+
+const isInsideAttendance = (log: any) => !isClosedAttendance(log) && (String(log?.status || "").toLowerCase() === "inside" || log?.status === "Fazla Mesai")
+
+const mergeAttendance = (records: any[], legacy: any[]) => {
+  const map = new Map<string, any>()
+  ;[...records, ...legacy].forEach((log, index) => {
+    const key = log?.id || `${getAttendancePersonId(log)}-${getLogDate(log)}-${log?.checkInTime || log?.entryTime || log?.saat || index}`
+    if (!map.has(key)) map.set(key, log)
+  })
+  return Array.from(map.values())
+}
+
+const ddmmyyyy = (date: string) => {
+  const value = date.toString().slice(0, 10)
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value
+}
+
 const toDateInput = (date: Date) => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, "0")
@@ -201,7 +226,11 @@ const addDaysInput = (dateInput: string, days: number) => {
 }
 
 const getLogDate = (log: any) => {
-  if (log?.date) return log.date.toString().slice(0, 10)
+  if (log?.date) {
+    const rawDate = log.date.toString().slice(0, 10)
+    const trDate = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    return trDate ? `${trDate[3]}-${trDate[2]}-${trDate[1]}` : rawDate
+  }
   const value = log?.entryTime || log?.timestamp || log?.createdAt || log?.updatedAt
   if (!value) return ""
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10)
@@ -236,6 +265,7 @@ export default function ReportsPage() {
     shifts: [] as any[],
     leaves: [] as any[],
     attendance: [] as any[],
+    livePresence: [] as any[],
     breaks: [] as any[],
     devices: [] as any[],
     access: [] as any[],
@@ -276,7 +306,8 @@ export default function ReportsPage() {
       positions: readArray(STORAGE_KEYS.positions),
       shifts: readArray(STORAGE_KEYS.shifts),
       leaves: readArray(STORAGE_KEYS.leaves),
-      attendance: readArray(STORAGE_KEYS.attendance),
+      attendance: mergeAttendance(readArray(STORAGE_KEYS.attendance), [...readArray(STORAGE_KEYS.attendanceLegacy), ...readArray(STORAGE_KEYS.livePresence)]),
+      livePresence: readArray(STORAGE_KEYS.livePresence),
       breaks: readArray(STORAGE_KEYS.breaks),
       devices: readArray(STORAGE_KEYS.devices),
       access: [...readArray(STORAGE_KEYS.access), ...readArray(STORAGE_KEYS.accessLegacy)],
@@ -311,7 +342,7 @@ export default function ReportsPage() {
     const personnelIds = new Set(filteredPersonnel.map(getPersonId))
     return data.attendance.filter((log) => {
       const date = getLogDate(log)
-      const personnelId = (log?.personnelId || log?.personId || "").toString()
+      const personnelId = getAttendancePersonId(log)
       const channel = (log?.verificationMethod || log?.channel || log?.platform || "").toString()
       const isQr = /qr/i.test(channel)
       return (!date || (date >= filters.startDate && date <= filters.endDate))
@@ -342,7 +373,7 @@ export default function ReportsPage() {
   const tableRows = React.useMemo(() => {
     return filteredPersonnel.map((person) => {
       const personId = getPersonId(person)
-      const logs = filteredAttendance.filter((log) => (log?.personnelId || log?.personId || "").toString() === personId)
+      const logs = filteredAttendance.filter((log) => getAttendancePersonId(log) === personId)
       const firstLog = logs[0]
       const entry = getTimeFromValue(firstLog?.entryTime || firstLog?.checkInTime)
       const exit = getTimeFromValue(firstLog?.exitTime || firstLog?.checkOutTime)
@@ -380,18 +411,27 @@ export default function ReportsPage() {
 
   const stats = React.useMemo(() => {
     const today = todayInput()
-    const todayLogs = data.attendance.filter((log) => getLogDate(log) === today)
-    const activePersonnel = data.personnel.filter((person) => person?.status !== "Inactive")
+    const todayLogs = filteredAttendance.filter((log) => getLogDate(log) === today && hasEntry(log))
+    const todayEntryPersonIds = new Set(todayLogs.map(getAttendancePersonId).filter(Boolean))
+    const activePersonnel = filteredPersonnel.filter((person) => person?.status !== "Inactive")
+    const todayLeavePersonIds = new Set(filteredLeaves
+      .filter((leave) => today >= String(leave?.startDate || "").slice(0, 10) && today <= String(leave?.endDate || leave?.startDate || "").slice(0, 10) && /approved|onay/i.test(String(leave?.status || "")))
+      .map((leave) => (leave?.personnelId || leave?.personId || "").toString())
+      .filter(Boolean))
     const late = tableRows.filter((row) => row.isLate).length
-    const absenceRate = filteredPersonnel.length ? Math.round(((filteredPersonnel.length - Math.min(todayLogs.length, filteredPersonnel.length)) / filteredPersonnel.length) * 100) : 0
+    const absentCount = activePersonnel.filter((person) => {
+      const personId = getPersonId(person)
+      return !todayEntryPersonIds.has(personId) && !todayLeavePersonIds.has(personId)
+    }).length
+    const absenceRate = activePersonnel.length ? Math.round((absentCount / activePersonnel.length) * 100) : 0
     const overtimeMinutes = tableRows.reduce((sum, row) => sum + row.overtime, 0)
     const pendingLeaves = data.leaves.filter((leave) => /pending|bekliyor/i.test(leave?.status || "Pending")).length
     const avgWork = tableRows.length ? Math.round(tableRows.reduce((sum, row) => sum + row.workMinutes, 0) / tableRows.length / 60 * 10) / 10 : 0
     const suspicious = data.audit.filter((log) => /şüpheli|suspicious/i.test(`${log.type || ""} ${log.detail || log.message || ""}`) || log.risk === "Kritik" || log.riskLevel === "Kritik").length
     const mismatch = data.audit.filter((log) => /device|cihaz|uyuşmaz/i.test(`${log.type || ""} ${log.detail || log.message || ""}`)).length
-    const mobileLogs = data.attendance.filter((log) => /mobil|mobile/i.test(`${log.channel || log.platform || log.verificationMethod || ""}`)).length
+    const mobileLogs = filteredAttendance.filter((log) => /mobil|mobile/i.test(`${log.channel || log.platform || log.verificationMethod || ""}`)).length
     return {
-      totalPersonnel: data.personnel.length,
+      totalPersonnel: filteredPersonnel.length,
       activePersonnel: activePersonnel.length,
       todayEntries: todayLogs.length,
       late,
@@ -402,9 +442,9 @@ export default function ReportsPage() {
       avgWork,
       suspicious,
       mismatch,
-      mobileRate: data.attendance.length ? Math.round((mobileLogs / data.attendance.length) * 100) : 0,
+      mobileRate: filteredAttendance.length ? Math.round((mobileLogs / filteredAttendance.length) * 100) : 0,
     }
-  }, [data.attendance, data.audit, data.leaves, data.personnel, filteredPersonnel.length, filteredShifts.length, tableRows])
+  }, [data.audit, data.leaves, filteredAttendance, filteredLeaves, filteredPersonnel, filteredShifts.length, tableRows])
 
   const charts = React.useMemo(() => {
     return {
@@ -829,7 +869,7 @@ function buildDateChart(logs: any[]) {
     if (!date) return
     counts.set(date, (counts.get(date) || 0) + 1)
   })
-  return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0])).slice(-8).map(([label, value]) => ({ label, value }))
+  return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0])).slice(-8).map(([label, value]) => ({ label: ddmmyyyy(label), value }))
 }
 
 function buildBranchChart(logs: any[], personnel: any[], branchById: Map<string, any>) {

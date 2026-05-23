@@ -42,11 +42,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
+import { logoutLocalSession } from "@/lib/auth-session"
 
 const s = translations.sidebar;
 const c = translations.common;
 const APPROVAL_STORAGE_KEYS = ["app_leave_requests", "app_advance_requests"] as const;
-const PERMISSION_STORAGE_KEYS = ["app_personnel", ...ACCESS_STORAGE_KEYS] as const;
+const PERMISSION_STORAGE_KEYS = ["app_personnel", "app_roles", "app_auth_session", ...ACCESS_STORAGE_KEYS] as const;
 
 const navigation = [
   {
@@ -192,10 +193,12 @@ export function MainSidebar() {
     window.addEventListener("storage", handleStorage)
     window.addEventListener("focus", refreshAccess)
     window.addEventListener("app-access-updated", refreshAccess)
+    window.addEventListener("app-auth-updated", refreshAccess)
     return () => {
       window.removeEventListener("storage", handleStorage)
       window.removeEventListener("focus", refreshAccess)
       window.removeEventListener("app-access-updated", refreshAccess)
+      window.removeEventListener("app-auth-updated", refreshAccess)
     }
   }, [])
 
@@ -225,6 +228,13 @@ export function MainSidebar() {
   React.useEffect(() => {
     setPendingApprovalsCount(readApprovalCount())
   }, [pathname])
+
+  const handleLogout = () => {
+    logoutLocalSession()
+    window.location.href = "/login"
+  }
+
+  if (pathname === "/login") return null
 
   return (
     <Sidebar
@@ -318,7 +328,7 @@ export function MainSidebar() {
               </div>
             </div>
           </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 text-rose-300 hover:text-white hover:bg-white/8 rounded-xl text-[13px] font-bold transition-all group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center">
+          <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-1.5 text-rose-300 hover:text-white hover:bg-white/8 rounded-xl text-[13px] font-bold transition-all group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center">
             <LogOut className="w-4 h-4 shrink-0" />
             <span className="group-data-[collapsible=icon]:hidden">{c.logout}</span>
           </button>

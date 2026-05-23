@@ -2,6 +2,8 @@
 
 export const ACCESS_STORAGE_KEYS = ["app_access_control", "app_access_controls", "app_access_management", "app_user_access", "accessControls"] as const
 const PERSONNEL_STORAGE_KEY = "app_personnel"
+const AUTH_SESSION_KEY = "app_auth_session"
+const ROLES_STORAGE_KEY = "app_roles"
 
 function readArray(key: string) {
   if (typeof window === "undefined") return []
@@ -41,11 +43,27 @@ function recordPersonIds(record: any) {
     .map(String)
 }
 
+function roleValues(role: any) {
+  return [role?.id, role?.roleId, role?.name, role?.roleName, role?.code].filter(Boolean).map(normalize)
+}
+
+function personRoleValues(person: any) {
+  return [person?.roleId, person?.role, person?.roleName, person?.assignedRole, person?.accessRole, person?.permissionRole].filter(Boolean).map(normalize)
+}
+
 function recordTime(record: any) {
   const raw = record?.updatedAt || record?.createdAt || record?.timestamp || 0
   if (typeof raw === "number") return raw
   const parsed = Date.parse(String(raw))
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function readSession() {
+  try {
+    return JSON.parse(window.localStorage.getItem(AUTH_SESSION_KEY) || "null")
+  } catch {
+    return null
+  }
 }
 
 function isHarunKaya(value: unknown) {
@@ -62,16 +80,22 @@ function isHrManager(person: any) {
 
 export function readCurrentAccess() {
   if (typeof window === "undefined") {
-    return { panelAccess: true, mobileAccess: true, user: null, record: null }
+    return { panelAccess: true, mobileAccess: true, user: null, record: null, session: null }
   }
 
+  const session = readSession()
   const personnel = readArray(PERSONNEL_STORAGE_KEY).filter((person: any) => !person?.isDeleted)
+  const roles = readArray(ROLES_STORAGE_KEY)
   const accessRecords = ACCESS_STORAGE_KEYS.flatMap((key) => readArray(key))
-  const activePerson =
-    personnel.find((person: any) => isHarunKaya(personName(person))) ||
-    personnel.find((person: any) => isHrManager(person)) ||
-    personnel[0] ||
-    null
+  const sessionPerson =
+    session
+      ? personnel.find((person: any) => {
+          const sameId = session?.personnelId && personId(person) === String(session.personnelId)
+          const sameEmail = session?.email && normalize(person?.email || person?.workEmail || person?.mail || person?.username) === normalize(session.email)
+          return sameId || sameEmail
+        }) || null
+      : null
+  const activePerson = sessionPerson || personnel.find((person: any) => isHarunKaya(personName(person))) || personnel.find((person: any) => isHrManager(person)) || personnel[0] || null
   const activeId = activePerson ? personId(activePerson) : ""
   const activeName = activePerson ? personName(activePerson) : "Harun Kaya"
 
@@ -80,26 +104,33 @@ export function readCurrentAccess() {
       const name = recordName(record)
       return (
         (activeId && recordPersonIds(record).includes(activeId)) ||
-        isHarunKaya(name) ||
+        (!session && isHarunKaya(name)) ||
         (activeName && normalize(name) === normalize(activeName))
       )
     })
     .sort((a: any, b: any) => recordTime(b) - recordTime(a))
   const accessRecord = matchedRecords[0] || null
+  const activeRoleValues = activePerson ? personRoleValues(activePerson) : []
+  const activeRole = roles.find((role: any) => roleValues(role).some((value) => activeRoleValues.includes(value))) || null
+  const rolePermissions = activeRole?.permissions || activeRole || {}
 
   const panelAccess =
     typeof accessRecord?.panelAccess === "boolean"
       ? accessRecord.panelAccess
       : typeof activePerson?.hasAdminAccess === "boolean"
         ? activePerson.hasAdminAccess
-        : true
+        : typeof rolePermissions?.panelAccess === "boolean"
+          ? rolePermissions.panelAccess
+          : true
 
   const mobileAccess =
     typeof accessRecord?.mobileAccess === "boolean"
       ? accessRecord.mobileAccess
       : typeof activePerson?.hasMobileAccess === "boolean"
         ? activePerson.hasMobileAccess
-        : true
+        : typeof rolePermissions?.mobileAccess === "boolean"
+          ? rolePermissions.mobileAccess
+          : true
 
-  return { panelAccess, mobileAccess, user: activePerson, record: accessRecord }
+  return { panelAccess, mobileAccess, user: activePerson, record: accessRecord, role: activeRole, session }
 }

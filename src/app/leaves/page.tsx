@@ -80,6 +80,8 @@ const t = translations.common;
 const l = translations.leaves;
 const LEAVE_REQUESTS_KEY = "app_leave_requests";
 const PERSONNEL_KEY = "app_personnel";
+const BRANCHES_KEY = "app_branches";
+const DEPARTMENTS_KEY = "app_departments";
 
 const LEAVE_TYPES = [
   { value: "Annual", label: "Yıllık İzin" },
@@ -101,6 +103,18 @@ const readLocalArray = (key: string) => {
 
 const getPersonnelName = (person: any) => {
   return (person?.fullName || [person?.name, person?.surname].filter(Boolean).join(" ") || [person?.firstName, person?.lastName].filter(Boolean).join(" ") || person?.personnelCode || "Personel").toString();
+};
+
+const matchesEntity = (entity: any, value: any) => {
+  const target = String(value || "").trim().toLowerCase();
+  if (!target) return false;
+  return [entity?.id, entity?.name, entity?.title, entity?.branchName, entity?.departmentName, entity?.code]
+    .some((item) => String(item || "").trim().toLowerCase() === target);
+};
+
+const getEntityName = (items: any[], value: any) => {
+  const matched = items.find((item) => matchesEntity(item, value));
+  return (matched?.name || matched?.title || matched?.branchName || matched?.departmentName || value || "-").toString();
 };
 
 const getLeaveTypeLabel = (type: string) => {
@@ -161,6 +175,8 @@ export default function LeaveRequestsPage() {
   const [loadingLeaves, setLoadingLeaves] = React.useState(true)
   const [rawRequests, setRawRequests] = React.useState<any[]>([])
   const [personnel, setPersonnel] = React.useState<any[]>([])
+  const [branches, setBranches] = React.useState<any[]>([])
+  const [departments, setDepartments] = React.useState<any[]>([])
   const [formData, setFormData] = React.useState({
     personnelId: "",
     leaveType: "",
@@ -173,6 +189,8 @@ export default function LeaveRequestsPage() {
   const loadLocalData = React.useCallback(() => {
     setRawRequests(readLocalArray(LEAVE_REQUESTS_KEY));
     setPersonnel(readLocalArray(PERSONNEL_KEY).filter((person: any) => !person?.isDeleted));
+    setBranches(readLocalArray(BRANCHES_KEY));
+    setDepartments(readLocalArray(DEPARTMENTS_KEY));
     setLoadingLeaves(false);
   }, []);
 
@@ -601,8 +619,8 @@ export default function LeaveRequestsPage() {
                   <DetailItem label={l.totalDays} value={`${selectedRequest.totalDays || 0} Gün`} />
                   <DetailItem label={l.startDate} value={formatDateTR(selectedRequest.startDate)} />
                   <DetailItem label={l.endDate} value={formatDateTR(selectedRequest.endDate)} />
-                  <DetailItem label="Şube" value={selectedRequest.person?.branchId || "-"} />
-                  <DetailItem label="Departman" value={selectedRequest.person?.departmentId || "-"} />
+                  <DetailItem label="Şube" value={getEntityName(branches, selectedRequest.person?.branchId || selectedRequest.person?.branch || selectedRequest.branchId || selectedRequest.branch || selectedRequest.branchName)} />
+                  <DetailItem label="Departman" value={getEntityName(departments, selectedRequest.person?.departmentId || selectedRequest.person?.department || selectedRequest.departmentId || selectedRequest.department || selectedRequest.departmentName)} />
                 </div>
 
                 <div className="space-y-4">
