@@ -1,5 +1,7 @@
 "use client"
 
+import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
+
 export const ACCESS_STORAGE_KEYS = ["app_access_control", "app_access_controls", "app_access_management", "app_user_access", "accessControls"] as const
 const PERSONNEL_STORAGE_KEY = "app_personnel"
 const AUTH_SESSION_KEY = "app_auth_session"
@@ -88,6 +90,7 @@ export function readCurrentAccess() {
     return { panelAccess: true, mobileAccess: true, user: null, record: null, session: null }
   }
 
+  ensureDefaultAuthSeed()
   const session = readSession()
   const personnel = readArray(PERSONNEL_STORAGE_KEY).filter((person: any) => !person?.isDeleted)
   const roles = readArray(ROLES_STORAGE_KEY)

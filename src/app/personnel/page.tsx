@@ -53,6 +53,7 @@ import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AddPersonnelForm } from "@/components/personnel/add-personnel-form"
 import { useToast } from "@/hooks/use-toast"
+import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -85,6 +86,7 @@ export default function PersonnelPage() {
 
   const loadEmployees = React.useCallback(() => {
     try {
+      ensureDefaultAuthSeed()
       const raw = localStorage.getItem(PERSONNEL_STORAGE_KEY)
       const parsed = raw ? JSON.parse(raw) : []
       setEmployees(Array.isArray(parsed) ? parsed : [])
@@ -203,6 +205,7 @@ export default function PersonnelPage() {
     surname: "",
     phone: "",
     email: "",
+    password: "",
     branchId: "",
     departmentId: "",
     position: "",
@@ -219,6 +222,7 @@ export default function PersonnelPage() {
       surname: selectedEmployee.surname || "",
       phone: selectedEmployee.phone || "",
       email: selectedEmployee.email || "",
+      password: selectedEmployee.password || "",
       branchId: selectedEmployee.branchId || "",
       departmentId: selectedEmployee.departmentId || "",
       position: selectedEmployee.position || "",
@@ -288,6 +292,14 @@ export default function PersonnelPage() {
         variant: "destructive",
         title: "Hata",
         description: "E-posta zorunludur.",
+      })
+      return
+    }
+    if (!editForm.password?.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Hata",
+        description: "Şifre zorunludur.",
       })
       return
     }
@@ -646,6 +658,10 @@ export default function PersonnelPage() {
                           <div className="space-y-2">
                             <Label>E-posta <span className="text-red-500">*</span></Label>
                             <Input type="email" value={editForm.email} onChange={(e) => setEditForm((p: any) => ({ ...p, email: e.target.value }))} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Şifre <span className="text-red-500">*</span></Label>
+                            <Input type="password" value={editForm.password} onChange={(e) => setEditForm((p: any) => ({ ...p, password: e.target.value }))} />
                           </div>
                           <div className="space-y-2">
                             <Label>Telefon <span className="text-red-500">*</span></Label>

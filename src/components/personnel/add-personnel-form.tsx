@@ -55,6 +55,7 @@ const personnelSchema = z.object({
   gender: z.string().optional(),
   phone: z.string().min(10, "Geçerli bir telefon numarası girin"),
   email: z.string().email("Geçerli bir e-posta adresi girin"),
+  password: z.string().min(4, "Şifre en az 4 karakter olmalıdır"),
   address: z.string().optional(),
   branchId: z.string().min(1, "Şube seçimi zorunludur"),
   departmentId: z.string().optional().or(z.literal("")),
@@ -212,6 +213,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
       gender: "",
       phone: "",
       email: "",
+      password: "",
       address: "",
       branchId: "",
       departmentId: "",
@@ -412,6 +414,17 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                       <FormItem>
                         <FormLabel>E-posta <span className="text-red-500">*</span></FormLabel>
                         <FormControl><Input type="email" placeholder="ornek@evyapar.com" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Şifre <span className="text-red-500">*</span></FormLabel>
+                        <FormControl><Input type="password" placeholder="Mobil/panel giriş şifresi" {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}

@@ -1,5 +1,7 @@
 "use client"
 
+import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
+
 export const AUTH_SESSION_KEY = "app_auth_session"
 
 function readArray(key: string) {
@@ -34,6 +36,7 @@ function personPassword(person: any) {
 
 export function readAuthSession() {
   if (typeof window === "undefined") return null
+  ensureDefaultAuthSeed()
   try {
     return JSON.parse(window.localStorage.getItem(AUTH_SESSION_KEY) || "null")
   } catch {
@@ -42,6 +45,7 @@ export function readAuthSession() {
 }
 
 export function findSessionPerson() {
+  ensureDefaultAuthSeed()
   const session = readAuthSession()
   if (!session?.personnelId && !session?.email) return null
 
@@ -54,6 +58,7 @@ export function findSessionPerson() {
 }
 
 export function loginWithLocalPersonnel(email: string, password: string) {
+  ensureDefaultAuthSeed()
   const personnel = readArray("app_personnel").filter((person: any) => !person?.isDeleted)
   const matched = personnel.find((person: any) => {
     const emailMatch = normalize(personEmail(person)) === normalize(email)
