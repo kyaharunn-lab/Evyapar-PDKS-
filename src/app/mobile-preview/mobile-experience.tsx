@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
+import { loginWithLocalPersonnel } from "@/lib/auth-session"
 import { formatDateTR } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
 
@@ -346,10 +347,12 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     window.addEventListener("storage", handleStorage)
     window.addEventListener("focus", refreshAccess)
     window.addEventListener("app-access-updated", refreshAccess)
+    window.addEventListener("app-auth-updated", refreshAccess)
     return () => {
       window.removeEventListener("storage", handleStorage)
       window.removeEventListener("focus", refreshAccess)
       window.removeEventListener("app-access-updated", refreshAccess)
+      window.removeEventListener("app-auth-updated", refreshAccess)
     }
   }, [])
 
@@ -743,6 +746,15 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     load()
   }
 
+  const handleMobileLogin = React.useCallback((email: string, password: string) => {
+    const result = loginWithLocalPersonnel(email, password)
+    if (!result.ok) return result.error || "Giriş yapılamadı."
+    setAccessState(readCurrentAccess())
+    load()
+    toast({ title: "Giriş başarılı", description: "Mobil uygulama açıldı." })
+    return ""
+  }, [load, toast])
+
   const phoneContent = data.personnel.length === 0 ? (
     <div className="grid min-h-[520px] w-full place-items-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 text-center">
       <div>
@@ -775,6 +787,10 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       onLeaveCreate={createLeave}
     />
   )
+
+  if (isStandaloneApp && !accessState.session) {
+    return <MobileLoginScreen onLogin={handleMobileLogin} />
+  }
 
   if (!hasMobileAccess) {
     return <MobileAccessDenied />
@@ -909,6 +925,45 @@ function MobileAccessDenied() {
           </p>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function MobileLoginScreen({ onLogin }: { onLogin: (email: string, password: string) => string }) {
+  const [email, setEmail] = React.useState("")
+  const [password, setPassword] = React.useState("")
+  const [error, setError] = React.useState("")
+
+  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const message = onLogin(email, password)
+    setError(message)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid min-h-dvh place-items-center overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-sky-950 p-5">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(99,102,241,0.24),transparent_26rem),radial-gradient(circle_at_80%_20%,rgba(14,165,233,0.2),transparent_24rem)]" />
+      <form onSubmit={submit} className="relative w-full max-w-sm rounded-[32px] border border-white/10 bg-white/10 p-6 text-white shadow-2xl shadow-black/30 backdrop-blur-2xl">
+        <div className="mb-7 text-center">
+          <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-white/15">
+            <Smartphone className="h-8 w-8 text-sky-200" />
+          </div>
+          <h1 className="text-2xl font-black tracking-tight">Evyapar Mobil</h1>
+          <p className="mt-2 text-sm font-semibold text-white/55">Personel hesabınızla giriş yapın.</p>
+        </div>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-[11px] font-black uppercase tracking-widest text-white/55">Email</Label>
+            <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="h-12 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/35" placeholder="personel@evyapar.com" required />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-[11px] font-black uppercase tracking-widest text-white/55">Şifre</Label>
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/35" placeholder="Şifreniz" required />
+          </div>
+          {error && <div className="rounded-2xl border border-rose-300/20 bg-rose-500/15 px-4 py-3 text-sm font-bold text-rose-100">{error}</div>}
+          <Button type="submit" className="h-12 w-full rounded-2xl bg-white font-black text-slate-950 hover:bg-white/90">Giriş Yap</Button>
+        </div>
+      </form>
     </div>
   )
 }

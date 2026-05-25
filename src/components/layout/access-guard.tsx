@@ -38,6 +38,7 @@ export function AccessGuard({ children }: { children: React.ReactNode }) {
   }, [])
 
   React.useEffect(() => {
+    if (isMobileAppPath) return
     if (!isLoginPath && !access.session) router.replace("/login")
     if (!isLoginPath && access.session && !access.panelAccess && access.mobileAccess && !isMobileAppPath) {
       router.replace("/mobile-app")
@@ -45,6 +46,8 @@ export function AccessGuard({ children }: { children: React.ReactNode }) {
   }, [access.mobileAccess, access.panelAccess, access.session, isLoginPath, isMobileAppPath, router])
 
   if (isLoginPath) return <>{children}</>
+
+  if (isMobileAppPath) return <>{children}</>
 
   if (!access.session) return null
 
