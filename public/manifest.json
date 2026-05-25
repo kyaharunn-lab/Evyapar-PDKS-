@@ -2,7 +2,7 @@
   "name": "Evyapar PDKS",
   "short_name": "Evyapar",
   "description": "Evyapar personel devam kontrol mobil uygulamasi",
-  "start_url": "/mobile-preview",
+  "start_url": "/mobile-app",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

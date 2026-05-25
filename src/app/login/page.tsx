@@ -14,7 +14,7 @@ import { readCurrentAccess } from "@/lib/access-permissions"
 
 function getPostLoginPath(access: { panelAccess: boolean; mobileAccess: boolean }) {
   if (access.panelAccess) return "/dashboard"
-  if (access.mobileAccess) return "/mobile-preview"
+  if (access.mobileAccess) return "/mobile-app"
   return "/dashboard"
 }
 

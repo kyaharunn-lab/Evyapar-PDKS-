@@ -16,7 +16,7 @@ export function AccessGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const [access, setAccess] = React.useState(() => readCurrentAccess())
   const isLoginPath = pathname === "/login"
-  const isMobilePreviewPath = pathname === "/mobile-preview" || pathname.startsWith("/mobile-preview/")
+  const isMobileAppPath = pathname === "/mobile-app" || pathname.startsWith("/mobile-app/")
 
   React.useEffect(() => {
     const refreshAccess = () => setAccess(readCurrentAccess())
@@ -39,17 +39,17 @@ export function AccessGuard({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     if (!isLoginPath && !access.session) router.replace("/login")
-    if (!isLoginPath && access.session && !access.panelAccess && access.mobileAccess && !isMobilePreviewPath) {
-      router.replace("/mobile-preview")
+    if (!isLoginPath && access.session && !access.panelAccess && access.mobileAccess && !isMobileAppPath) {
+      router.replace("/mobile-app")
     }
-  }, [access.mobileAccess, access.panelAccess, access.session, isLoginPath, isMobilePreviewPath, router])
+  }, [access.mobileAccess, access.panelAccess, access.session, isLoginPath, isMobileAppPath, router])
 
   if (isLoginPath) return <>{children}</>
 
   if (!access.session) return null
 
   if (!access.panelAccess && access.mobileAccess) {
-    return isMobilePreviewPath ? <>{children}</> : null
+    return isMobileAppPath ? <>{children}</> : null
   }
 
   if (!access.panelAccess) {
