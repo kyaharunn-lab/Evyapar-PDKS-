@@ -23,6 +23,7 @@ function readArray(key: string) {
 export function ensureDefaultAuthSeed() {
   if (typeof window === "undefined") return
 
+  let changed = false
   const now = Date.now()
   const personnel = readArray(PERSONNEL_STORAGE_KEY)
   const branches = readArray(BRANCHES_STORAGE_KEY)
@@ -114,18 +115,21 @@ export function ensureDefaultAuthSeed() {
 
   if (branches.length === 0) {
     window.localStorage.setItem(BRANCHES_STORAGE_KEY, JSON.stringify([branch]))
+    changed = true
   }
 
   if (roles.length === 0) {
     window.localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify([role]))
+    changed = true
   }
 
   if (personnel.length === 0) {
     window.localStorage.setItem(PERSONNEL_STORAGE_KEY, JSON.stringify([admin]))
+    changed = true
   } else {
     const hasDefaultAdmin = personnel.some((person: any) => person?.id === DEFAULT_ADMIN_ID)
     if (hasDefaultAdmin) {
-      window.localStorage.setItem(PERSONNEL_STORAGE_KEY, JSON.stringify(personnel.map((person: any) => {
+      const nextPersonnel = personnel.map((person: any) => {
         if (person?.id !== DEFAULT_ADMIN_ID) return person
         return {
           ...person,
@@ -139,17 +143,25 @@ export function ensureDefaultAuthSeed() {
           hasAdminAccess: person?.hasAdminAccess ?? true,
           hasMobileAccess: person?.hasMobileAccess ?? true,
         }
-      })))
+      })
+      if (JSON.stringify(nextPersonnel) !== JSON.stringify(personnel)) {
+        window.localStorage.setItem(PERSONNEL_STORAGE_KEY, JSON.stringify(nextPersonnel))
+        changed = true
+      }
     }
   }
 
   if (accessRecords.length === 0) {
     window.localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify([accessRecord]))
+    changed = true
   }
 
   if (qrPoints.length === 0) {
     window.localStorage.setItem(QR_POINTS_STORAGE_KEY, JSON.stringify([qrPoint]))
+    changed = true
   }
 
-  window.dispatchEvent(new Event("app-access-updated"))
+  if (changed) {
+    window.dispatchEvent(new Event("app-access-updated"))
+  }
 }

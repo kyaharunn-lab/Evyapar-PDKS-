@@ -8,9 +8,14 @@ import { loginWithLocalPersonnel, readAuthSession } from "@/lib/auth-session"
 
 export default function MobileAppPage() {
   const [hasSession, setHasSession] = React.useState(false)
+  const [authLoading, setAuthLoading] = React.useState(true)
 
   React.useEffect(() => {
-    const refresh = () => setHasSession(Boolean(readAuthSession()))
+    const refresh = () => {
+      const nextHasSession = Boolean(readAuthSession())
+      setHasSession((current) => current === nextHasSession ? current : nextHasSession)
+      setAuthLoading(false)
+    }
     refresh()
     window.addEventListener("app-auth-updated", refresh)
     window.addEventListener("storage", refresh)
@@ -19,6 +24,10 @@ export default function MobileAppPage() {
       window.removeEventListener("storage", refresh)
     }
   }, [])
+
+  if (authLoading) {
+    return <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-950 via-indigo-950 to-sky-950" />
+  }
 
   if (!hasSession) {
     return <NativeMobileLogin onSuccess={() => setHasSession(true)} />
