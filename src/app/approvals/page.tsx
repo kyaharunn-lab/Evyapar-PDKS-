@@ -80,6 +80,7 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { formatDateTimeTR } from "@/lib/date-time"
 import { Textarea } from "@/components/ui/textarea"
+import { useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 
 const t = translations.common;
 const a = translations.approvals;
@@ -138,6 +139,7 @@ export default function ApprovalsCenterPage() {
   const [localLeaves, setLocalLeaves] = React.useState<any[]>([])
   const [localAdvances, setLocalAdvances] = React.useState<any[]>([])
   const [localPersonnel, setLocalPersonnel] = React.useState<any[]>([])
+  const leaveSyncTargets = React.useMemo(() => [{ collectionName: "leaveRequests", storageKey: LEAVE_REQUESTS_KEY }], [])
 
   const loadLocalApprovals = React.useCallback(() => {
     setLocalLeaves(readLocalArray(LEAVE_REQUESTS_KEY))
@@ -156,6 +158,8 @@ export default function ApprovalsCenterPage() {
     return () => window.removeEventListener("storage", onStorage)
   }, [loadLocalApprovals])
 
+  useFirestoreLocalMirror(db, leaveSyncTargets, loadLocalApprovals)
+
   // Update "now" every minute for wait time calc
   React.useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000)
@@ -165,7 +169,7 @@ export default function ApprovalsCenterPage() {
   // Real-time queries for pending requests
   const leaveQuery = React.useMemo(() => {
     if (!db) return null;
-    return query(collection(db, "leave_requests"), where("status", "==", "Pending"));
+    return query(collection(db, "leaveRequests"), where("status", "==", "Pending"));
   }, [db]);
 
   const advanceQuery = React.useMemo(() => {
@@ -303,6 +307,9 @@ export default function ApprovalsCenterPage() {
           };
         });
         writeLocalArray(key, next);
+        if (key === LEAVE_REQUESTS_KEY) {
+          void writeSharedRecord(db, "leaveRequests", next.find((record: any) => (record?.id || "").toString() === requestId))
+        }
         writeLocalArray(AUDIT_KEY, [
           {
             id: `approval-${Date.now()}`,
@@ -330,7 +337,7 @@ export default function ApprovalsCenterPage() {
       }
 
       if (!db) return;
-      const collectionName = type === "Leave" ? "leave_requests" : "advance_requests";
+      const collectionName = type === "Leave" ? "leaveRequests" : "advance_requests";
       const requestRef = doc(db, collectionName, requestId);
       
       const payload: any = {

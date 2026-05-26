@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useFirestore } from "@/firebase"
+import { useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 
 type RequestTab = "leaves" | "advances" | "approvals"
 
@@ -28,6 +30,7 @@ function isPendingStatus(status: unknown) {
 }
 
 export default function RequestsPage() {
+  const db = useFirestore()
   const [activeTab, setActiveTab] = React.useState<RequestTab>("leaves")
   const [counts, setCounts] = React.useState({ leaves: 0, advances: 0, approvals: 0 })
   const [leaves, setLeaves] = React.useState<any[]>([])
@@ -64,6 +67,9 @@ export default function RequestsPage() {
     }
   }, [refreshCounts])
 
+  const leaveSyncTargets = React.useMemo(() => [{ collectionName: "leaveRequests", storageKey: "app_leave_requests" }], [])
+  useFirestoreLocalMirror(db, leaveSyncTargets, refreshCounts)
+
   const updateRequestStatus = React.useCallback((request: any, status: "approved" | "rejected") => {
     const storageKey = request?.requestType === "Avans" ? "app_advance_requests" : "app_leave_requests"
     const currentRequests = readLocalArray(storageKey)
@@ -78,6 +84,9 @@ export default function RequestsPage() {
     })
 
     localStorage.setItem(storageKey, JSON.stringify(nextRequests))
+    if (storageKey === "app_leave_requests") {
+      void writeSharedRecord(db, "leaveRequests", nextRequests.find((item) => item?.id === request?.id))
+    }
 
     if (storageKey === "app_leave_requests") {
       setLeaves(nextRequests)

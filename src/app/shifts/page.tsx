@@ -58,6 +58,8 @@ import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { DATE_INPUT_PROPS, TIME_INPUT_PROPS, formatDateTR, formatTimeValueTR, normalizeTimeInputTR } from "@/lib/date-time"
+import { useFirestore } from "@/firebase"
+import { writeSharedRecord } from "@/lib/shared-data-sync"
 
 const s = translations.shifts;
 const t = translations.common;
@@ -90,6 +92,7 @@ const getPersonnelLabel = (person: any) => {
 
 export default function ShiftsPage() {
   const { toast } = useToast();
+  const db = useFirestore();
   
   const [viewMode, setViewMode] = React.useState<"timeline" | "grid" | "list">("timeline")
   const [selectedDate, setSelectedDate] = React.useState(new Date())
@@ -195,6 +198,7 @@ export default function ShiftsPage() {
       }
       return next;
     });
+    void writeSharedRecord(db, "shifts", newShift);
 
     setIsCreateModalOpen(false);
     resetForm();

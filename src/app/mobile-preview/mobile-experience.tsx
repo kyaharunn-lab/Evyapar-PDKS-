@@ -30,10 +30,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { useFirestore } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 import { loginWithLocalPersonnel } from "@/lib/auth-session"
 import { formatDateTR } from "@/lib/date-time"
+import { useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_KEY = "app_mobile_preview_settings"
@@ -266,6 +268,7 @@ function isMobileUserModeRequested() {
 
 export function MobileExperience({ variant = "preview" }: { variant?: "preview" | "app" }) {
   const { toast } = useToast()
+  const db = useFirestore()
   const isStandaloneApp = variant === "app"
   const [accessState, setAccessState] = React.useState(() => readCurrentAccess())
   const [userModeParam, setUserModeParam] = React.useState(() => isMobileUserModeRequested())
@@ -294,6 +297,13 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     qrStatus: "QR bekleniyor",
     gpsStatus: "Bekleniyor",
   })
+  const sharedSyncTargets = React.useMemo(() => [
+    { collectionName: "branches", storageKey: "app_branches" },
+    { collectionName: "personnel", storageKey: "app_personnel" },
+    { collectionName: "qrPoints", storageKey: "app_qr_points" },
+    { collectionName: "shifts", storageKey: "app_shifts" },
+    { collectionName: "leaveRequests", storageKey: "app_leave_requests" },
+  ], [])
 
   const load = React.useCallback(() => {
     const saved = readObject(SETTINGS_KEY)
@@ -333,6 +343,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   React.useEffect(() => {
     load()
   }, [load])
+
+  useFirestoreLocalMirror(db, sharedSyncTargets, load)
 
   React.useEffect(() => {
     const refreshAccess = () => {
@@ -741,6 +753,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       createdAt: new Date().toISOString(),
     }
     writeArray("app_leave_requests", [record, ...readArray("app_leave_requests")])
+    void writeSharedRecord(db, "leaveRequests", record)
     addAudit("Mobil izin talebi oluşturuldu", `${personName(selectedPerson)} için ${form.type} talebi oluşturuldu.`, "İzin")
     updateSettings({ screen: "İzin" })
     load()

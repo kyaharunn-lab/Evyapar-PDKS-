@@ -75,6 +75,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DATE_INPUT_PROPS, formatDateTR } from "@/lib/date-time"
+import { useFirestore } from "@/firebase"
+import { useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 
 const t = translations.common;
 const l = translations.leaves;
@@ -163,6 +165,7 @@ const calculateLeaveDays = (startDate?: string, endDate?: string) => {
 
 export default function LeaveRequestsPage() {
   const { toast } = useToast()
+  const db = useFirestore()
   
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedRequest, setSelectedRequest] = React.useState<any>(null)
@@ -197,6 +200,9 @@ export default function LeaveRequestsPage() {
   React.useEffect(() => {
     loadLocalData();
   }, [loadLocalData]);
+
+  const leaveSyncTargets = React.useMemo(() => [{ collectionName: "leaveRequests", storageKey: LEAVE_REQUESTS_KEY }], []);
+  useFirestoreLocalMirror(db, leaveSyncTargets, loadLocalData);
 
   const persistRequests = React.useCallback((next: any[]) => {
     localStorage.setItem(LEAVE_REQUESTS_KEY, JSON.stringify(next));
@@ -278,6 +284,7 @@ export default function LeaveRequestsPage() {
     };
 
     persistRequests([nextRequest, ...rawRequests]);
+    void writeSharedRecord(db, "leaveRequests", nextRequest);
     setIsCreateOpen(false);
     resetForm();
     toast({
@@ -299,6 +306,7 @@ export default function LeaveRequestsPage() {
         };
       });
       persistRequests(next);
+      void writeSharedRecord(db, "leaveRequests", next.find((request) => request.id === requestId));
 
       toast({
         title: t.save,

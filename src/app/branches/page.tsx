@@ -64,9 +64,12 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TIME_INPUT_PROPS } from "@/lib/date-time"
+import { useFirestore } from "@/firebase"
+import { writeSharedRecord } from "@/lib/shared-data-sync"
 
 export default function BranchesPage() {
   const { toast } = useToast()
+  const db = useFirestore()
   
   const [isAddOpen, setIsAddOpen] = React.useState(false)
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
@@ -217,6 +220,7 @@ export default function BranchesPage() {
           const idx = list.findIndex((b) => b?.id === editingBranchId);
           if (idx >= 0) {
             const updated = { ...list[idx], ...base };
+            void writeSharedRecord(db, "branches", updated);
             const next = [updated, ...list.slice(0, idx), ...list.slice(idx + 1)];
             persistBranches(next);
             return next;
@@ -229,11 +233,11 @@ export default function BranchesPage() {
           ...base,
           createdAt,
         };
+        void writeSharedRecord(db, "branches", newBranch);
         const next = [newBranch, ...list];
         persistBranches(next);
         return next;
       });
-
       toast({
         title: "Başarılı",
         description: editingBranchId ? "Şube güncellendi." : "Şube kaydı oluşturuldu.",

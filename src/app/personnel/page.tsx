@@ -53,7 +53,9 @@ import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AddPersonnelForm } from "@/components/personnel/add-personnel-form"
 import { useToast } from "@/hooks/use-toast"
+import { useFirestore } from "@/firebase"
 import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
+import { writeSharedRecord } from "@/lib/shared-data-sync"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -69,6 +71,7 @@ const p = translations.personnel;
 
 export default function PersonnelPage() {
   const { toast } = useToast()
+  const db = useFirestore()
   const [isAddOpen, setIsAddOpen] = React.useState(false)
   const [isProfileOpen, setIsProfileOpen] = React.useState(false)
   const [isEditOpen, setIsEditOpen] = React.useState(false)
@@ -137,6 +140,7 @@ export default function PersonnelPage() {
   }, [])
 
   const upsertEmployee = React.useCallback((updated: any) => {
+    void writeSharedRecord(db, "personnel", updated)
     setEmployees((prev) => {
       const list = Array.isArray(prev) ? prev : []
       const idx = list.findIndex((e) => e?.id === updated?.id)
@@ -147,7 +151,7 @@ export default function PersonnelPage() {
       persistEmployees(next)
       return next
     })
-  }, [persistEmployees])
+  }, [db, persistEmployees])
 
   const getBranchLabel = React.useCallback((branchId: string | undefined) => {
     if (!branchId) return "-"
@@ -257,7 +261,7 @@ export default function PersonnelPage() {
       return next
     })
     toast({ title: "Başarılı", description: "Personel silindi." })
-  }, [persistEmployees, toast])
+  }, [db, persistEmployees, toast])
 
   const handleOpenProfile = React.useCallback((emp: any) => {
     setSelectedEmployee(emp)

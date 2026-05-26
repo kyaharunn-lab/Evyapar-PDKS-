@@ -45,6 +45,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { writeSharedRecord } from "@/lib/shared-data-sync"
 
 const personnelSchema = z.object({
   name: z.string().min(2, "Ad en az 2 karakter olmalıdır"),
@@ -328,6 +329,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
           updatedAt: createdAt,
         }
         localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify([accessRecord, ...accessList]))
+        void writeSharedRecord(db, "personnel", newPersonnel)
         window.dispatchEvent(new Event("app-access-updated"))
       } catch {
         // allow flow to continue even if storage is blocked

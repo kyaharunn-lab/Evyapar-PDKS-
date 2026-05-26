@@ -69,9 +69,11 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
+import { useFirestore } from "@/firebase"
 import { cn } from "@/lib/utils"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DATE_INPUT_PROPS, formatDateTimeTR, formatDateTR, formatTimeValueTR } from "@/lib/date-time"
+import { deleteSharedRecord, useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 
 const LEAVE_REQUESTS_KEY = "app_leave_requests"
 const PERSONNEL_KEY = "app_personnel"
@@ -121,6 +123,7 @@ interface LeaveRequest {
 
 export default function LeaveRequestsPage() {
   const { toast } = useToast()
+  const db = useFirestore()
 
   // State
   const [leaveRequests, setLeaveRequests] = React.useState<LeaveRequest[]>([])
@@ -186,6 +189,9 @@ export default function LeaveRequestsPage() {
     return () => window.removeEventListener("storage", handleStorageChange)
   }, [loadData])
 
+  const leaveSyncTargets = React.useMemo(() => [{ collectionName: "leaveRequests", storageKey: LEAVE_REQUESTS_KEY }], [])
+  useFirestoreLocalMirror(db, leaveSyncTargets, loadData)
+
   // Validate form
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
@@ -232,6 +238,7 @@ export default function LeaveRequestsPage() {
     const updated = [newRequest, ...leaveRequests]
     localStorage.setItem(LEAVE_REQUESTS_KEY, JSON.stringify(updated))
     setLeaveRequests(updated)
+    void writeSharedRecord(db, "leaveRequests", newRequest)
 
     toast({
       title: "Başarılı",
@@ -271,6 +278,7 @@ export default function LeaveRequestsPage() {
 
     localStorage.setItem(LEAVE_REQUESTS_KEY, JSON.stringify(updated))
     setLeaveRequests(updated)
+    void writeSharedRecord(db, "leaveRequests", updated.find((req) => req.id === selectedRequest.id))
 
     toast({
       title: "Başarılı",
@@ -288,6 +296,7 @@ export default function LeaveRequestsPage() {
     const updated = leaveRequests.filter(req => req.id !== id)
     localStorage.setItem(LEAVE_REQUESTS_KEY, JSON.stringify(updated))
     setLeaveRequests(updated)
+    void deleteSharedRecord(db, "leaveRequests", id)
 
     toast({
       title: "Başarılı",
@@ -306,6 +315,7 @@ export default function LeaveRequestsPage() {
 
     localStorage.setItem(LEAVE_REQUESTS_KEY, JSON.stringify(updated))
     setLeaveRequests(updated)
+    void writeSharedRecord(db, "leaveRequests", updated.find((req) => req.id === id))
 
     toast({
       title: "Başarılı",
@@ -330,6 +340,7 @@ export default function LeaveRequestsPage() {
 
     localStorage.setItem(LEAVE_REQUESTS_KEY, JSON.stringify(updated))
     setLeaveRequests(updated)
+    void writeSharedRecord(db, "leaveRequests", updated.find((req) => req.id === id))
 
     toast({
       title: "Başarılı",

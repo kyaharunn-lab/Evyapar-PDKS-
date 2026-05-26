@@ -64,6 +64,8 @@ import {
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
 import { formatDateTimeTR } from "@/lib/date-time"
+import { useFirestore } from "@/firebase"
+import { deleteSharedRecord, writeSharedRecord } from "@/lib/shared-data-sync"
 import { cn } from "@/lib/utils"
 
 const BRANCHES_KEY = "app_branches"
@@ -135,6 +137,7 @@ const initialForm = {
 
 export default function QrPointsPage() {
   const { toast } = useToast()
+  const db = useFirestore()
   const [branches, setBranches] = React.useState<any[]>([])
   const [qrPoints, setQrPoints] = React.useState<any[]>([])
   const [isFormOpen, setIsFormOpen] = React.useState(false)
@@ -247,6 +250,7 @@ export default function QrPointsPage() {
       : [{ id: `qr-point-${now}-${Math.random().toString(16).slice(2)}`, ...record, createdAt: now, lastUsedAt: "" }, ...qrPoints]
 
     persistQrPoints(next)
+    void writeSharedRecord(db, "qrPoints", next.find((point) => point?.id === (editingId || next[0]?.id)))
     setIsFormOpen(false)
     resetForm()
     toast({ title: "Başarılı", description: editingId ? "QR noktası güncellendi." : "QR noktası oluşturuldu." })
@@ -258,17 +262,20 @@ export default function QrPointsPage() {
       return { ...point, qrCode: createQrCodeValue(qrPoints), updatedAt: Date.now() }
     })
     persistQrPoints(next)
+    void writeSharedRecord(db, "qrPoints", next.find((point) => point?.id === pointId))
     toast({ title: "Başarılı", description: "QR kod yenilendi." })
   }
 
   const deactivatePoint = (pointId: string) => {
     const next = qrPoints.map((point) => point?.id === pointId ? { ...point, status: "Passive", updatedAt: Date.now() } : point)
     persistQrPoints(next)
+    void writeSharedRecord(db, "qrPoints", next.find((point) => point?.id === pointId))
     toast({ title: "Başarılı", description: "QR noktası pasifleştirildi." })
   }
 
   const deletePoint = (pointId: string) => {
     persistQrPoints(qrPoints.filter((point) => point?.id !== pointId))
+    void deleteSharedRecord(db, "qrPoints", pointId)
     toast({ title: "Başarılı", description: "QR noktası silindi." })
   }
 
