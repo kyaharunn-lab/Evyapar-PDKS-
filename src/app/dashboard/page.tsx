@@ -35,11 +35,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { collection, doc, limit, onSnapshot, query, setDoc } from "firebase/firestore"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useFirestore } from "@/firebase"
+import { firebaseConfig } from "@/firebase/config"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 
@@ -178,8 +181,51 @@ function formatDateTime(value: any) {
   return date.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
 }
 
+type FirestoreDebugState = {
+  firestore: "checking" | "connected" | "error"
+  lastWrite: "checking" | "success" | "error"
+  lastRead: "checking" | "success" | "error"
+  errorMessage: string
+}
+
+const FIRESTORE_DEBUG_COLLECTIONS = ["branches", "personnel", "leaveRequests"]
+
+function getFirebaseConfigIssue() {
+  const missing = Object.entries(firebaseConfig)
+    .filter(([, value]) => !value || value === "env-placeholder")
+    .map(([key]) => key)
+
+  return missing.length ? `Firebase config eksik/placeholder: ${missing.join(", ")}` : ""
+}
+
+function getErrorMessage(error: unknown) {
+  if (!error) return ""
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+function debugStatusLabel(value: FirestoreDebugState["firestore"] | FirestoreDebugState["lastWrite"] | FirestoreDebugState["lastRead"]) {
+  if (value === "success") return "success"
+  if (value === "connected") return "connected"
+  if (value === "error") return "error"
+  return "checking"
+}
+
+function debugStatusClass(value: FirestoreDebugState["firestore"] | FirestoreDebugState["lastWrite"] | FirestoreDebugState["lastRead"]) {
+  if (value === "success" || value === "connected") return "bg-emerald-50 text-emerald-700 border-emerald-100"
+  if (value === "error") return "bg-red-50 text-red-700 border-red-100"
+  return "bg-amber-50 text-amber-700 border-amber-100"
+}
+
 export default function DashboardPage() {
+  const db = useFirestore()
   const [loading, setLoading] = React.useState(true)
+  const [firestoreDebug, setFirestoreDebug] = React.useState<FirestoreDebugState>({
+    firestore: "checking",
+    lastWrite: "checking",
+    lastRead: "checking",
+    errorMessage: "",
+  })
   const [data, setData] = React.useState<any>({
     personnel: [],
     branches: [],
@@ -227,6 +273,61 @@ export default function DashboardPage() {
       window.removeEventListener("app-break-records-updated", load)
     }
   }, [load])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+
+    let cancelled = false
+    const unsubscribers: Array<() => void> = []
+    const configIssue = getFirebaseConfigIssue()
+
+    const updateDebug = (patch: Partial<FirestoreDebugState>) => {
+      if (!cancelled) {
+        setFirestoreDebug((current) => ({ ...current, ...patch }))
+      }
+    }
+
+    if (!db) {
+      updateDebug({
+        firestore: "error",
+        lastWrite: "error",
+        lastRead: "error",
+        errorMessage: configIssue || "Firestore init basarisiz: db instance yok.",
+      })
+      return
+    }
+
+    updateDebug({
+      firestore: configIssue ? "error" : "connected",
+      errorMessage: configIssue,
+    })
+
+    setDoc(doc(db, "__sync_debug", "admin-panel"), {
+      checkedAt: new Date().toISOString(),
+      source: "dashboard",
+      collections: FIRESTORE_DEBUG_COLLECTIONS,
+    }, { merge: true })
+      .then(() => updateDebug({ lastWrite: "success" }))
+      .catch((error) => updateDebug({ lastWrite: "error", errorMessage: getErrorMessage(error) }))
+
+    FIRESTORE_DEBUG_COLLECTIONS.forEach((collectionName) => {
+      try {
+        const unsubscribe = onSnapshot(
+          query(collection(db, collectionName), limit(1)),
+          () => updateDebug({ lastRead: "success" }),
+          (error) => updateDebug({ lastRead: "error", errorMessage: getErrorMessage(error) })
+        )
+        unsubscribers.push(unsubscribe)
+      } catch (error) {
+        updateDebug({ lastRead: "error", errorMessage: getErrorMessage(error) })
+      }
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribers.forEach((unsubscribe) => unsubscribe())
+    }
+  }, [db])
 
   const today = React.useMemo(() => dateKey(new Date()), [])
   const todayEntries = React.useMemo(() => data.attendance.filter((record: any) => getRecordDate(record) === today && isEntry(record)), [data.attendance, today])
@@ -365,6 +466,31 @@ export default function DashboardPage() {
           CANLI İZLEME AKTİF · LOCAL
         </Badge>
       </div>
+
+      <Card className="premium-card">
+        <CardContent className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Firestore Sync Debug</p>
+            <p className="mt-1 text-sm font-bold text-primary">branches / personnel / leaveRequests baglanti kontrolu</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[520px]">
+            <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold", debugStatusClass(firestoreDebug.firestore))}>
+              Firestore: {debugStatusLabel(firestoreDebug.firestore)}
+            </div>
+            <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold", debugStatusClass(firestoreDebug.lastWrite))}>
+              Last write: {debugStatusLabel(firestoreDebug.lastWrite)}
+            </div>
+            <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold", debugStatusClass(firestoreDebug.lastRead))}>
+              Last read: {debugStatusLabel(firestoreDebug.lastRead)}
+            </div>
+          </div>
+          <div className="min-w-0 lg:max-w-sm">
+            <p className="truncate rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+              Error message: {firestoreDebug.errorMessage || "-"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {quickActions.map((action) => (
