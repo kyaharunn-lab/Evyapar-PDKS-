@@ -42,7 +42,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFirestore } from "@/firebase"
-import { firebaseConfig } from "@/firebase/config"
+import { firebaseConfig, firebaseEnvKeys } from "@/firebase/config"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 
@@ -193,9 +193,9 @@ const FIRESTORE_DEBUG_COLLECTIONS = ["branches", "personnel", "leaveRequests"]
 function getFirebaseConfigIssue() {
   const missing = Object.entries(firebaseConfig)
     .filter(([, value]) => !value || value === "env-placeholder")
-    .map(([key]) => key)
+    .map(([key]) => firebaseEnvKeys[key as keyof typeof firebaseEnvKeys] || key)
 
-  return missing.length ? `Firebase config eksik/placeholder: ${missing.join(", ")}` : ""
+  return missing.length ? `Firebase env eksik: ${missing.join(", ")}` : ""
 }
 
 function getErrorMessage(error: unknown) {
