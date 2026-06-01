@@ -31,6 +31,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useFirestore } from "@/firebase"
+import { collection, getDocs } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 import { loginWithLocalPersonnel } from "@/lib/auth-session"
@@ -297,6 +298,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     qrStatus: "QR bekleniyor",
     gpsStatus: "Bekleniyor",
   })
+  const [firestoreBootstrapped, setFirestoreBootstrapped] = React.useState(false)
   const sharedSyncTargets = React.useMemo(() => [
     { collectionName: "branches", storageKey: "app_branches" },
     { collectionName: "personnel", storageKey: "app_personnel" },
@@ -341,10 +343,55 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   }, [isStandaloneApp])
 
   React.useEffect(() => {
+    if (isStandaloneApp && db && !firestoreBootstrapped) return
     load()
-  }, [load])
+  }, [db, firestoreBootstrapped, isStandaloneApp, load])
 
   useFirestoreLocalMirror(db, sharedSyncTargets, load)
+
+  React.useEffect(() => {
+    if (!isStandaloneApp || typeof window === "undefined") return
+    if (!db) {
+      setFirestoreBootstrapped(true)
+      return
+    }
+
+    let cancelled = false
+
+    const bootstrapFromFirestore = async () => {
+      for (const target of sharedSyncTargets) {
+        try {
+          const snapshot = await getDocs(collection(db, target.collectionName))
+          const docs = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))
+          window.localStorage.setItem(target.storageKey, JSON.stringify(docs))
+          window.dispatchEvent(new Event(`${target.storageKey}-updated`))
+          console.info("[mobile-app firestore bootstrap]", {
+            collectionPath: target.collectionName,
+            storageKey: target.storageKey,
+            count: docs.length,
+          })
+        } catch (error) {
+          console.warn("[mobile-app firestore bootstrap] collection read failed; localStorage fallback kept", {
+            collectionPath: target.collectionName,
+            storageKey: target.storageKey,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            code: (error as any)?.code,
+          })
+        }
+      }
+
+      if (!cancelled) {
+        setFirestoreBootstrapped(true)
+        load()
+      }
+    }
+
+    void bootstrapFromFirestore()
+
+    return () => {
+      cancelled = true
+    }
+  }, [db, isStandaloneApp, load, sharedSyncTargets])
 
   React.useEffect(() => {
     const refreshAccess = () => {
