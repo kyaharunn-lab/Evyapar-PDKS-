@@ -1266,10 +1266,24 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
     return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
   }
   const toIsoDate = (value: string) => {
-    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+    const normalized = normalizeDateText(value)
+    const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
     if (!match) return ""
     const [, day, month, year] = match
     return `${year}-${month}-${day}`
+  }
+  const debugLeaveValidation = (validationErrorReason = "") => {
+    const parsedStartDate = toIsoDate(startDateText)
+    const parsedEndDate = toIsoDate(endDateText)
+    console.info("[mobile-app leave validation debug]", {
+      startDate: startDateText,
+      endDate: endDateText,
+      parsedStartDate,
+      parsedEndDate,
+      startDateValid: isValidIsoDate(parsedStartDate),
+      endDateValid: isValidIsoDate(parsedEndDate),
+      validationErrorReason,
+    })
   }
   const isValidIsoDate = (value: string) => {
     if (!value) return false
@@ -1283,17 +1297,21 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
     const startDate = toIsoDate(startDateText)
     const endDate = toIsoDate(endDateText)
     if (!form.type.trim()) {
+      debugLeaveValidation("leave type is empty")
       setError("Izin turu zorunlu.")
       return
     }
     if (!isValidIsoDate(startDate) || !isValidIsoDate(endDate)) {
+      debugLeaveValidation("invalid dd/mm/yyyy parse or invalid calendar date")
       setError("Tarihleri dd/mm/yyyy formatinda girin.")
       return
     }
     if (endDate < startDate) {
+      debugLeaveValidation("end date is before start date")
       setError("Bitis tarihi baslangictan once olamaz.")
       return
     }
+    debugLeaveValidation("")
     setSaving(true)
     const saved = await onLeaveCreate({ ...form, startDate, endDate })
     setSaving(false)
