@@ -27,6 +27,20 @@ function warnFirestoreDebug(message: string, payload?: Record<string, any>) {
   console.warn(`[Firestore sync debug] ${message}`, payload || {})
 }
 
+function rememberWriteStatus(collectionName: string, status: "success" | "error", payload?: Record<string, any>) {
+  if (typeof window === "undefined" || collectionName !== "personnel") return
+  try {
+    window.localStorage.setItem("app_firestore_debug", JSON.stringify({
+      lastPersonnelWriteStatus: status,
+      lastPersonnelWriteAt: new Date().toISOString(),
+      lastPersonnelWritePath: payload?.documentPath || "",
+      lastPersonnelWriteError: payload?.errorMessage || "",
+    }))
+    window.dispatchEvent(new Event("app-firestore-debug-updated"))
+  } catch {
+  }
+}
+
 export function useFirestoreLocalMirror(db: Firestore | null | undefined, targets: SyncTarget[], onUpdate?: () => void) {
   React.useEffect(() => {
     if (!db || typeof window === "undefined") return
@@ -95,6 +109,9 @@ export async function writeSharedRecord(db: Firestore | null | undefined, collec
         recordId: record ? recordId(record) : "",
       })
     }
+    rememberWriteStatus(collectionName, "error", {
+      errorMessage: !db ? "Firestore db instance yok." : "Record yok.",
+    })
     return false
   }
 
@@ -119,17 +136,20 @@ export async function writeSharedRecord(db: Firestore | null | undefined, collec
         recordId: id,
       })
     }
+    rememberWriteStatus(collectionName, "success", { documentPath: path })
     return true
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     if (shouldDebugCollection(collectionName)) {
       warnFirestoreDebug("write error", {
         collectionPath: collectionName,
         documentPath: path,
         recordId: id,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage,
         code: (error as any)?.code,
       })
     }
+    rememberWriteStatus(collectionName, "error", { documentPath: path, errorMessage })
     console.warn(`Firestore ${collectionName} write failed; localStorage fallback kept.`, error)
     return false
   }

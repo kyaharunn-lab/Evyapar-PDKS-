@@ -35,7 +35,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { collection, doc, limit, onSnapshot, query, setDoc } from "firebase/firestore"
+import { collection, doc, onSnapshot, setDoc } from "firebase/firestore"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -185,6 +185,10 @@ type FirestoreDebugState = {
   firestore: "checking" | "connected" | "error"
   lastWrite: "checking" | "success" | "error"
   lastRead: "checking" | "success" | "error"
+  lastPersonnelWrite: "checking" | "success" | "error"
+  personnelCount: number | null
+  branchesCount: number | null
+  leaveRequestsCount: number | null
   errorMessage: string
 }
 
@@ -202,6 +206,16 @@ function getErrorMessage(error: unknown) {
   if (!error) return ""
   if (error instanceof Error) return error.message
   return String(error)
+}
+
+function readFirestoreDebugCache() {
+  if (typeof window === "undefined") return null
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem("app_firestore_debug") || "null")
+    return parsed && typeof parsed === "object" ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function debugStatusLabel(value: FirestoreDebugState["firestore"] | FirestoreDebugState["lastWrite"] | FirestoreDebugState["lastRead"]) {
@@ -224,6 +238,10 @@ export default function DashboardPage() {
     firestore: "checking",
     lastWrite: "checking",
     lastRead: "checking",
+    lastPersonnelWrite: "checking",
+    personnelCount: null,
+    branchesCount: null,
+    leaveRequestsCount: null,
     errorMessage: "",
   })
   const [data, setData] = React.useState<any>({
@@ -286,12 +304,22 @@ export default function DashboardPage() {
         setFirestoreDebug((current) => ({ ...current, ...patch }))
       }
     }
+    const refreshWriteStatus = () => {
+      const cached = readFirestoreDebugCache()
+      if (cached?.lastPersonnelWriteStatus === "success" || cached?.lastPersonnelWriteStatus === "error") {
+        updateDebug({
+          lastPersonnelWrite: cached.lastPersonnelWriteStatus,
+          ...(cached.lastPersonnelWriteError ? { errorMessage: cached.lastPersonnelWriteError } : {}),
+        })
+      }
+    }
 
     if (!db) {
       updateDebug({
         firestore: "error",
         lastWrite: "error",
         lastRead: "error",
+        lastPersonnelWrite: "error",
         errorMessage: configIssue || "Firestore init basarisiz: db instance yok.",
       })
       return
@@ -310,11 +338,19 @@ export default function DashboardPage() {
       .then(() => updateDebug({ lastWrite: "success" }))
       .catch((error) => updateDebug({ lastWrite: "error", errorMessage: getErrorMessage(error) }))
 
+    refreshWriteStatus()
+    window.addEventListener("app-firestore-debug-updated", refreshWriteStatus)
+
     FIRESTORE_DEBUG_COLLECTIONS.forEach((collectionName) => {
       try {
         const unsubscribe = onSnapshot(
-          query(collection(db, collectionName), limit(1)),
-          () => updateDebug({ lastRead: "success" }),
+          collection(db, collectionName),
+          (snapshot) => updateDebug({
+            lastRead: "success",
+            ...(collectionName === "personnel" ? { personnelCount: snapshot.size } : {}),
+            ...(collectionName === "branches" ? { branchesCount: snapshot.size } : {}),
+            ...(collectionName === "leaveRequests" ? { leaveRequestsCount: snapshot.size } : {}),
+          }),
           (error) => updateDebug({ lastRead: "error", errorMessage: getErrorMessage(error) })
         )
         unsubscribers.push(unsubscribe)
@@ -325,6 +361,7 @@ export default function DashboardPage() {
 
     return () => {
       cancelled = true
+      window.removeEventListener("app-firestore-debug-updated", refreshWriteStatus)
       unsubscribers.forEach((unsubscribe) => unsubscribe())
     }
   }, [db])
@@ -482,6 +519,18 @@ export default function DashboardPage() {
             </div>
             <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold", debugStatusClass(firestoreDebug.lastRead))}>
               Last read: {debugStatusLabel(firestoreDebug.lastRead)}
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
+              Personnel count: {firestoreDebug.personnelCount ?? "-"}
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
+              Branches count: {firestoreDebug.branchesCount ?? "-"}
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
+              LeaveRequests count: {firestoreDebug.leaveRequestsCount ?? "-"}
+            </div>
+            <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold sm:col-span-3", debugStatusClass(firestoreDebug.lastPersonnelWrite))}>
+              Last personnel write status: {debugStatusLabel(firestoreDebug.lastPersonnelWrite)}
             </div>
           </div>
           <div className="min-w-0 lg:max-w-sm">
