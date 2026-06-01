@@ -35,7 +35,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { collection, doc, onSnapshot, setDoc } from "firebase/firestore"
+import { collection, doc, getDocs, onSnapshot, setDoc } from "firebase/firestore"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -193,6 +193,12 @@ type FirestoreDebugState = {
 }
 
 const FIRESTORE_DEBUG_COLLECTIONS = ["branches", "personnel", "leaveRequests"]
+const FIRESTORE_INITIAL_MIGRATION_TARGETS = [
+  { collectionName: "personnel", storageKey: "app_personnel" },
+  { collectionName: "branches", storageKey: "app_branches" },
+  { collectionName: "qrPoints", storageKey: "app_qr_points" },
+  { collectionName: "shifts", storageKey: "app_shifts" },
+]
 
 function getFirebaseConfigIssue() {
   const missing = Object.entries(firebaseConfig)
@@ -216,6 +222,10 @@ function readFirestoreDebugCache() {
   } catch {
     return null
   }
+}
+
+function firestoreRecordId(record: any) {
+  return String(record?.id || record?.uid || record?.code || record?.branchCode || record?.personnelCode || record?.qrCode || `record-${Date.now()}-${Math.random().toString(16).slice(2)}`)
 }
 
 function debugStatusLabel(value: FirestoreDebugState["firestore"] | FirestoreDebugState["lastWrite"] | FirestoreDebugState["lastRead"]) {
@@ -337,6 +347,43 @@ export default function DashboardPage() {
     }, { merge: true })
       .then(() => updateDebug({ lastWrite: "success" }))
       .catch((error) => updateDebug({ lastWrite: "error", errorMessage: getErrorMessage(error) }))
+
+    const runInitialMigration = async () => {
+      for (const target of FIRESTORE_INITIAL_MIGRATION_TARGETS) {
+        try {
+          const snapshot = await getDocs(collection(db, target.collectionName))
+          const localRecords = readArray(target.storageKey)
+          if (snapshot.size > 0 || localRecords.length === 0) {
+            console.info("[Firestore initial migration] skipped", {
+              collectionPath: target.collectionName,
+              firestoreCount: snapshot.size,
+              localCount: localRecords.length,
+            })
+            continue
+          }
+
+          await Promise.all(localRecords.map((record: any) => setDoc(
+            doc(db, target.collectionName, firestoreRecordId(record)),
+            record,
+            { merge: true }
+          )))
+
+          console.info("[Firestore initial migration] migrated", {
+            collectionPath: target.collectionName,
+            migratedCount: localRecords.length,
+          })
+        } catch (error) {
+          updateDebug({ lastWrite: "error", errorMessage: getErrorMessage(error) })
+          console.warn("[Firestore initial migration] failed", {
+            collectionPath: target.collectionName,
+            errorMessage: getErrorMessage(error),
+            code: (error as any)?.code,
+          })
+        }
+      }
+    }
+
+    void runInitialMigration()
 
     refreshWriteStatus()
     window.addEventListener("app-firestore-debug-updated", refreshWriteStatus)
