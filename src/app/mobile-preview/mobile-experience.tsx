@@ -813,7 +813,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     load()
     toast({
       title: firestoreOk ? "Izin talebi kaydedildi" : "Izin talebi yerel kaydedildi",
-      description: firestoreOk ? "Firestore leaveRequests koleksiyonuna yazildi." : "Firestore yazimi basarisiz oldu; localStorage fallback korundu.",
+      description: firestoreOk ? `${form.startDate} - ${form.endDate} Firestore'a yazildi.` : `${form.startDate} - ${form.endDate} localStorage fallback ile kaydedildi.`,
       variant: firestoreOk ? undefined : "destructive",
     })
     return true
@@ -1314,26 +1314,25 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
   const dayOptions = React.useMemo(() => Array.from({ length: 31 }, (_, index) => `${index + 1}`.padStart(2, "0")), [])
   const monthOptions = React.useMemo(() => Array.from({ length: 12 }, (_, index) => `${index + 1}`.padStart(2, "0")), [])
   const yearOptions = React.useMemo(() => Array.from({ length: 4 }, (_, index) => `${currentYear + index}`), [currentYear])
-  const toIsoDate = (day: string, month: string, year: string) => day && month && year ? `${year}-${month}-${day}` : ""
-  const isValidIsoDate = (value: string) => {
-    if (!value) return false
-    const date = new Date(`${value}T00:00:00`)
-    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  const isValidDateParts = (day: string, month: string, year: string) => Boolean(day && month && /^\d{4}$/.test(year))
+  const toIsoDate = (day: string, month: string, year: string) => {
+    if (!isValidDateParts(day, month, year)) return ""
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
   }
   const submit = async (event?: React.FormEvent<HTMLFormElement>) => {
     event?.preventDefault()
     if (saving) return
     setError("")
-    const startDate = toIsoDate(startDay, startMonth, startYear)
-    const endDate = toIsoDate(endDay, endMonth, endYear)
     if (!form.type.trim()) {
       setError("Izin turu zorunlu.")
       return
     }
-    if (!isValidIsoDate(startDate) || !isValidIsoDate(endDate)) {
+    if (!isValidDateParts(startDay, startMonth, startYear) || !isValidDateParts(endDay, endMonth, endYear)) {
       setError("Gun, ay ve yil alanlarini kontrol edin.")
       return
     }
+    const startDate = toIsoDate(startDay, startMonth, startYear)
+    const endDate = toIsoDate(endDay, endMonth, endYear)
     if (endDate < startDate) {
       setError("Bitis tarihi baslangictan once olamaz.")
       return
