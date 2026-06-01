@@ -95,7 +95,7 @@ export async function writeSharedRecord(db: Firestore | null | undefined, collec
         recordId: record ? recordId(record) : "",
       })
     }
-    return
+    return false
   }
 
   const id = recordId(record)
@@ -119,6 +119,7 @@ export async function writeSharedRecord(db: Firestore | null | undefined, collec
         recordId: id,
       })
     }
+    return true
   } catch (error) {
     if (shouldDebugCollection(collectionName)) {
       warnFirestoreDebug("write error", {
@@ -130,6 +131,7 @@ export async function writeSharedRecord(db: Firestore | null | undefined, collec
       })
     }
     console.warn(`Firestore ${collectionName} write failed; localStorage fallback kept.`, error)
+    return false
   }
 }
 

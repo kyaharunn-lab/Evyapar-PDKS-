@@ -737,8 +737,11 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     load()
   }
 
-  const createLeave = (form: any) => {
-    if (!selectedPerson) return
+  const createLeave = async (form: any) => {
+    if (!selectedPerson) {
+      toast({ variant: "destructive", title: "Izin kaydedilemedi", description: "Personel bulunamadi." })
+      return false
+    }
     const record = {
       id: `mobile-leave-${Date.now()}`,
       personnelId: personId,
@@ -749,14 +752,24 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       endDate: form.endDate,
       description: form.description,
       status: "Bekliyor",
-      source: "mobile-preview",
+      source: isStandaloneApp ? "mobile-app" : "mobile-preview",
       createdAt: new Date().toISOString(),
     }
-    writeArray("app_leave_requests", [record, ...readArray("app_leave_requests")])
-    void writeSharedRecord(db, "leaveRequests", record)
+    const previousLeaves = readArray("app_leave_requests")
+    writeArray("app_leave_requests", [record, ...previousLeaves])
+    const firestoreOk = await writeSharedRecord(db, "leaveRequests", record)
+    if (!firestoreOk) {
+      writeArray("app_leave_requests", [record, ...previousLeaves])
+    }
     addAudit("Mobil izin talebi oluşturuldu", `${personName(selectedPerson)} için ${form.type} talebi oluşturuldu.`, "İzin")
     updateSettings({ screen: "İzin" })
     load()
+    toast({
+      title: firestoreOk ? "Izin talebi kaydedildi" : "Izin talebi yerel kaydedildi",
+      description: firestoreOk ? "Firestore leaveRequests koleksiyonuna yazildi." : "Firestore yazimi basarisiz oldu; localStorage fallback korundu.",
+      variant: firestoreOk ? undefined : "destructive",
+    })
+    return true
   }
 
   const handleMobileLogin = React.useCallback((email: string, password: string) => {
@@ -1244,6 +1257,8 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
   const [form, setForm] = React.useState({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
   const [startDateText, setStartDateText] = React.useState("")
   const [endDateText, setEndDateText] = React.useState("")
+  const [error, setError] = React.useState("")
+  const [saving, setSaving] = React.useState(false)
   const normalizeDateText = (value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 8)
     if (digits.length <= 2) return digits
@@ -1256,11 +1271,36 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
     const [, day, month, year] = match
     return `${year}-${month}-${day}`
   }
-  const submit = () => {
+  const isValidIsoDate = (value: string) => {
+    if (!value) return false
+    const date = new Date(`${value}T00:00:00`)
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
+  }
+  const submit = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault()
+    if (saving) return
+    setError("")
     const startDate = toIsoDate(startDateText)
     const endDate = toIsoDate(endDateText)
-    if (!startDate || !endDate) return
-    onLeaveCreate({ ...form, startDate, endDate })
+    if (!form.type.trim()) {
+      setError("Izin turu zorunlu.")
+      return
+    }
+    if (!isValidIsoDate(startDate) || !isValidIsoDate(endDate)) {
+      setError("Tarihleri dd/mm/yyyy formatinda girin.")
+      return
+    }
+    if (endDate < startDate) {
+      setError("Bitis tarihi baslangictan once olamaz.")
+      return
+    }
+    setSaving(true)
+    const saved = await onLeaveCreate({ ...form, startDate, endDate })
+    setSaving(false)
+    if (saved === false) {
+      setError("Kayit sirasinda hata olustu.")
+      return
+    }
     setOpen(false)
     setForm({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
     setStartDateText("")
@@ -1277,15 +1317,16 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">İzin Taleplerim</h3><CalendarClock className="h-5 w-5 text-white/60" /></div>
       <Button data-mobile-action="leave-new" onClick={() => setOpen((value) => !value)} className={cn("mb-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>Yeni izin talebi</Button>
       {open && (
-        <MobileCard className="mb-4 space-y-3">
+        <form onSubmit={submit} className="mb-4 space-y-3 rounded-[26px] border border-white/10 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
           <Input value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
           <div className="grid grid-cols-2 gap-2">
             <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={startDateText} onChange={(e) => setStartDateText(normalizeDateText(e.target.value))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
             <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={endDateText} onChange={(e) => setEndDateText(normalizeDateText(e.target.value))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
           </div>
           <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Açıklama" className="min-h-16 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
-          <Button data-mobile-action="leave-save" onClick={submit} className="h-10 w-full rounded-2xl bg-white text-slate-950 hover:bg-white/90">Kaydet</Button>
-        </MobileCard>
+          {error ? <p className="rounded-2xl border border-red-300/20 bg-red-500/15 px-3 py-2 text-xs font-bold text-red-100">{error}</p> : null}
+          <Button data-mobile-action="leave-save" type="submit" disabled={saving} className="h-10 w-full rounded-2xl bg-white text-slate-950 hover:bg-white/90">{saving ? "Kaydediliyor..." : "Kaydet"}</Button>
+        </form>
       )}
       <ListItems items={items} empty="İzin talebi bulunamadı." />
     </div>
