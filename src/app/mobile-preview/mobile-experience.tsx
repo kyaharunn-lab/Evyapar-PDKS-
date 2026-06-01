@@ -1255,36 +1255,19 @@ function ShiftScreen({ shifts, branch, palette }: any) {
 function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
   const [open, setOpen] = React.useState(false)
   const [form, setForm] = React.useState({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
-  const [startDateText, setStartDateText] = React.useState("")
-  const [endDateText, setEndDateText] = React.useState("")
+  const [startDay, setStartDay] = React.useState("")
+  const [startMonth, setStartMonth] = React.useState("")
+  const [startYear, setStartYear] = React.useState("")
+  const [endDay, setEndDay] = React.useState("")
+  const [endMonth, setEndMonth] = React.useState("")
+  const [endYear, setEndYear] = React.useState("")
   const [error, setError] = React.useState("")
   const [saving, setSaving] = React.useState(false)
-  const normalizeDateText = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 8)
-    if (digits.length <= 2) return digits
-    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
-    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
-  }
-  const toIsoDate = (value: string) => {
-    const normalized = normalizeDateText(value)
-    const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
-    if (!match) return ""
-    const [, day, month, year] = match
-    return `${year}-${month}-${day}`
-  }
-  const debugLeaveValidation = (validationErrorReason = "") => {
-    const parsedStartDate = toIsoDate(startDateText)
-    const parsedEndDate = toIsoDate(endDateText)
-    console.info("[mobile-app leave validation debug]", {
-      startDate: startDateText,
-      endDate: endDateText,
-      parsedStartDate,
-      parsedEndDate,
-      startDateValid: isValidIsoDate(parsedStartDate),
-      endDateValid: isValidIsoDate(parsedEndDate),
-      validationErrorReason,
-    })
-  }
+  const currentYear = new Date().getFullYear()
+  const dayOptions = React.useMemo(() => Array.from({ length: 31 }, (_, index) => `${index + 1}`.padStart(2, "0")), [])
+  const monthOptions = React.useMemo(() => Array.from({ length: 12 }, (_, index) => `${index + 1}`.padStart(2, "0")), [])
+  const yearOptions = React.useMemo(() => Array.from({ length: 4 }, (_, index) => `${currentYear + index}`), [currentYear])
+  const toIsoDate = (day: string, month: string, year: string) => day && month && year ? `${year}-${month}-${day}` : ""
   const isValidIsoDate = (value: string) => {
     if (!value) return false
     const date = new Date(`${value}T00:00:00`)
@@ -1294,24 +1277,20 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
     event?.preventDefault()
     if (saving) return
     setError("")
-    const startDate = toIsoDate(startDateText)
-    const endDate = toIsoDate(endDateText)
+    const startDate = toIsoDate(startDay, startMonth, startYear)
+    const endDate = toIsoDate(endDay, endMonth, endYear)
     if (!form.type.trim()) {
-      debugLeaveValidation("leave type is empty")
       setError("Izin turu zorunlu.")
       return
     }
     if (!isValidIsoDate(startDate) || !isValidIsoDate(endDate)) {
-      debugLeaveValidation("invalid dd/mm/yyyy parse or invalid calendar date")
-      setError("Tarihleri dd/mm/yyyy formatinda girin.")
+      setError("Gun, ay ve yil alanlarini kontrol edin.")
       return
     }
     if (endDate < startDate) {
-      debugLeaveValidation("end date is before start date")
       setError("Bitis tarihi baslangictan once olamaz.")
       return
     }
-    debugLeaveValidation("")
     setSaving(true)
     const saved = await onLeaveCreate({ ...form, startDate, endDate })
     setSaving(false)
@@ -1321,8 +1300,12 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
     }
     setOpen(false)
     setForm({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
-    setStartDateText("")
-    setEndDateText("")
+    setStartDay("")
+    setStartMonth("")
+    setStartYear("")
+    setEndDay("")
+    setEndMonth("")
+    setEndYear("")
   }
   const items = leaves.slice(0, 8).map((leave: any) => ({
     title: leave.type || leave.leaveType || "İzin",
@@ -1337,9 +1320,21 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
       {open && (
         <form onSubmit={submit} className="mb-4 space-y-3 rounded-[26px] border border-white/10 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
           <Input value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
-          <div className="grid grid-cols-2 gap-2">
-            <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={startDateText} onChange={(e) => setStartDateText(normalizeDateText(e.target.value))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
-            <Input inputMode="numeric" placeholder="dd/mm/yyyy" value={endDateText} onChange={(e) => setEndDateText(normalizeDateText(e.target.value))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white" />
+          <div className="space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-white/45">Baslangic tarihi</p>
+            <div className="grid grid-cols-3 gap-2">
+              <select value={startDay} onChange={(e) => setStartDay(e.target.value)} className="h-10 rounded-2xl border border-white/10 bg-white/10 px-2 text-xs font-bold text-white"><option value="">Gun</option>{dayOptions.map((day) => <option key={day} value={day}>{day}</option>)}</select>
+              <select value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="h-10 rounded-2xl border border-white/10 bg-white/10 px-2 text-xs font-bold text-white"><option value="">Ay</option>{monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}</select>
+              <select value={startYear} onChange={(e) => setStartYear(e.target.value)} className="h-10 rounded-2xl border border-white/10 bg-white/10 px-2 text-xs font-bold text-white"><option value="">Yil</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-white/45">Bitis tarihi</p>
+            <div className="grid grid-cols-3 gap-2">
+              <select value={endDay} onChange={(e) => setEndDay(e.target.value)} className="h-10 rounded-2xl border border-white/10 bg-white/10 px-2 text-xs font-bold text-white"><option value="">Gun</option>{dayOptions.map((day) => <option key={day} value={day}>{day}</option>)}</select>
+              <select value={endMonth} onChange={(e) => setEndMonth(e.target.value)} className="h-10 rounded-2xl border border-white/10 bg-white/10 px-2 text-xs font-bold text-white"><option value="">Ay</option>{monthOptions.map((month) => <option key={month} value={month}>{month}</option>)}</select>
+              <select value={endYear} onChange={(e) => setEndYear(e.target.value)} className="h-10 rounded-2xl border border-white/10 bg-white/10 px-2 text-xs font-bold text-white"><option value="">Yil</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select>
+            </div>
           </div>
           <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Açıklama" className="min-h-16 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
           {error ? <p className="rounded-2xl border border-red-300/20 bg-red-500/15 px-3 py-2 text-xs font-bold text-red-100">{error}</p> : null}
