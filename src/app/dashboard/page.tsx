@@ -189,6 +189,10 @@ type FirestoreDebugState = {
   personnelCount: number | null
   branchesCount: number | null
   leaveRequestsCount: number | null
+  localPersonnelCount: number | null
+  localBranchesCount: number | null
+  migrationStatus: "idle" | "running" | "migrated" | "skipped" | "error"
+  migrationError: string
   errorMessage: string
 }
 
@@ -252,6 +256,10 @@ export default function DashboardPage() {
     personnelCount: null,
     branchesCount: null,
     leaveRequestsCount: null,
+    localPersonnelCount: null,
+    localBranchesCount: null,
+    migrationStatus: "idle",
+    migrationError: "",
     errorMessage: "",
   })
   const [data, setData] = React.useState<any>({
@@ -338,6 +346,8 @@ export default function DashboardPage() {
     updateDebug({
       firestore: configIssue ? "error" : "connected",
       errorMessage: configIssue,
+      localPersonnelCount: readArray("app_personnel").length,
+      localBranchesCount: readArray("app_branches").length,
     })
 
     setDoc(doc(db, "__sync_debug", "admin-panel"), {
@@ -349,11 +359,28 @@ export default function DashboardPage() {
       .catch((error) => updateDebug({ lastWrite: "error", errorMessage: getErrorMessage(error) }))
 
     const runInitialMigration = async () => {
+      updateDebug({
+        migrationStatus: "running",
+        migrationError: "",
+        localPersonnelCount: readArray("app_personnel").length,
+        localBranchesCount: readArray("app_branches").length,
+      })
+      let migratedTotal = 0
+      let skippedTotal = 0
+      let failed = false
+
       for (const target of FIRESTORE_INITIAL_MIGRATION_TARGETS) {
         try {
           const snapshot = await getDocs(collection(db, target.collectionName))
           const localRecords = readArray(target.storageKey)
+          console.info("[Firestore initial migration] local count", {
+            collectionPath: target.collectionName,
+            storageKey: target.storageKey,
+            firestoreCount: snapshot.size,
+            localCount: localRecords.length,
+          })
           if (snapshot.size > 0 || localRecords.length === 0) {
+            skippedTotal += 1
             console.info("[Firestore initial migration] skipped", {
               collectionPath: target.collectionName,
               firestoreCount: snapshot.size,
@@ -367,13 +394,20 @@ export default function DashboardPage() {
             record,
             { merge: true }
           )))
+          migratedTotal += localRecords.length
 
           console.info("[Firestore initial migration] migrated", {
             collectionPath: target.collectionName,
             migratedCount: localRecords.length,
           })
         } catch (error) {
-          updateDebug({ lastWrite: "error", errorMessage: getErrorMessage(error) })
+          failed = true
+          updateDebug({
+            lastWrite: "error",
+            migrationStatus: "error",
+            migrationError: getErrorMessage(error),
+            errorMessage: getErrorMessage(error),
+          })
           console.warn("[Firestore initial migration] failed", {
             collectionPath: target.collectionName,
             errorMessage: getErrorMessage(error),
@@ -381,6 +415,11 @@ export default function DashboardPage() {
           })
         }
       }
+
+      updateDebug({
+        migrationStatus: failed ? "error" : migratedTotal > 0 ? "migrated" : skippedTotal > 0 ? "skipped" : "idle",
+        ...(failed ? {} : { migrationError: "" }),
+      })
     }
 
     void runInitialMigration()
@@ -568,13 +607,25 @@ export default function DashboardPage() {
               Last read: {debugStatusLabel(firestoreDebug.lastRead)}
             </div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
-              Personnel count: {firestoreDebug.personnelCount ?? "-"}
+              Local personnel count: {firestoreDebug.localPersonnelCount ?? "-"}
             </div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
-              Branches count: {firestoreDebug.branchesCount ?? "-"}
+              Local branches count: {firestoreDebug.localBranchesCount ?? "-"}
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
+              Firestore personnel count: {firestoreDebug.personnelCount ?? "-"}
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
+              Firestore branches count: {firestoreDebug.branchesCount ?? "-"}
             </div>
             <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
               LeaveRequests count: {firestoreDebug.leaveRequestsCount ?? "-"}
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-extrabold text-slate-600">
+              Migration status: {firestoreDebug.migrationStatus}
+            </div>
+            <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold sm:col-span-3", firestoreDebug.migrationStatus === "error" ? "bg-red-50 text-red-700 border-red-100" : "bg-slate-50 text-slate-600 border-slate-100")}>
+              Migration error: {firestoreDebug.migrationError || "-"}
             </div>
             <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold sm:col-span-3", debugStatusClass(firestoreDebug.lastPersonnelWrite))}>
               Last personnel write status: {debugStatusLabel(firestoreDebug.lastPersonnelWrite)}
