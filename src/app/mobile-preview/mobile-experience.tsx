@@ -120,6 +120,20 @@ function qrValueMatchesPoint(qrCode: string, point: any) {
   return Boolean(value && value === qrCode)
 }
 
+function normalizeQrType(point: any) {
+  return (point?.type || point?.qrType || point?.kind || "Genel").toString().toLocaleLowerCase("tr-TR")
+}
+
+function isQrEntryOnly(point: any) {
+  const type = normalizeQrType(point)
+  return (type.includes("giriş") || type.includes("giris")) && !(type.includes("çıkış") || type.includes("cikis") || type.includes("genel"))
+}
+
+function isQrExitOnly(point: any) {
+  const type = normalizeQrType(point)
+  return (type.includes("çıkış") || type.includes("cikis")) && !(type.includes("giriş") || type.includes("giris") || type.includes("genel"))
+}
+
 function personName(person: any) {
   return (person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || person?.displayName || "Personel").toString()
 }
@@ -750,6 +764,26 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       toast({ variant: "destructive", title: "QR doğrulanamadı", description: "Yanlış şube QR kodu." })
       return
     }
+    const liveRecords = readArray(LIVE_PRESENCE_KEY)
+    const inside = liveRecords.some((item: any) => matchesPerson(item, personId))
+    if (isQrEntryOnly(activeBranchPoint)) {
+      if (inside) {
+        toast({ variant: "destructive", title: "QR işlemi durduruldu", description: "Personel zaten içeride." })
+        return
+      }
+      handleAttendance("Giriş")
+      return
+    }
+    if (isQrExitOnly(activeBranchPoint)) {
+      if (!inside) {
+        toast({ variant: "destructive", title: "QR işlemi durduruldu", description: "Personel zaten dışarıda." })
+        return
+      }
+      handleAttendance("Çıkış")
+      return
+    }
+    handleAttendance(inside ? "Çıkış" : "Giriş")
+    return
     const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
     const success = Boolean(activePoint && selectedPerson)
     if (success) {
