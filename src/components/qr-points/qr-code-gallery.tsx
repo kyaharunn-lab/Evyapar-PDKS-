@@ -45,15 +45,27 @@ function qrPayload(point: any, branch: any) {
   return point?.qrCode || JSON.stringify(payload)
 }
 
-function qrImageUrl(value: string, size = 220) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=12&data=${encodeURIComponent(value)}`
+function qrImageUrl(value: string, size = 360) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=18&ecc=M&data=${encodeURIComponent(value)}`
 }
 
 function downloadQrImage(image: string, filename: string) {
-  const link = document.createElement("a")
-  link.href = image
-  link.download = filename
-  link.click()
+  fetch(image)
+    .then((response) => response.blob())
+    .then((blob) => {
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
+    })
+    .catch(() => {
+      const link = document.createElement("a")
+      link.href = image
+      link.download = filename
+      link.click()
+    })
 }
 
 function printQrDocument(items: Array<{ name: string; branch: string; type: string; image: string; value: string }>) {
@@ -62,14 +74,33 @@ function printQrDocument(items: Array<{ name: string; branch: string; type: stri
   if (!win) return
   win.document.write(`
     <html>
-      <head><title>QR Kodlari</title></head>
-      <body style="font-family: Arial, sans-serif; padding: 24px;">
+      <head>
+        <title>EVYAPAR PDKS QR</title>
+        <style>
+          @page { size: A4; margin: 18mm; }
+          * { box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; margin: 0; color: #0f172a; background: white; }
+          .sheet { min-height: 260mm; display: grid; place-items: center; page-break-after: always; }
+          .card { width: 160mm; min-height: 220mm; border: 2px solid #e2e8f0; border-radius: 24px; padding: 24mm 18mm; text-align: center; }
+          .brand { font-size: 28px; font-weight: 900; letter-spacing: 1px; margin-bottom: 12mm; }
+          .branch { font-size: 22px; font-weight: 800; margin: 0 0 4mm; }
+          .type { display: inline-block; padding: 8px 16px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-weight: 800; margin-bottom: 12mm; }
+          .qr { width: 92mm; height: 92mm; margin: 0 auto 14mm; image-rendering: crisp-edges; }
+          .hint { font-size: 18px; font-weight: 800; margin-bottom: 10mm; }
+          .value { white-space: pre-wrap; word-break: break-word; text-align: left; font-size: 10px; line-height: 1.45; background: #f8fafc; border-radius: 14px; padding: 12px; color: #334155; }
+        </style>
+      </head>
+      <body>
         ${items.map((item) => `
-          <section style="page-break-inside: avoid; text-align: center; margin-bottom: 32px;">
-            <h2 style="margin: 0 0 6px;">${item.name}</h2>
-            <p style="margin: 0 0 16px;">${item.branch} - ${item.type}</p>
-            <img src="${item.image}" style="width: 260px; height: 260px;" />
-            <pre style="white-space: pre-wrap; word-break: break-word; text-align: left; margin-top: 18px; padding: 12px; background: #f1f5f9; border-radius: 12px;">${item.value}</pre>
+          <section class="sheet">
+            <div class="card">
+              <div class="brand">EVYAPAR PDKS</div>
+              <h1 class="branch">${item.branch}</h1>
+              <div class="type">${item.type}</div>
+              <img class="qr" src="${item.image}" />
+              <div class="hint">Personel giriş/çıkış için okutunuz</div>
+              <pre class="value">${item.value}</pre>
+            </div>
           </section>
         `).join("")}
         <script>window.onload = () => window.print()</script>
@@ -81,7 +112,7 @@ function printQrDocument(items: Array<{ name: string; branch: string; type: stri
 
 function QrDetailModal({ point, branch, onClose }: { point: any; branch: any; onClose: () => void }) {
   const value = qrPayload(point, branch)
-  const image = qrImageUrl(value, 320)
+  const image = qrImageUrl(value, 480)
   const name = (point?.name || point?.title || point?.qrPointName || "QR Noktasi").toString()
   const type = qrType(point)
   const active = isActive(point)
