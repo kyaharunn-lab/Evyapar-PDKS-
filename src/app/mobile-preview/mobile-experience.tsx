@@ -977,6 +977,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       isPersonInside={isPersonInside}
       notificationSettings={data.notificationSettings}
       company={data.companySettings}
+      isStandaloneApp={isStandaloneApp}
       setScreen={(screen: string) => updateSettings({ screen })}
       onAttendance={handleAttendance}
       onQr={handleQrSimulation}
@@ -1021,6 +1022,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             isPersonInside={isPersonInside}
             notificationSettings={data.notificationSettings}
             company={data.companySettings}
+            isStandaloneApp={isStandaloneApp}
             setScreen={(screen: string) => updateSettings({ screen })}
             onAttendance={handleAttendance}
             onQr={handleQrSimulation}
@@ -1091,6 +1093,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
                 isPersonInside={isPersonInside}
                 notificationSettings={data.notificationSettings}
                 company={data.companySettings}
+                isStandaloneApp={isStandaloneApp}
                 setScreen={(screen: string) => updateSettings({ screen })}
                 onAttendance={handleAttendance}
                 onQr={handleQrSimulation}
@@ -1238,13 +1241,17 @@ function MobileAppShell(props: any) {
   const palette = getTheme(settings.theme)
   const isAndroid = settings.device === "Android"
 
+  const setMobileScreen = React.useCallback((screen: string) => {
+    props.setScreen(screen === "Giriş" || screen === "GPS" ? "QR" : screen)
+  }, [props.setScreen])
+
   return (
     <div className={cn("flex h-dvh min-h-dvh w-full flex-col overflow-hidden", palette.shell)}>
       <MobileStatusBar isAndroid={isAndroid} />
       <div data-mobile-app-scroll className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2 transition-all duration-300">
-        <MobileScreen {...props} palette={palette} />
+        <MobileScreen {...props} palette={palette} setScreen={setMobileScreen} />
       </div>
-      <BottomNav palette={palette} active={settings.screen} setScreen={props.setScreen} />
+      <BottomNav palette={palette} active={settings.screen} setScreen={setMobileScreen} />
     </div>
   )
 }
@@ -1266,6 +1273,11 @@ function MobileStatusBar({ isAndroid }: { isAndroid: boolean }) {
 }
 
 function MobileScreen(props: any) {
+  React.useEffect(() => {
+    if (props.isStandaloneApp && (props.settings.screen === "Giriş" || props.settings.screen === "GPS")) {
+      props.setScreen("QR")
+    }
+  }, [props.isStandaloneApp, props.settings.screen, props.setScreen])
   const map: Record<string, React.ReactNode> = {
     Ana: <HomeScreen {...props} />,
     "Giriş": <CheckScreen {...props} />,
