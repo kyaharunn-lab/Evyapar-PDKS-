@@ -134,6 +134,22 @@ function isQrExitOnly(point: any) {
   return (type.includes("çıkış") || type.includes("cikis")) && !(type.includes("giriş") || type.includes("giris") || type.includes("genel"))
 }
 
+function vibrate(pattern: number | number[] = 80) {
+  try {
+    navigator.vibrate?.(pattern)
+  } catch {
+  }
+}
+
+function formatWorkDuration(record: any) {
+  const start = new Date(record?.checkInTime || record?.entryTime || record?.createdAt || Date.now()).getTime()
+  const diff = Math.max(0, Date.now() - (Number.isNaN(start) ? Date.now() : start))
+  const minutes = Math.max(1, Math.round(diff / 60000))
+  const hours = Math.floor(minutes / 60)
+  const remaining = minutes % 60
+  return hours ? `${hours} saat ${remaining} dk` : `${remaining} dk`
+}
+
 function personName(person: any) {
   return (person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || person?.displayName || "Personel").toString()
 }
@@ -755,33 +771,57 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   const handleQrSimulation = (scannedPoint?: any) => {
     const activeBranchPoint = branchQrPoints.find((point: any) => isActiveQrPoint(point) && qrPointMatchesBranch(point, selectedBranch))
     if (!activeBranchPoint) {
+      vibrate([80, 40, 80])
       toast({ variant: "destructive", title: "QR doğrulanamadı", description: scannedPoint ? "Yanlış şube QR kodu." : "Bu şubeye ait aktif QR noktası yok." })
       return
     }
     const scannedCode = (scannedPoint?.qrCode || scannedPoint?.code || scannedPoint?.id || "").toString()
     const activeCode = (activeBranchPoint?.qrCode || activeBranchPoint?.code || activeBranchPoint?.id || "").toString()
     if (scannedPoint && scannedCode && activeCode && !qrValueMatchesPoint(scannedCode, activeBranchPoint)) {
+      vibrate([80, 40, 80])
       toast({ variant: "destructive", title: "QR doğrulanamadı", description: "Yanlış şube QR kodu." })
       return
     }
     const liveRecords = readArray(LIVE_PRESENCE_KEY)
     const inside = liveRecords.some((item: any) => matchesPerson(item, personId))
+    const openAttendance = readArray(ATTENDANCE_RECORDS_KEY).find((item: any) => matchesPerson(item, personId) && item?.status === "inside" && !item?.checkOutTime)
+    const showEntrySuccess = () => {
+      vibrate(90)
+      toast({
+        title: "Giriş Başarılı",
+        description: `${personName(selectedPerson)} • ${selectedBranch ? branchName(selectedBranch) : "Şube"} • Giriş saati: ${new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`,
+        duration: 3000,
+      })
+    }
+    const showExitSuccess = () => {
+      vibrate([70, 35, 70])
+      toast({
+        title: "Çıkış Başarılı",
+        description: `${personName(selectedPerson)} • ${selectedBranch ? branchName(selectedBranch) : "Şube"} • Çalışma süresi: ${formatWorkDuration(openAttendance)}`,
+        duration: 3000,
+      })
+    }
     if (isQrEntryOnly(activeBranchPoint)) {
       if (inside) {
+        vibrate([80, 40, 80])
         toast({ variant: "destructive", title: "QR işlemi durduruldu", description: "Personel zaten içeride." })
         return
       }
+      showEntrySuccess()
       handleAttendance("Giriş")
       return
     }
     if (isQrExitOnly(activeBranchPoint)) {
       if (!inside) {
+        vibrate([80, 40, 80])
         toast({ variant: "destructive", title: "QR işlemi durduruldu", description: "Personel zaten dışarıda." })
         return
       }
+      showExitSuccess()
       handleAttendance("Çıkış")
       return
     }
+    inside ? showExitSuccess() : showEntrySuccess()
     handleAttendance(inside ? "Çıkış" : "Giriş")
     return
     const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
