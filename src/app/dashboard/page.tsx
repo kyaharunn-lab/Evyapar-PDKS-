@@ -194,10 +194,12 @@ type FirestoreDebugState = {
   localBranchesCount: number | null
   migrationStatus: "idle" | "running" | "migrated" | "skipped" | "error"
   migrationError: string
+  collectionStatus: Record<string, "checking" | "exists" | "missing" | "error">
   errorMessage: string
 }
 
 const FIRESTORE_DEBUG_COLLECTIONS = ["branches", "personnel", "leaveRequests"]
+const FIRESTORE_AUDIT_COLLECTIONS = ["personnel", "branches", "shifts", "attendance", "livePresence"]
 const FIRESTORE_INITIAL_MIGRATION_TARGETS = [
   { collectionName: "personnel", storageKey: "app_personnel" },
   { collectionName: "branches", storageKey: "app_branches" },
@@ -261,6 +263,13 @@ export default function DashboardPage() {
     localBranchesCount: null,
     migrationStatus: "idle",
     migrationError: "",
+    collectionStatus: {
+      personnel: "checking",
+      branches: "checking",
+      shifts: "checking",
+      attendance: "checking",
+      livePresence: "checking",
+    },
     errorMessage: "",
   })
   const [data, setData] = React.useState<any>({
@@ -325,9 +334,15 @@ export default function DashboardPage() {
     const unsubscribers: Array<() => void> = []
     const configIssue = getFirebaseConfigIssue()
 
-    const updateDebug = (patch: Partial<FirestoreDebugState>) => {
+    const updateDebug = (patch: Partial<Omit<FirestoreDebugState, "collectionStatus">> & { collectionStatus?: Partial<FirestoreDebugState["collectionStatus"]> }) => {
       if (!cancelled) {
-        setFirestoreDebug((current) => ({ ...current, ...patch }))
+        setFirestoreDebug((current) => ({
+          ...current,
+          ...patch,
+          collectionStatus: patch.collectionStatus
+            ? { ...current.collectionStatus, ...patch.collectionStatus }
+            : current.collectionStatus,
+        }))
       }
     }
     const refreshWriteStatus = () => {
@@ -435,7 +450,7 @@ export default function DashboardPage() {
     refreshWriteStatus()
     window.addEventListener("app-firestore-debug-updated", refreshWriteStatus)
 
-    FIRESTORE_DEBUG_COLLECTIONS.forEach((collectionName) => {
+    Array.from(new Set([...FIRESTORE_DEBUG_COLLECTIONS, ...FIRESTORE_AUDIT_COLLECTIONS])).forEach((collectionName) => {
       try {
         const unsubscribe = onSnapshot(
           collection(db, collectionName),
@@ -444,8 +459,21 @@ export default function DashboardPage() {
             ...(collectionName === "personnel" ? { personnelCount: snapshot.size } : {}),
             ...(collectionName === "branches" ? { branchesCount: snapshot.size } : {}),
             ...(collectionName === "leaveRequests" ? { leaveRequestsCount: snapshot.size } : {}),
+            ...(FIRESTORE_AUDIT_COLLECTIONS.includes(collectionName) ? {
+              collectionStatus: {
+                [collectionName]: snapshot.size > 0 ? "exists" : "missing",
+              },
+            } : {}),
           }),
-          (error) => updateDebug({ lastRead: "error", errorMessage: getErrorMessage(error) })
+          (error) => updateDebug({
+            lastRead: "error",
+            errorMessage: getErrorMessage(error),
+            ...(FIRESTORE_AUDIT_COLLECTIONS.includes(collectionName) ? {
+              collectionStatus: {
+                [collectionName]: "error",
+              },
+            } : {}),
+          })
         )
         unsubscribers.push(unsubscribe)
       } catch (error) {
@@ -635,6 +663,20 @@ export default function DashboardPage() {
             <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold sm:col-span-3", firestoreDebug.migrationStatus === "error" ? "bg-red-50 text-red-700 border-red-100" : "bg-slate-50 text-slate-600 border-slate-100")}>
               Migration error: {firestoreDebug.migrationError || "-"}
             </div>
+            {FIRESTORE_AUDIT_COLLECTIONS.map((collectionName) => {
+              const status = firestoreDebug.collectionStatus[collectionName] || "checking"
+              return (
+                <div
+                  key={collectionName}
+                  className={cn(
+                    "rounded-2xl border px-3 py-2 text-xs font-extrabold",
+                    status === "exists" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : status === "error" ? "bg-red-50 text-red-700 border-red-100" : status === "missing" ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-slate-50 text-slate-600 border-slate-100"
+                  )}
+                >
+                  {collectionName}: {status}
+                </div>
+              )
+            })}
             <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold sm:col-span-3", debugStatusClass(firestoreDebug.lastPersonnelWrite))}>
               Last personnel write status: {debugStatusLabel(firestoreDebug.lastPersonnelWrite)}
             </div>
