@@ -160,7 +160,7 @@ function dateKeyFromValue(value: any) {
   return date.toISOString().slice(0, 10)
 }
 
-function timeToMinutes(value: any) {
+function lateTimeToMinutes(value: any) {
   const text = (value || "").toString().slice(0, 5)
   const [hour, minute] = text.split(":").map(Number)
   if (Number.isNaN(hour) || Number.isNaN(minute)) return null
@@ -203,8 +203,8 @@ function enrichAttendanceLateData(record: any, shifts: any[]) {
   if (record?.checkOutTime || record?.status === "outside") return record
   const shift = findTodayShiftForAttendance(record, shifts)
   if (!shift) return record
-  const entryMinutes = timeToMinutes(attendanceEntryTime(record))
-  const shiftMinutes = timeToMinutes(shift?.startTime || shift?.entryTime)
+  const entryMinutes = lateTimeToMinutes(attendanceEntryTime(record))
+  const shiftMinutes = lateTimeToMinutes(shift?.startTime || shift?.entryTime)
   if (entryMinutes === null || shiftMinutes === null) return record
   const lateMinutes = Math.max(0, entryMinutes - shiftMinutes - LATE_TOLERANCE_MINUTES)
   return {
