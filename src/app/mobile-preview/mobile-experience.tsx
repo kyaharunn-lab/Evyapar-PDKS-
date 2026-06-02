@@ -91,6 +91,35 @@ function isActiveQrPoint(point: any) {
   return point?.active === true || isActive(point?.status)
 }
 
+function parseQrPayload(value: string) {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === "object" ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function qrValueMatchesPoint(qrCode: string, point: any) {
+  const payload = parseQrPayload(qrCode)
+  if (payload) {
+    const payloadBranchId = (payload.branchId || "").toString()
+    const payloadPointId = (payload.qrPointId || payload.id || "").toString()
+    const payloadType = (payload.type || "").toString().toLowerCase()
+    const pointId = getId(point)
+    const pointBranchId = (point?.branchId || point?.branchCode || point?.locationId || "").toString()
+    const pointType = (point?.type || "").toString().toLowerCase()
+    return Boolean(
+      payloadPointId &&
+      payloadPointId === pointId &&
+      (!payloadBranchId || payloadBranchId === pointBranchId) &&
+      (!payloadType || !pointType || payloadType === pointType)
+    )
+  }
+  const value = (point?.qrCode || point?.code || point?.id || "").toString()
+  return Boolean(value && value === qrCode)
+}
+
 function personName(person: any) {
   return (person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || person?.displayName || "Personel").toString()
 }
@@ -717,7 +746,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     }
     const scannedCode = (scannedPoint?.qrCode || scannedPoint?.code || scannedPoint?.id || "").toString()
     const activeCode = (activeBranchPoint?.qrCode || activeBranchPoint?.code || activeBranchPoint?.id || "").toString()
-    if (scannedPoint && scannedCode && activeCode && scannedCode !== activeCode) {
+    if (scannedPoint && scannedCode && activeCode && !qrValueMatchesPoint(scannedCode, activeBranchPoint)) {
       toast({ variant: "destructive", title: "QR doğrulanamadı", description: "Yanlış şube QR kodu." })
       return
     }
@@ -1318,10 +1347,7 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
     setScanning(false)
   }, [])
   const handleScannedCode = React.useCallback((qrCode: string) => {
-    const scannedPoint = qrPoints.find((point: any) => {
-      const value = (point?.qrCode || point?.code || point?.id || "").toString()
-      return value && value === qrCode
-    })
+    const scannedPoint = qrPoints.find((point: any) => qrValueMatchesPoint(qrCode, point))
     stopScanner()
     onQr(scannedPoint || { qrCode })
   }, [onQr, qrPoints, stopScanner])
