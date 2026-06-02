@@ -167,10 +167,6 @@ function lateTimeToMinutes(value: any) {
   return hour * 60 + minute
 }
 
-function attendancePersonId(record: any) {
-  return (record?.personnelId || record?.personId || record?.personelId || record?.employeeId || "").toString()
-}
-
 function attendanceEntryTime(record: any) {
   const value = record?.checkInTime || record?.entryTime || record?.time || record?.createdAt
   if (!value) return ""
