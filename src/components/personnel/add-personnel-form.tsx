@@ -92,6 +92,16 @@ const personnelSchema = z.object({
 
 type PersonnelFormValues = z.infer<typeof personnelSchema>
 
+async function syncAllPersonnelToFirestore(db: any, personnel: any[]) {
+  console.log("personnel sync start", personnel.length)
+  try {
+    await Promise.all(personnel.map((person) => writeSharedRecord(db, "personnel", person)))
+    console.log("personnel sync success")
+  } catch (error) {
+    console.error("personnel sync failed", error)
+  }
+}
+
 interface AddPersonnelFormProps {
   onSuccess: () => void
   onCancel: () => void
@@ -329,6 +339,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
           updatedAt: createdAt,
         }
         localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify([accessRecord, ...accessList]))
+        await syncAllPersonnelToFirestore(db, next)
         const firestoreOk = await writeSharedRecord(db, "personnel", newPersonnel)
         console.info("[Firestore personnel write]", {
           collectionPath: "personnel",

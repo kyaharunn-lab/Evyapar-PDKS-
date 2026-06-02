@@ -69,6 +69,16 @@ import {
 const t = translations.common;
 const p = translations.personnel;
 
+async function syncAllPersonnelToFirestore(db: any, personnel: any[]) {
+  console.log("personnel sync start", personnel.length)
+  try {
+    await Promise.all(personnel.map((person) => writeSharedRecord(db, "personnel", person)))
+    console.log("personnel sync success")
+  } catch (error) {
+    console.error("personnel sync failed", error)
+  }
+}
+
 export default function PersonnelPage() {
   const { toast } = useToast()
   const db = useFirestore()
@@ -106,6 +116,7 @@ export default function PersonnelPage() {
       const parsedPrevious = rawPrevious ? JSON.parse(rawPrevious) : []
       const previous = Array.isArray(parsedPrevious) ? parsedPrevious : []
       localStorage.setItem(PERSONNEL_STORAGE_KEY, JSON.stringify(next))
+      void syncAllPersonnelToFirestore(db, next)
       const nextIds = new Set(next.map((person) => (person?.id || "").toString()).filter(Boolean))
       previous.forEach((person) => {
         const id = (person?.id || "").toString()
