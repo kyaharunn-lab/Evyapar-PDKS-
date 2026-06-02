@@ -329,7 +329,19 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
           updatedAt: createdAt,
         }
         localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify([accessRecord, ...accessList]))
-        void writeSharedRecord(db, "personnel", newPersonnel)
+        const firestoreOk = await writeSharedRecord(db, "personnel", newPersonnel)
+        console.info("[Firestore personnel write]", {
+          collectionPath: "personnel",
+          recordId: newPersonnel.id,
+          status: firestoreOk ? "success" : "error",
+        })
+        if (!firestoreOk) {
+          toast({
+            variant: "destructive",
+            title: "Firestore personel yazımı başarısız",
+            description: "Personel localStorage'a kaydedildi; Firestore personnel koleksiyonuna yazılamadı.",
+          })
+        }
         window.dispatchEvent(new Event("app-access-updated"))
       } catch {
         // allow flow to continue even if storage is blocked

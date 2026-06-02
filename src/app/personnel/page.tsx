@@ -55,7 +55,7 @@ import { AddPersonnelForm } from "@/components/personnel/add-personnel-form"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase"
 import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
-import { deleteSharedRecord, writeSharedRecord } from "@/lib/shared-data-sync"
+import { writeSharedRecord } from "@/lib/shared-data-sync"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -140,7 +140,20 @@ export default function PersonnelPage() {
   }, [])
 
   const upsertEmployee = React.useCallback((updated: any) => {
-    void writeSharedRecord(db, "personnel", updated)
+    void writeSharedRecord(db, "personnel", updated).then((ok) => {
+      console.info("[Firestore personnel write]", {
+        collectionPath: "personnel",
+        recordId: updated?.id,
+        status: ok ? "success" : "error",
+      })
+      if (!ok) {
+        toast({
+          variant: "destructive",
+          title: "Firestore personel yazımı başarısız",
+          description: "Personel localStorage'a kaydedildi; Firestore personnel koleksiyonuna yazılamadı.",
+        })
+      }
+    })
     setEmployees((prev) => {
       const list = Array.isArray(prev) ? prev : []
       const idx = list.findIndex((e) => e?.id === updated?.id)
@@ -151,7 +164,7 @@ export default function PersonnelPage() {
       persistEmployees(next)
       return next
     })
-  }, [db, persistEmployees])
+  }, [db, persistEmployees, toast])
 
   const getBranchLabel = React.useCallback((branchId: string | undefined) => {
     if (!branchId) return "-"
