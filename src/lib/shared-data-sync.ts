@@ -71,6 +71,7 @@ export function useFirestoreLocalMirror(db: Firestore | null | undefined, target
             }
             window.localStorage.setItem(target.storageKey, JSON.stringify(docs))
             window.dispatchEvent(new Event(`${target.storageKey}-updated`))
+            window.dispatchEvent(new StorageEvent("storage", { key: target.storageKey }))
             if (target.storageKey === "app_attendance_records") window.dispatchEvent(new Event("app-attendance-records-updated"))
             if (target.storageKey === "app_live_presence") window.dispatchEvent(new Event("app-live-presence-updated"))
             onUpdate?.()

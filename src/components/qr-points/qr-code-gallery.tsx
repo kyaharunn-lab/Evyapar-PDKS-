@@ -1,11 +1,13 @@
 "use client"
 
 import * as React from "react"
+import { collection, onSnapshot } from "firebase/firestore"
 import { Download, Eye, Maximize2, Printer, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useFirestore } from "@/firebase"
 import { cn } from "@/lib/utils"
 
 function readArray(key: string) {
@@ -246,9 +248,11 @@ function QrCard({ point, branch, selected, onSelectedChange, onDetail }: { point
 }
 
 export function QrCodeGallery() {
+  const db = useFirestore()
   const [data, setData] = React.useState({ qrPoints: [] as any[], branches: [] as any[] })
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
   const [detailPoint, setDetailPoint] = React.useState<any | null>(null)
+  const [firestoreCount, setFirestoreCount] = React.useState<number | null>(null)
 
   const load = React.useCallback(() => {
     setData({
@@ -268,6 +272,19 @@ export function QrCodeGallery() {
       window.removeEventListener("app_branches-updated", load)
     }
   }, [load])
+
+  React.useEffect(() => {
+    if (!db) return
+    return onSnapshot(collection(db, "qrPoints"), (snapshot) => {
+      setFirestoreCount(snapshot.size)
+      console.info("[QR points debug]", {
+        firestoreQrPointsCount: snapshot.size,
+        renderedQrPointsCount: readArray("app_qr_points").length,
+      })
+    }, (error) => {
+      console.warn("[QR points debug] Firestore qrPoints listen failed", error)
+    })
+  }, [db])
 
   if (!data.qrPoints.length) return null
 
@@ -307,6 +324,7 @@ export function QrCodeGallery() {
         <div>
           <h3 className="text-lg font-extrabold text-primary">QR Kod Gorselleri</h3>
           <p className="text-sm font-medium text-slate-500">Sube bazli QR kodlari goruntuleyin, indirin veya yazdirin.</p>
+          <p className="mt-1 text-xs font-bold text-slate-400">Firestore qrPoints count: {firestoreCount ?? "-"} · Rendered qrPoints count: {data.qrPoints.length}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" className="rounded-2xl text-xs font-bold" disabled={!selectedItems.length} onClick={exportSelectedPng}>Secili PNG</Button>

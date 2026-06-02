@@ -150,6 +150,74 @@ function formatWorkDuration(record: any) {
   return hours ? `${hours} saat ${remaining} dk` : `${remaining} dk`
 }
 
+const LATE_TOLERANCE_MINUTES = 10
+
+function dateKeyFromValue(value: any) {
+  if (!value) return ""
+  if (typeof value === "string") return value.slice(0, 10)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  return date.toISOString().slice(0, 10)
+}
+
+function timeToMinutes(value: any) {
+  const text = (value || "").toString().slice(0, 5)
+  const [hour, minute] = text.split(":").map(Number)
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null
+  return hour * 60 + minute
+}
+
+function attendancePersonId(record: any) {
+  return (record?.personnelId || record?.personId || record?.personelId || record?.employeeId || "").toString()
+}
+
+function attendanceEntryTime(record: any) {
+  const value = record?.checkInTime || record?.entryTime || record?.time || record?.createdAt
+  if (!value) return ""
+  if (typeof value === "string" && /^\d{2}:\d{2}/.test(value)) return value.slice(0, 5)
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value.toString().slice(0, 5)
+  return date.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+}
+
+function shiftContainsPerson(shift: any, personId: string) {
+  const assigned = Array.isArray(shift?.assignedPersonnel) ? shift.assignedPersonnel : []
+  const assignedIds = [
+    ...assigned.map((item: any) => (typeof item === "object" ? item?.id || item?.personnelId || item?.personId : item).toString()),
+    ...((Array.isArray(shift?.personnelIds) ? shift.personnelIds : []).map((item: any) => item.toString())),
+  ]
+  return assignedIds.includes(personId)
+}
+
+function findTodayShiftForAttendance(record: any, shifts: any[]) {
+  const personId = attendancePersonId(record)
+  const today = dateKeyFromValue(record?.date || record?.checkInTime || record?.entryTime || record?.createdAt || new Date().toISOString())
+  if (!personId || !today) return null
+  return shifts.find((shift: any) => {
+    const shiftDate = dateKeyFromValue(shift?.startDate || shift?.date || shift?.createdAt)
+    return shiftDate === today && shiftContainsPerson(shift, personId)
+  }) || null
+}
+
+function enrichAttendanceLateData(record: any, shifts: any[]) {
+  if (record?.checkOutTime || record?.status === "outside") return record
+  const shift = findTodayShiftForAttendance(record, shifts)
+  if (!shift) return record
+  const entryMinutes = timeToMinutes(attendanceEntryTime(record))
+  const shiftMinutes = timeToMinutes(shift?.startTime || shift?.entryTime)
+  if (entryMinutes === null || shiftMinutes === null) return record
+  const lateMinutes = Math.max(0, entryMinutes - shiftMinutes - LATE_TOLERANCE_MINUTES)
+  return {
+    ...record,
+    isLate: lateMinutes > 0,
+    lateMinutes,
+    lateText: lateMinutes > 0 ? `${lateMinutes} dk geç` : "",
+    lateToleranceMinutes: LATE_TOLERANCE_MINUTES,
+    shiftId: shift?.id || record?.shiftId,
+    shiftName: shift?.name || shift?.shiftName || record?.shiftName,
+  }
+}
+
 function personName(person: any) {
   return (person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || person?.displayName || "Personel").toString()
 }
@@ -424,8 +492,23 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     if (!db || typeof window === "undefined") return
 
     const syncAttendanceToFirestore = async () => {
-      const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
-      const liveRecords = readArray(LIVE_PRESENCE_KEY)
+      const shifts = readArray("app_shifts")
+      const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY).map((record: any) => enrichAttendanceLateData(record, shifts))
+      const liveRecords = readArray(LIVE_PRESENCE_KEY).map((record: any) => {
+        const personId = attendancePersonId(record)
+        const activeAttendance = attendanceRecords.find((item: any) => attendancePersonId(item) === personId && item?.status === "inside" && !item?.checkOutTime)
+        return activeAttendance ? {
+          ...record,
+          isLate: activeAttendance.isLate,
+          lateMinutes: activeAttendance.lateMinutes,
+          lateToleranceMinutes: activeAttendance.lateToleranceMinutes,
+          shiftId: activeAttendance.shiftId,
+          shiftName: activeAttendance.shiftName,
+        } : record
+      })
+
+      writeArray(ATTENDANCE_RECORDS_KEY, attendanceRecords)
+      writeArray(LIVE_PRESENCE_KEY, liveRecords)
 
       await Promise.all(attendanceRecords.map((record: any) => writeSharedRecord(db, "attendance", record)))
       await Promise.all(liveRecords.map((record: any) => writeSharedRecord(db, "livePresence", record)))
