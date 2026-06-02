@@ -28,13 +28,16 @@ function warnFirestoreDebug(message: string, payload?: Record<string, any>) {
 }
 
 function rememberWriteStatus(collectionName: string, status: "success" | "error", payload?: Record<string, any>) {
-  if (typeof window === "undefined" || collectionName !== "personnel") return
+  if (typeof window === "undefined" || !["personnel", "branches"].includes(collectionName)) return
   try {
+    const previous = JSON.parse(window.localStorage.getItem("app_firestore_debug") || "{}")
+    const keyPrefix = collectionName === "personnel" ? "lastPersonnelWrite" : "lastBranchWrite"
     window.localStorage.setItem("app_firestore_debug", JSON.stringify({
-      lastPersonnelWriteStatus: status,
-      lastPersonnelWriteAt: new Date().toISOString(),
-      lastPersonnelWritePath: payload?.documentPath || "",
-      lastPersonnelWriteError: payload?.errorMessage || "",
+      ...previous,
+      [`${keyPrefix}Status`]: status,
+      [`${keyPrefix}At`]: new Date().toISOString(),
+      [`${keyPrefix}Path`]: payload?.documentPath || "",
+      [`${keyPrefix}Error`]: payload?.errorMessage || "",
     }))
     window.dispatchEvent(new Event("app-firestore-debug-updated"))
   } catch {
@@ -158,10 +161,20 @@ export async function writeSharedRecord(db: Firestore | null | undefined, collec
 }
 
 export async function deleteSharedRecord(db: Firestore | null | undefined, collectionName: string, id: string) {
-  if (!db || !id) return
+  if (!db || !id) {
+    rememberWriteStatus(collectionName, "error", {
+      errorMessage: !db ? "Firestore db instance yok." : "Record id yok.",
+    })
+    return
+  }
   try {
     await deleteDoc(doc(db, collectionName, String(id)))
+    rememberWriteStatus(collectionName, "success", { documentPath: `${collectionName}/${id}` })
   } catch (error) {
+    rememberWriteStatus(collectionName, "error", {
+      documentPath: `${collectionName}/${id}`,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    })
     console.warn(`Firestore ${collectionName} delete failed; localStorage fallback kept.`, error)
   }
 }

@@ -187,6 +187,7 @@ type FirestoreDebugState = {
   lastWrite: "checking" | "success" | "error"
   lastRead: "checking" | "success" | "error"
   lastPersonnelWrite: "checking" | "success" | "error"
+  lastBranchWrite: "checking" | "success" | "error"
   personnelCount: number | null
   branchesCount: number | null
   leaveRequestsCount: number | null
@@ -256,6 +257,7 @@ export default function DashboardPage() {
     lastWrite: "checking",
     lastRead: "checking",
     lastPersonnelWrite: "checking",
+    lastBranchWrite: "checking",
     personnelCount: null,
     branchesCount: null,
     leaveRequestsCount: null,
@@ -353,6 +355,12 @@ export default function DashboardPage() {
           ...(cached.lastPersonnelWriteError ? { errorMessage: cached.lastPersonnelWriteError } : {}),
         })
       }
+      if (cached?.lastBranchWriteStatus === "success" || cached?.lastBranchWriteStatus === "error") {
+        updateDebug({
+          lastBranchWrite: cached.lastBranchWriteStatus,
+          ...(cached.lastBranchWriteError ? { errorMessage: cached.lastBranchWriteError } : {}),
+        })
+      }
     }
 
     if (!db) {
@@ -361,6 +369,7 @@ export default function DashboardPage() {
         lastWrite: "error",
         lastRead: "error",
         lastPersonnelWrite: "error",
+        lastBranchWrite: "error",
         errorMessage: configIssue || "Firestore init basarisiz: db instance yok.",
       })
       return
@@ -679,6 +688,9 @@ export default function DashboardPage() {
             })}
             <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold sm:col-span-3", debugStatusClass(firestoreDebug.lastPersonnelWrite))}>
               Last personnel write status: {debugStatusLabel(firestoreDebug.lastPersonnelWrite)}
+            </div>
+            <div className={cn("rounded-2xl border px-3 py-2 text-xs font-extrabold sm:col-span-3", debugStatusClass(firestoreDebug.lastBranchWrite))}>
+              Last branch write status: {debugStatusLabel(firestoreDebug.lastBranchWrite)}
             </div>
           </div>
           <div className="min-w-0 lg:max-w-sm">

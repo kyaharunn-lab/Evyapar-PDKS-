@@ -65,7 +65,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TIME_INPUT_PROPS } from "@/lib/date-time"
 import { useFirestore } from "@/firebase"
-import { writeSharedRecord } from "@/lib/shared-data-sync"
+import { deleteSharedRecord, writeSharedRecord } from "@/lib/shared-data-sync"
 
 export default function BranchesPage() {
   const { toast } = useToast()

@@ -55,7 +55,7 @@ import { AddPersonnelForm } from "@/components/personnel/add-personnel-form"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase"
 import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
-import { writeSharedRecord } from "@/lib/shared-data-sync"
+import { deleteSharedRecord, writeSharedRecord } from "@/lib/shared-data-sync"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
