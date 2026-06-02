@@ -43,6 +43,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { useFirestore } from "@/firebase"
 import { firebaseConfig, firebaseEnvKeys } from "@/firebase/config"
+import { useFirestoreLocalMirror } from "@/lib/shared-data-sync"
 import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 
@@ -294,6 +295,13 @@ export default function DashboardPage() {
     })
     setLoading(false)
   }, [])
+
+  const attendanceSyncTargets = React.useMemo(() => [
+    { collectionName: "attendance", storageKey: "app_attendance_records" },
+    { collectionName: "livePresence", storageKey: "app_live_presence" },
+  ], [])
+
+  useFirestoreLocalMirror(db, attendanceSyncTargets, load)
 
   React.useEffect(() => {
     load()

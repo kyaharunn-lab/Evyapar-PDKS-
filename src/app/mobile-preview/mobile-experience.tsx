@@ -36,7 +36,7 @@ import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 import { loginWithLocalPersonnel } from "@/lib/auth-session"
 import { formatDateTR } from "@/lib/date-time"
-import { useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
+import { deleteSharedRecord, useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_KEY = "app_mobile_preview_settings"
@@ -305,6 +305,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     { collectionName: "qrPoints", storageKey: "app_qr_points" },
     { collectionName: "shifts", storageKey: "app_shifts" },
     { collectionName: "leaveRequests", storageKey: "app_leave_requests" },
+    { collectionName: "attendance", storageKey: "app_attendance_records" },
+    { collectionName: "livePresence", storageKey: "app_live_presence" },
   ], [])
 
   const load = React.useCallback(() => {
@@ -348,6 +350,45 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   }, [db, firestoreBootstrapped, isStandaloneApp, load])
 
   useFirestoreLocalMirror(db, sharedSyncTargets, load)
+
+  React.useEffect(() => {
+    if (!db || typeof window === "undefined") return
+
+    const syncAttendanceToFirestore = async () => {
+      const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
+      const liveRecords = readArray(LIVE_PRESENCE_KEY)
+
+      await Promise.all(attendanceRecords.map((record: any) => writeSharedRecord(db, "attendance", record)))
+      await Promise.all(liveRecords.map((record: any) => writeSharedRecord(db, "livePresence", record)))
+
+      try {
+        const liveSnapshot = await getDocs(collection(db, "livePresence"))
+        const localIds = new Set(liveRecords.map((record: any) => getId(record) || (record?.personnelId || "").toString()).filter(Boolean))
+        await Promise.all(liveSnapshot.docs.map((item) => {
+          const data = item.data()
+          const remoteKey = item.id || getId(data) || (data?.personnelId || "").toString()
+          return localIds.has(remoteKey) ? Promise.resolve() : deleteSharedRecord(db, "livePresence", item.id)
+        }))
+      } catch (error) {
+        console.warn("[Firestore attendance sync] livePresence cleanup failed", error)
+      }
+
+      console.info("[Firestore attendance sync] mobile attendance mirrored", {
+        attendanceCount: attendanceRecords.length,
+        livePresenceCount: liveRecords.length,
+      })
+    }
+
+    const onAttendanceSync = () => {
+      void syncAttendanceToFirestore()
+    }
+
+    window.addEventListener("app-mobile-attendance-updated", onAttendanceSync)
+
+    return () => {
+      window.removeEventListener("app-mobile-attendance-updated", onAttendanceSync)
+    }
+  }, [db])
 
   React.useEffect(() => {
     if (!isStandaloneApp || typeof window === "undefined") return
