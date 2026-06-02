@@ -1376,11 +1376,11 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
   return (
     <div>
       <MobileHeader person={{ fullName: "QR Okutma" }} palette={palette} title="Güvenli doğrulama" />
-      <div className="relative mt-6 grid h-72 place-items-center overflow-hidden rounded-[32px] border border-white/15 bg-black/35">
+      <div className="relative mt-6 grid h-[340px] max-h-[52dvh] min-h-[320px] place-items-center overflow-hidden rounded-[32px] border border-white/15 bg-black/35">
         <Camera className="absolute left-4 top-4 z-10 h-5 w-5 text-white/50" />
-        <div id={qrReaderId} className={cn("absolute inset-0 h-full w-full overflow-hidden [&_video]:h-full [&_video]:w-full [&_video]:object-cover", scanning ? "block" : "hidden")} />
-        <div className="h-44 w-44 rounded-[28px] border-4 border-sky-300/80 shadow-[0_0_32px_rgba(56,189,248,0.35)]" />
-        <div className="absolute h-0.5 w-48 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent" />
+        <div id={qrReaderId} className={cn("absolute inset-0 h-full w-full overflow-hidden [&_div]:border-0 [&_img]:hidden [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover", scanning ? "block" : "hidden")} />
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-[28px] border-4 border-sky-300/80 shadow-[0_0_32px_rgba(56,189,248,0.35)]" />
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-0.5 w-52 -translate-x-1/2 -translate-y-1/2 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent" />
       </div>
       {cameraError ? <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">{cameraError}</p> : null}
       <Button data-mobile-action="qr-camera" onClick={scanning ? stopScanner : startCameraScan} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{scanning ? "Taramayı Durdur" : "Kamerayla QR Tara"}</Button>
