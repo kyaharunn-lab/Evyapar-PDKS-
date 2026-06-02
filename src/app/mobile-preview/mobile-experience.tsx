@@ -1294,18 +1294,85 @@ function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts,
 function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
   const activePoint = qrPoints.find((point: any) => isActiveQrPoint(point) && qrPointMatchesBranch(point, branch))
   const firstActivePoint = qrPoints.find((point: any) => isActiveQrPoint(point))
+  const videoRef = React.useRef<HTMLVideoElement | null>(null)
+  const streamRef = React.useRef<MediaStream | null>(null)
+  const scanFrameRef = React.useRef<number | null>(null)
+  const [cameraError, setCameraError] = React.useState("")
+  const [scanning, setScanning] = React.useState(false)
   const handleQr = () => {
     onQr(activePoint || firstActivePoint)
   }
+  const stopScanner = React.useCallback(() => {
+    if (scanFrameRef.current) {
+      window.cancelAnimationFrame(scanFrameRef.current)
+      scanFrameRef.current = null
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    setScanning(false)
+  }, [])
+  const handleScannedCode = React.useCallback((qrCode: string) => {
+    const scannedPoint = qrPoints.find((point: any) => {
+      const value = (point?.qrCode || point?.code || point?.id || "").toString()
+      return value && value === qrCode
+    })
+    stopScanner()
+    onQr(scannedPoint || { qrCode })
+  }, [onQr, qrPoints, stopScanner])
+  const startCameraScan = React.useCallback(async () => {
+    setCameraError("")
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError("Kamera desteklenmiyor. Simülasyon kullanın.")
+        return
+      }
+      const BarcodeDetectorCtor = (window as any).BarcodeDetector
+      if (!BarcodeDetectorCtor) {
+        setCameraError("QR tarayıcı desteklenmiyor. Simülasyon kullanın.")
+        return
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      streamRef.current = stream
+      setScanning(true)
+      const video = videoRef.current
+      if (!video) return
+      video.srcObject = stream
+      await video.play()
+      const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] })
+      const scan = async () => {
+        try {
+          const codes = await detector.detect(video)
+          const rawValue = codes?.[0]?.rawValue
+          if (rawValue) {
+            handleScannedCode(rawValue.toString())
+            return
+          }
+        } catch (error) {
+          setCameraError(error instanceof Error ? error.message : "QR okuma hatası.")
+          stopScanner()
+          return
+        }
+        scanFrameRef.current = window.requestAnimationFrame(scan)
+      }
+      scanFrameRef.current = window.requestAnimationFrame(scan)
+    } catch (error) {
+      setCameraError(error instanceof Error ? error.message : "Kamera izni alınamadı.")
+      stopScanner()
+    }
+  }, [handleScannedCode, stopScanner])
+  React.useEffect(() => stopScanner, [stopScanner])
   return (
     <div>
       <MobileHeader person={{ fullName: "QR Okutma" }} palette={palette} title="Güvenli doğrulama" />
       <div className="relative mt-6 grid h-72 place-items-center overflow-hidden rounded-[32px] border border-white/15 bg-black/35">
-        <Camera className="absolute left-4 top-4 h-5 w-5 text-white/50" />
+        <Camera className="absolute left-4 top-4 z-10 h-5 w-5 text-white/50" />
+        <video ref={videoRef} playsInline muted className={cn("absolute inset-0 h-full w-full object-cover", scanning ? "block" : "hidden")} />
         <div className="h-44 w-44 rounded-[28px] border-4 border-sky-300/80 shadow-[0_0_32px_rgba(56,189,248,0.35)]" />
         <div className="absolute h-0.5 w-48 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent" />
       </div>
-      <Button data-mobile-action="qr-sim" onClick={handleQr} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>QR Simülasyonu Başlat</Button>
+      {cameraError ? <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">{cameraError}</p> : null}
+      <Button data-mobile-action="qr-camera" onClick={scanning ? stopScanner : startCameraScan} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{scanning ? "Taramayı Durdur" : "Kamerayla QR Tara"}</Button>
+      <Button data-mobile-action="qr-sim" onClick={handleQr} variant="outline" className="mt-2 h-11 w-full rounded-2xl border-white/15 bg-white/10 text-sm font-extrabold text-white hover:bg-white/15">QR Simülasyonu Başlat</Button>
       <MobileCard className="mt-4">
         <p className="text-xs font-bold uppercase tracking-widest text-white/50">Şube QR noktası</p>
         <h4 className="mt-1 text-lg font-extrabold text-white">{activePoint?.pointName || activePoint?.name || "Bu şubeye ait QR noktası bulunamadı."}</h4>
