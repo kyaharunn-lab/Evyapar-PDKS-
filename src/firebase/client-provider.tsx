@@ -7,7 +7,10 @@ import { FirebaseProvider } from './provider';
 import { useFirestoreLocalMirror } from '@/lib/shared-data-sync';
 
 const attendanceSyncTargets = [
+  { collectionName: "branches", storageKey: "app_branches" },
+  { collectionName: "personnel", storageKey: "app_personnel" },
   { collectionName: "qrPoints", storageKey: "app_qr_points" },
+  { collectionName: "shifts", storageKey: "app_shifts" },
   { collectionName: "attendance", storageKey: "app_attendance_records" },
   { collectionName: "livePresence", storageKey: "app_live_presence" },
 ]

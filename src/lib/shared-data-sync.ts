@@ -60,27 +60,53 @@ export function useFirestoreLocalMirror(db: Firestore | null | undefined, target
         return onSnapshot(
           collection(db, target.collectionName),
           (snapshot) => {
+            let localStorageCount = 0
+            try {
+              const currentLocal = JSON.parse(window.localStorage.getItem(target.storageKey) || "[]")
+              localStorageCount = Array.isArray(currentLocal) ? currentLocal.length : 0
+            } catch {
+              localStorageCount = 0
+            }
             const docs = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))
             if (shouldDebugCollection(target.collectionName)) {
               logFirestoreDebug("realtime snapshot", {
                 collectionPath: target.collectionName,
                 storageKey: target.storageKey,
+                dataSource: "firestore",
                 snapshotCount: snapshot.size,
+                firestoreCount: snapshot.size,
+                localStorageCount,
+                renderedCount: docs.length,
                 localWriteCount: docs.length,
               })
             }
             window.localStorage.setItem(target.storageKey, JSON.stringify(docs))
             window.dispatchEvent(new Event(`${target.storageKey}-updated`))
             window.dispatchEvent(new StorageEvent("storage", { key: target.storageKey }))
+            if (target.storageKey === "app_branches") window.dispatchEvent(new Event("app-branches-updated"))
+            if (target.storageKey === "app_personnel") window.dispatchEvent(new Event("app-personnel-updated"))
+            if (target.storageKey === "app_qr_points") window.dispatchEvent(new Event("app-qr-points-updated"))
+            if (target.storageKey === "app_shifts") window.dispatchEvent(new Event("app-shifts-updated"))
             if (target.storageKey === "app_attendance_records") window.dispatchEvent(new Event("app-attendance-records-updated"))
             if (target.storageKey === "app_live_presence") window.dispatchEvent(new Event("app-live-presence-updated"))
             onUpdate?.()
           },
           (error) => {
+            let localStorageCount = 0
+            try {
+              const currentLocal = JSON.parse(window.localStorage.getItem(target.storageKey) || "[]")
+              localStorageCount = Array.isArray(currentLocal) ? currentLocal.length : 0
+            } catch {
+              localStorageCount = 0
+            }
             if (shouldDebugCollection(target.collectionName)) {
               warnFirestoreDebug("listener error", {
                 collectionPath: target.collectionName,
                 storageKey: target.storageKey,
+                dataSource: "localStorage",
+                firestoreCount: 0,
+                localStorageCount,
+                renderedCount: localStorageCount,
                 errorMessage: error?.message || String(error),
                 code: (error as any)?.code,
               })
