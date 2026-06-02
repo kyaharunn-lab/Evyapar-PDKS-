@@ -55,7 +55,7 @@ import { AddPersonnelForm } from "@/components/personnel/add-personnel-form"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase"
 import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
-import { writeSharedRecord } from "@/lib/shared-data-sync"
+import { deleteSharedRecord, writeSharedRecord } from "@/lib/shared-data-sync"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -102,11 +102,33 @@ export default function PersonnelPage() {
 
   const persistEmployees = React.useCallback((next: any[]) => {
     try {
+      const rawPrevious = localStorage.getItem(PERSONNEL_STORAGE_KEY)
+      const parsedPrevious = rawPrevious ? JSON.parse(rawPrevious) : []
+      const previous = Array.isArray(parsedPrevious) ? parsedPrevious : []
       localStorage.setItem(PERSONNEL_STORAGE_KEY, JSON.stringify(next))
-    } catch {
+      const nextIds = new Set(next.map((person) => (person?.id || "").toString()).filter(Boolean))
+      previous.forEach((person) => {
+        const id = (person?.id || "").toString()
+        if (id && !nextIds.has(id)) {
+          void deleteSharedRecord(db, "personnel", id)
+        }
+      })
+      next.forEach((person) => {
+        if (person?.id) {
+          void writeSharedRecord(db, "personnel", person).then((ok) => {
+            console.info("[Firestore personnel write]", {
+              collectionPath: "personnel",
+              recordId: person.id,
+              status: ok ? "success" : "error",
+            })
+          })
+        }
+      })
+    } catch (error) {
+      console.warn("[Firestore personnel write] local persist/mirror failed", error)
       // ignore storage errors
     }
-  }, [])
+  }, [db])
 
   React.useEffect(() => {
     loadEmployees()
