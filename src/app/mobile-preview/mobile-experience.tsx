@@ -1294,9 +1294,10 @@ function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts,
 function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
   const activePoint = qrPoints.find((point: any) => isActiveQrPoint(point) && qrPointMatchesBranch(point, branch))
   const firstActivePoint = qrPoints.find((point: any) => isActiveQrPoint(point))
-  const videoRef = React.useRef<HTMLVideoElement | null>(null)
   const streamRef = React.useRef<MediaStream | null>(null)
   const scanFrameRef = React.useRef<number | null>(null)
+  const html5QrRef = React.useRef<any>(null)
+  const qrReaderId = React.useId().replace(/:/g, "")
   const [cameraError, setCameraError] = React.useState("")
   const [scanning, setScanning] = React.useState(false)
   const handleQr = () => {
@@ -1306,6 +1307,11 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
     if (scanFrameRef.current) {
       window.cancelAnimationFrame(scanFrameRef.current)
       scanFrameRef.current = null
+    }
+    if (html5QrRef.current) {
+      const scanner = html5QrRef.current
+      html5QrRef.current = null
+      void scanner.stop?.().catch(() => {}).finally(() => scanner.clear?.())
     }
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
@@ -1319,54 +1325,60 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
     stopScanner()
     onQr(scannedPoint || { qrCode })
   }, [onQr, qrPoints, stopScanner])
+  const loadHtml5QrCode = React.useCallback(async () => {
+    if ((window as any).Html5Qrcode) return (window as any).Html5Qrcode
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector<HTMLScriptElement>("script[data-html5-qrcode]")
+      if (existing) {
+        existing.addEventListener("load", () => resolve(), { once: true })
+        existing.addEventListener("error", () => reject(new Error("QR scanner script yüklenemedi.")), { once: true })
+        return
+      }
+      const script = document.createElement("script")
+      script.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+      script.async = true
+      script.dataset.html5Qrcode = "true"
+      script.onload = () => resolve()
+      script.onerror = () => reject(new Error("QR scanner script yüklenemedi. İnternet bağlantısını kontrol edin."))
+      document.head.appendChild(script)
+    })
+    if (!(window as any).Html5Qrcode) throw new Error("Tarayıcı QR scanner kütüphanesini başlatamadı.")
+    return (window as any).Html5Qrcode
+  }, [])
   const startCameraScan = React.useCallback(async () => {
     setCameraError("")
     try {
+      if (!window.isSecureContext && window.location.hostname !== "localhost") {
+        setCameraError("Kamera için HTTPS gerekli.")
+        return
+      }
       if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError("Kamera desteklenmiyor. Simülasyon kullanın.")
+        setCameraError("Tarayıcı kamera erişimini desteklemiyor.")
         return
       }
-      const BarcodeDetectorCtor = (window as any).BarcodeDetector
-      if (!BarcodeDetectorCtor) {
-        setCameraError("QR tarayıcı desteklenmiyor. Simülasyon kullanın.")
-        return
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-      streamRef.current = stream
+      const Html5Qrcode = await loadHtml5QrCode()
       setScanning(true)
-      const video = videoRef.current
-      if (!video) return
-      video.srcObject = stream
-      await video.play()
-      const detector = new BarcodeDetectorCtor({ formats: ["qr_code"] })
-      const scan = async () => {
-        try {
-          const codes = await detector.detect(video)
-          const rawValue = codes?.[0]?.rawValue
-          if (rawValue) {
-            handleScannedCode(rawValue.toString())
-            return
-          }
-        } catch (error) {
-          setCameraError(error instanceof Error ? error.message : "QR okuma hatası.")
-          stopScanner()
-          return
-        }
-        scanFrameRef.current = window.requestAnimationFrame(scan)
-      }
-      scanFrameRef.current = window.requestAnimationFrame(scan)
+      const scanner = new Html5Qrcode(qrReaderId)
+      html5QrRef.current = scanner
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 8, qrbox: { width: 220, height: 220 } },
+        (decodedText: string) => handleScannedCode(decodedText),
+        () => {}
+      )
     } catch (error) {
-      setCameraError(error instanceof Error ? error.message : "Kamera izni alınamadı.")
+      const message = error instanceof Error ? error.message : "Kamera izni alınamadı."
+      setCameraError(message.includes("Permission") || message.includes("NotAllowed") ? "Kamera izni verilmedi." : message)
       stopScanner()
     }
-  }, [handleScannedCode, stopScanner])
+  }, [handleScannedCode, loadHtml5QrCode, qrReaderId, stopScanner])
   React.useEffect(() => stopScanner, [stopScanner])
   return (
     <div>
       <MobileHeader person={{ fullName: "QR Okutma" }} palette={palette} title="Güvenli doğrulama" />
       <div className="relative mt-6 grid h-72 place-items-center overflow-hidden rounded-[32px] border border-white/15 bg-black/35">
         <Camera className="absolute left-4 top-4 z-10 h-5 w-5 text-white/50" />
-        <video ref={videoRef} playsInline muted className={cn("absolute inset-0 h-full w-full object-cover", scanning ? "block" : "hidden")} />
+        <div id={qrReaderId} className={cn("absolute inset-0 h-full w-full overflow-hidden [&_video]:h-full [&_video]:w-full [&_video]:object-cover", scanning ? "block" : "hidden")} />
         <div className="h-44 w-44 rounded-[28px] border-4 border-sky-300/80 shadow-[0_0_32px_rgba(56,189,248,0.35)]" />
         <div className="absolute h-0.5 w-48 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent" />
       </div>
