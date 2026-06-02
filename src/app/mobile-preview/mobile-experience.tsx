@@ -81,6 +81,16 @@ function getId(item: any) {
   return (item?.id || item?.uid || item?.code || item?.branchCode || item?.departmentCode || item?.personnelCode || "").toString()
 }
 
+function qrPointMatchesBranch(point: any, branch: any) {
+  const branchId = getId(branch)
+  if (!branchId) return false
+  return [point?.branchId, point?.branchCode, point?.locationId].map((value) => (value || "").toString()).includes(branchId)
+}
+
+function isActiveQrPoint(point: any) {
+  return point?.active === true || isActive(point?.status)
+}
+
 function personName(person: any) {
   return (person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || person?.displayName || "Personel").toString()
 }
@@ -699,7 +709,18 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     addAudit(`Mobil ${type.toLowerCase()} simülasyonu yapıldı`, `${personName(selectedPerson)} için ${type.toLowerCase()} kaydı oluşturuldu.`)
   }
 
-  const handleQrSimulation = () => {
+  const handleQrSimulation = (scannedPoint?: any) => {
+    const activeBranchPoint = branchQrPoints.find((point: any) => isActiveQrPoint(point) && qrPointMatchesBranch(point, selectedBranch))
+    if (!activeBranchPoint) {
+      toast({ variant: "destructive", title: "QR doğrulanamadı", description: scannedPoint ? "Yanlış şube QR kodu." : "Bu şubeye ait aktif QR noktası yok." })
+      return
+    }
+    const scannedCode = (scannedPoint?.qrCode || scannedPoint?.code || scannedPoint?.id || "").toString()
+    const activeCode = (activeBranchPoint?.qrCode || activeBranchPoint?.code || activeBranchPoint?.id || "").toString()
+    if (scannedPoint && scannedCode && activeCode && scannedCode !== activeCode) {
+      toast({ variant: "destructive", title: "QR doğrulanamadı", description: "Yanlış şube QR kodu." })
+      return
+    }
     const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
     const success = Boolean(activePoint && selectedPerson)
     if (success) {
@@ -1271,7 +1292,11 @@ function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts,
 }
 
 function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
-  const activePoint = qrPoints.find((point: any) => isActive(point?.status))
+  const activePoint = qrPoints.find((point: any) => isActiveQrPoint(point) && qrPointMatchesBranch(point, branch))
+  const firstActivePoint = qrPoints.find((point: any) => isActiveQrPoint(point))
+  const handleQr = () => {
+    onQr(activePoint || firstActivePoint)
+  }
   return (
     <div>
       <MobileHeader person={{ fullName: "QR Okutma" }} palette={palette} title="Güvenli doğrulama" />
@@ -1280,7 +1305,7 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
         <div className="h-44 w-44 rounded-[28px] border-4 border-sky-300/80 shadow-[0_0_32px_rgba(56,189,248,0.35)]" />
         <div className="absolute h-0.5 w-48 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent" />
       </div>
-      <Button data-mobile-action="qr-sim" onClick={onQr} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>QR Simülasyonu Başlat</Button>
+      <Button data-mobile-action="qr-sim" onClick={handleQr} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>QR Simülasyonu Başlat</Button>
       <MobileCard className="mt-4">
         <p className="text-xs font-bold uppercase tracking-widest text-white/50">Şube QR noktası</p>
         <h4 className="mt-1 text-lg font-extrabold text-white">{activePoint?.pointName || activePoint?.name || "Bu şubeye ait QR noktası bulunamadı."}</h4>

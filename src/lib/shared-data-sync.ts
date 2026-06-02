@@ -14,7 +14,7 @@ function recordId(record: any) {
 }
 
 function shouldDebugCollection(collectionName: string) {
-  return ["branches", "personnel", "shifts", "attendance", "livePresence", "leaveRequests"].includes(collectionName)
+  return ["branches", "personnel", "qrPoints", "shifts", "attendance", "livePresence", "leaveRequests"].includes(collectionName)
 }
 
 function logFirestoreDebug(message: string, payload?: Record<string, any>) {
