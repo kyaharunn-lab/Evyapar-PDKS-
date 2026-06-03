@@ -30,9 +30,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useAuth, useFirestore, useStorage } from "@/firebase"
+import { useAuth, useFirestore } from "@/firebase"
 import { collection, getDocs } from "firebase/firestore"
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 import { loginWithLocalPersonnel } from "@/lib/auth-session"
@@ -40,7 +39,6 @@ import { loginWithFirebasePersonnel } from "@/lib/firebase-auth-personnel"
 import { formatDateTR } from "@/lib/date-time"
 import { deleteSharedRecord, useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 import { cn } from "@/lib/utils"
-import { firebaseConfig } from "@/firebase/config"
 
 const SETTINGS_KEY = "app_mobile_preview_settings"
 const ATTENDANCE_KEY = "app_mobile_attendance_preview"
@@ -80,10 +78,6 @@ function readObject(key: string) {
 
 function writeArray(key: string, value: any[]) {
   localStorage.setItem(key, JSON.stringify(value))
-}
-
-function sanitizeStorageFilename(name: string) {
-  return name.trim().replace(/[\\/#?%*:|"<>]/g, "-").replace(/\s+/g, "-") || `attachment-${Date.now()}`
 }
 
 function getId(item: any) {
@@ -413,7 +407,6 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   const { toast } = useToast()
   const auth = useAuth()
   const db = useFirestore()
-  const storage = useStorage()
   const isStandaloneApp = variant === "app"
   const [accessState, setAccessState] = React.useState(() => readCurrentAccess())
   const [userModeParam, setUserModeParam] = React.useState(() => isMobileUserModeRequested())
@@ -1049,30 +1042,32 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     let attachment: Record<string, any> = {}
 
     if (attachmentFile) {
-      if (!firebaseConfig.storageBucket || firebaseConfig.storageBucket.includes("placeholder")) {
-        toast({ variant: "destructive", title: "Dosya yuklenemedi", description: "Firebase Storage config eksik. Ekli izin talebi kaydedilmedi." })
-        return false
-      }
-
       try {
-        const safeName = sanitizeStorageFilename(attachmentFile.name)
-        const uploadPath = `leave-attachments/${personId}/${leaveRequestId}/${safeName}`
-        const uploadRef = ref(storage, uploadPath)
-        const snapshot = await uploadBytes(uploadRef, attachmentFile, { contentType: attachmentFile.type })
-        const downloadURL = await getDownloadURL(snapshot.ref)
+        const uploadData = new FormData()
+        uploadData.append("file", attachmentFile)
+        const response = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadData,
+        })
+        const result = await response.json().catch(() => ({}))
+
+        if (!response.ok) {
+          throw new Error(result?.error || "Cloudinary yuklemesi basarisiz oldu.")
+        }
+
         attachment = {
-          attachmentUrl: downloadURL,
-          attachmentName: attachmentFile.name,
+          attachmentUrl: result.url,
+          attachmentPublicId: result.publicId,
+          attachmentName: result.originalFilename || attachmentFile.name,
           attachmentType: attachmentFile.type,
-          attachmentSize: attachmentFile.size,
-          attachmentUploadedAt: new Date().toISOString(),
+          attachmentResourceType: result.resourceType,
         }
       } catch (error) {
         console.error("leave attachment upload failed", error)
         toast({
           variant: "destructive",
           title: "Dosya yuklenemedi",
-          description: error instanceof Error ? error.message : "Firebase Storage yuklemesi basarisiz oldu.",
+          description: error instanceof Error ? error.message : "Cloudinary yuklemesi basarisiz oldu.",
         })
         return false
       }

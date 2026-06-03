@@ -790,7 +790,7 @@ function AttachmentPreview({ request }: { request: any }) {
               </div>
             </div>
             <Button asChild variant="outline" className="h-10 rounded-xl">
-              <a href={url} target="_blank" rel="noopener noreferrer">{type === "application/pdf" ? "PDF Aç" : "Dosyayı Aç"}</a>
+              <a href={url} target="_blank" rel="noopener noreferrer">Ek dosyayı görüntüle</a>
             </Button>
           </div>
         </div>
