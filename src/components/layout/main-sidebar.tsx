@@ -134,27 +134,12 @@ function readApprovalCount() {
 
 function EvyaparLogo() {
   return (
-    <div className="relative flex items-center justify-center w-[42px] h-[42px] bg-gradient-to-br from-[#EF4444] to-[#B91C1C] rounded-xl shadow-lg shadow-red-500/20 group-hover:scale-105 transition-transform duration-300 overflow-hidden">
-      {/* Abstract Monogram "E" and Access Symbol */}
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        className="w-7 h-7 text-white"
-      >
-        <path
-          d="M6 6H18V8H8V11H16V13H8V16H18V18H6V6Z"
-          fill="currentColor"
-          fillRule="evenodd"
-          clipRule="evenodd"
-        />
-        <path
-          opacity="0.3"
-          d="M4 4V20H20V4H4ZM2 2H22V22H2V2Z"
-          fill="white"
-        />
-      </svg>
-      {/* Gloss effect */}
+    <div className="relative flex h-[42px] w-[136px] items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-4 shadow-lg shadow-sky-950/25 transition-transform duration-300 group-hover:scale-105 group-data-[collapsible=icon]:w-[42px] group-data-[collapsible=icon]:px-1.5">
+      <img
+        src="/assets/evyapar-logo-beyaz.png"
+        alt="Evyapar"
+        className="h-auto w-full max-w-[106px] object-contain group-data-[collapsible=icon]:max-w-[36px]"
+      />
       <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
     </div>
   )

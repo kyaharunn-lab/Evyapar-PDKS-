@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { LockKeyhole, LogIn, ShieldCheck } from "lucide-react"
+import { LogIn, ShieldCheck } from "lucide-react"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -65,8 +65,8 @@ export default function LoginPage() {
       <Card className="premium-card relative w-full max-w-md overflow-hidden border-none">
         <CardContent className="p-8">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-primary text-white shadow-xl shadow-primary/20">
-              <LockKeyhole className="h-8 w-8" />
+            <div className="mx-auto mb-5 flex h-16 w-48 items-center justify-center rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 px-6 shadow-xl shadow-primary/20">
+              <img src="/assets/evyapar-logo-beyaz.png" alt="Evyapar" className="h-auto w-full object-contain" />
             </div>
             <Badge className="mb-4 rounded-full bg-primary/5 px-3 py-1 text-primary hover:bg-primary/5">
               <ShieldCheck className="mr-2 h-3.5 w-3.5" />
