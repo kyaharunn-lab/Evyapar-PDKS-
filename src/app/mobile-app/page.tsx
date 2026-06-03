@@ -4,7 +4,9 @@ import * as React from "react"
 import { Smartphone } from "lucide-react"
 
 import { MobileExperience } from "../mobile-preview/mobile-experience"
+import { useAuth, useFirestore } from "@/firebase"
 import { loginWithLocalPersonnel, readAuthSession } from "@/lib/auth-session"
+import { loginWithFirebasePersonnel } from "@/lib/firebase-auth-personnel"
 
 export default function MobileAppPage() {
   const [hasSession, setHasSession] = React.useState(false)
@@ -37,16 +39,29 @@ export default function MobileAppPage() {
 }
 
 function NativeMobileLogin({ onSuccess }: { onSuccess: () => void }) {
+  const auth = useAuth()
+  const db = useFirestore()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [error, setError] = React.useState("")
+  const [submitting, setSubmitting] = React.useState(false)
 
-  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError("")
+    setSubmitting(true)
+
+    const firebaseResult = await loginWithFirebasePersonnel(auth, db, email, password)
+    if (firebaseResult.ok) {
+      setSubmitting(false)
+      onSuccess()
+      return
+    }
+
     const result = loginWithLocalPersonnel(email, password)
+    setSubmitting(false)
     if (!result.ok) {
-      setError(result.error || "Giriş yapılamadı.")
+      setError(result.error || firebaseResult.error || "Giriş yapılamadı.")
       return
     }
     onSuccess()
@@ -87,8 +102,8 @@ function NativeMobileLogin({ onSuccess }: { onSuccess: () => void }) {
             />
           </div>
           {error && <div className="rounded-2xl border border-rose-300/20 bg-rose-500/15 px-4 py-3 text-sm font-bold text-rose-100">{error}</div>}
-          <button type="submit" className="pointer-events-auto h-12 w-full rounded-2xl bg-white font-black text-slate-950 transition hover:bg-white/90">
-            Giriş Yap
+          <button type="submit" disabled={submitting} className="pointer-events-auto h-12 w-full rounded-2xl bg-white font-black text-slate-950 transition hover:bg-white/90 disabled:opacity-70">
+            {submitting ? "Giriş yapılıyor..." : "Giriş Yap"}
           </button>
         </div>
       </form>

@@ -9,8 +9,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useAuth, useFirestore } from "@/firebase"
 import { loginWithLocalPersonnel, readAuthSession } from "@/lib/auth-session"
 import { readCurrentAccess } from "@/lib/access-permissions"
+import { loginWithFirebasePersonnel } from "@/lib/firebase-auth-personnel"
 
 function getPostLoginPath(access: { panelAccess: boolean; mobileAccess: boolean }) {
   if (access.panelAccess) return "/dashboard"
@@ -19,6 +21,8 @@ function getPostLoginPath(access: { panelAccess: boolean; mobileAccess: boolean 
 }
 
 export default function LoginPage() {
+  const auth = useAuth()
+  const db = useFirestore()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [error, setError] = React.useState("")
@@ -30,16 +34,24 @@ export default function LoginPage() {
     }
   }, [])
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError("")
     setLoading(true)
+
+    const firebaseResult = await loginWithFirebasePersonnel(auth, db, email, password)
+    if (firebaseResult.ok) {
+      setLoading(false)
+      const access = readCurrentAccess()
+      window.location.replace(getPostLoginPath(access))
+      return
+    }
 
     const result = loginWithLocalPersonnel(email, password)
     setLoading(false)
 
     if (!result.ok) {
-      setError(result.error || "Giriş yapılamadı.")
+      setError(result.error || firebaseResult.error || "Giriş yapılamadı.")
       return
     }
 

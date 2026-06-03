@@ -45,6 +45,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { createFirebasePersonnelAuthUser } from "@/lib/firebase-auth-personnel"
 import { writeSharedRecord } from "@/lib/shared-data-sync"
 
 const personnelSchema = z.object({
@@ -275,8 +276,21 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
 
       const createdAt = Date.now()
       const rolePermissions = getRolePermissions(values.role)
+      let authUid = ""
+      const authResult = await createFirebasePersonnelAuthUser(values.email, values.password)
+      if (authResult.ok) {
+        authUid = authResult.uid
+      } else {
+        console.error("personnel firebase auth create failed", authResult.error)
+        toast({
+          variant: "destructive",
+          title: "Firebase Auth kullanicisi olusturulamadi",
+          description: authResult.error || "Personel localStorage fallback ile kaydedilecek.",
+        })
+      }
       const newPersonnel = {
         id: `personnel-${createdAt}-${Math.random().toString(16).slice(2)}`,
+        authUid,
         ...values,
         hasAdminAccess: rolePermissions.panelAccess,
         hasMobileAccess: rolePermissions.mobileAccess,

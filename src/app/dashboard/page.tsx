@@ -338,13 +338,19 @@ export default function DashboardPage() {
 
     const updateDebug = (patch: Partial<Omit<FirestoreDebugState, "collectionStatus">> & { collectionStatus?: Partial<FirestoreDebugState["collectionStatus"]> }) => {
       if (!cancelled) {
-        setFirestoreDebug((current) => ({
-          ...current,
-          ...patch,
-          collectionStatus: patch.collectionStatus
-            ? { ...current.collectionStatus, ...patch.collectionStatus }
-            : current.collectionStatus,
-        }))
+        setFirestoreDebug((current) => {
+          const collectionStatus: FirestoreDebugState["collectionStatus"] = { ...current.collectionStatus }
+          if (patch.collectionStatus) {
+            Object.entries(patch.collectionStatus).forEach(([key, value]) => {
+              if (value) collectionStatus[key] = value
+            })
+          }
+          return {
+            ...current,
+            ...patch,
+            collectionStatus,
+          }
+        })
       }
     }
     const refreshWriteStatus = () => {

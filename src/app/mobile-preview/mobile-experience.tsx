@@ -30,11 +30,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useFirestore } from "@/firebase"
+import { useAuth, useFirestore } from "@/firebase"
 import { collection, getDocs } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 import { loginWithLocalPersonnel } from "@/lib/auth-session"
+import { loginWithFirebasePersonnel } from "@/lib/firebase-auth-personnel"
 import { formatDateTR } from "@/lib/date-time"
 import { deleteSharedRecord, useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 import { cn } from "@/lib/utils"
@@ -402,6 +403,7 @@ function isMobileUserModeRequested() {
 
 export function MobileExperience({ variant = "preview" }: { variant?: "preview" | "app" }) {
   const { toast } = useToast()
+  const auth = useAuth()
   const db = useFirestore()
   const isStandaloneApp = variant === "app"
   const [accessState, setAccessState] = React.useState(() => readCurrentAccess())
@@ -1063,14 +1065,21 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     return true
   }
 
-  const handleMobileLogin = React.useCallback((email: string, password: string) => {
+  const handleMobileLogin = React.useCallback(async (email: string, password: string) => {
+    const firebaseResult = await loginWithFirebasePersonnel(auth, db, email, password)
+    if (firebaseResult.ok) {
+      setAccessState(readCurrentAccess())
+      load()
+      toast({ title: "Giris basarili", description: "Firebase Auth ile mobil uygulama acildi." })
+      return ""
+    }
     const result = loginWithLocalPersonnel(email, password)
     if (!result.ok) return result.error || "Giriş yapılamadı."
     setAccessState(readCurrentAccess())
     load()
     toast({ title: "Giriş başarılı", description: "Mobil uygulama açıldı." })
     return ""
-  }, [load, toast])
+  }, [auth, db, load, toast])
 
   const phoneContent = data.personnel.length === 0 ? (
     <div className="grid min-h-[520px] w-full place-items-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 text-center">
@@ -1249,14 +1258,14 @@ function MobileAccessDenied() {
   )
 }
 
-function MobileLoginScreen({ onLogin }: { onLogin: (email: string, password: string) => string }) {
+function MobileLoginScreen({ onLogin }: { onLogin: (email: string, password: string) => string | Promise<string> }) {
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [error, setError] = React.useState("")
 
-  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    const message = onLogin(email, password)
+    const message = await onLogin(email, password)
     setError(message)
   }
 
