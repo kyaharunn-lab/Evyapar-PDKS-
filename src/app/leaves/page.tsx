@@ -760,6 +760,19 @@ function DetailItem({ label, value }: { label: string, value: string }) {
   )
 }
 
+async function downloadAttachmentFile(url: string, filename: string) {
+  const response = await fetch(url)
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = objectUrl
+  anchor.download = filename || "izin-eki"
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(objectUrl)
+}
+
 function AttachmentPreview({ request }: { request: any }) {
   const url = request?.attachmentUrl
   const name = request?.attachmentName || "Ek dosya"
@@ -791,6 +804,9 @@ function AttachmentPreview({ request }: { request: any }) {
             </div>
             <Button asChild variant="outline" className="h-10 rounded-xl">
               <a href={url} target="_blank" rel="noopener noreferrer">Ek dosyayı görüntüle</a>
+            </Button>
+            <Button variant="outline" className="h-10 rounded-xl" onClick={() => downloadAttachmentFile(url, name)}>
+              İndir
             </Button>
           </div>
         </div>

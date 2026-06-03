@@ -3,7 +3,7 @@ import { v2 as cloudinary } from "cloudinary"
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "application/pdf"])
 const PERSONNEL_PHOTO_TYPES = new Set(["image/jpeg", "image/png"])
-const ALLOWED_FOLDERS = new Set(["evyapar-pdks/leave-documents", "evyapar-pdks/personnel-photos"])
+const ALLOWED_FOLDERS = new Set(["evyapar-pdks/leave-documents", "evyapar-pdks/personnel-photos", "evyapar-pdks/personnel-documents"])
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 function jsonError(message: string, status: number) {
@@ -89,6 +89,7 @@ export async function POST(request: Request) {
       resourceType: result.resource_type,
       format: result.format,
       originalFilename: file.name,
+      bytes: result.bytes || file.size,
     })
   } catch (error) {
     console.error("[cloudinary upload] failed", error)

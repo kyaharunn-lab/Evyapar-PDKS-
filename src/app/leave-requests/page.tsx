@@ -1046,6 +1046,19 @@ export default function LeaveRequestsPage() {
   )
 }
 
+async function downloadLeaveAttachment(url: string, filename: string) {
+  const response = await fetch(url)
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement("a")
+  anchor.href = objectUrl
+  anchor.download = filename || "izin-eki"
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(objectUrl)
+}
+
 function LeaveAttachmentBlock({ request }: { request: any }) {
   const url = request?.attachmentUrl
   const name = request?.attachmentName || "Ek dosya"
@@ -1075,6 +1088,9 @@ function LeaveAttachmentBlock({ request }: { request: any }) {
             </div>
             <Button asChild variant="outline" className="h-9 rounded-xl">
               <a href={url} target="_blank" rel="noopener noreferrer">Ek dosyayı görüntüle</a>
+            </Button>
+            <Button variant="outline" className="h-9 rounded-xl" onClick={() => downloadLeaveAttachment(url, name)}>
+              İndir
             </Button>
           </div>
         </div>
