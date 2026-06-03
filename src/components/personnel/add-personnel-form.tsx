@@ -48,6 +48,9 @@ import { Badge } from "@/components/ui/badge"
 import { createFirebasePersonnelAuthUser } from "@/lib/firebase-auth-personnel"
 import { writeSharedRecord } from "@/lib/shared-data-sync"
 
+const PERSONNEL_PHOTO_TYPES = ["image/jpeg", "image/png"]
+const PERSONNEL_PHOTO_MAX_BYTES = 5 * 1024 * 1024
+
 const personnelSchema = z.object({
   name: z.string().min(2, "Ad en az 2 karakter olmalıdır"),
   surname: z.string().min(2, "Soyad en az 2 karakter olmalıdır"),
@@ -113,6 +116,7 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null)
+  const [photoFile, setPhotoFile] = React.useState<File | null>(null)
   const [localBranches, setLocalBranches] = React.useState<any[]>([])
   const [loadingLocalBranches, setLoadingLocalBranches] = React.useState(true)
   const [localDepartments, setLocalDepartments] = React.useState<any[]>([])
@@ -276,6 +280,32 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
 
       const createdAt = Date.now()
       const rolePermissions = getRolePermissions(values.role)
+      let photoFields: Record<string, string> = {}
+      if (photoFile) {
+        if (!PERSONNEL_PHOTO_TYPES.includes(photoFile.type)) {
+          toast({ variant: "destructive", title: "Geçersiz fotoğraf", description: "Sadece JPG veya PNG yükleyebilirsiniz." })
+          return
+        }
+        if (photoFile.size > PERSONNEL_PHOTO_MAX_BYTES) {
+          toast({ variant: "destructive", title: "Fotoğraf çok büyük", description: "Dosya boyutu en fazla 5 MB olabilir." })
+          return
+        }
+        const uploadData = new FormData()
+        uploadData.append("file", photoFile)
+        uploadData.append("folder", "evyapar-pdks/personnel-photos")
+        const response = await fetch("/api/upload", { method: "POST", body: uploadData })
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          toast({ variant: "destructive", title: "Fotoğraf yüklenemedi", description: result?.error || "Cloudinary yüklemesi başarısız oldu." })
+          return
+        }
+        photoFields = {
+          photoUrl: result.url,
+          photoPublicId: result.publicId,
+          photoName: result.originalFilename || photoFile.name,
+          photoType: photoFile.type,
+        }
+      }
       let authUid = ""
       const authResult = await createFirebasePersonnelAuthUser(values.email, values.password)
       if (authResult.ok) {
@@ -303,7 +333,8 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
         fullName: `${values.name} ${values.surname}`,
         qrId,
         personnelCode,
-        avatarUrl: avatarPreview || "",
+        avatarUrl: photoFields.photoUrl || avatarPreview || "",
+        ...photoFields,
         isDeleted: false,
         salary: {
           amount: parseFloat(values.salaryAmount || "0"),
@@ -724,9 +755,30 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                     type="button"
                     size="icon" 
                     className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-accent hover:bg-accent/90 border-2 border-primary"
+                    onClick={() => document.getElementById("personnel-photo-input")?.click()}
                   >
                     <Camera className="h-4 w-4" />
                   </Button>
+                  <input
+                    id="personnel-photo-input"
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] || null
+                      if (!file) return
+                      if (!PERSONNEL_PHOTO_TYPES.includes(file.type)) {
+                        toast({ variant: "destructive", title: "Geçersiz fotoğraf", description: "Sadece JPG veya PNG yükleyebilirsiniz." })
+                        return
+                      }
+                      if (file.size > PERSONNEL_PHOTO_MAX_BYTES) {
+                        toast({ variant: "destructive", title: "Fotoğraf çok büyük", description: "Dosya boyutu en fazla 5 MB olabilir." })
+                        return
+                      }
+                      setPhotoFile(file)
+                      setAvatarPreview(URL.createObjectURL(file))
+                    }}
+                  />
                 </div>
                 <h4 className="mt-4 text-lg font-bold truncate">
                   {form.watch("name") || "Ad"} {form.watch("surname") || "Soyad"}

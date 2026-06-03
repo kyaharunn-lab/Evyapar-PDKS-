@@ -16,7 +16,8 @@ import {
   Lock,
   Download,
   Users,
-  X
+  X,
+  Camera
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -68,6 +69,24 @@ import {
 
 const t = translations.common;
 const p = translations.personnel;
+const PERSONNEL_PHOTO_TYPES = ["image/jpeg", "image/png"]
+const PERSONNEL_PHOTO_MAX_BYTES = 5 * 1024 * 1024
+
+async function uploadPersonnelPhoto(file: File) {
+  const uploadData = new FormData()
+  uploadData.append("file", file)
+  uploadData.append("folder", "evyapar-pdks/personnel-photos")
+  const response = await fetch("/api/upload", { method: "POST", body: uploadData })
+  const result = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(result?.error || "Fotoğraf yüklenemedi.")
+  return {
+    photoUrl: result.url,
+    photoPublicId: result.publicId,
+    photoName: result.originalFilename || file.name,
+    photoType: file.type,
+    avatarUrl: result.url,
+  }
+}
 
 async function syncAllPersonnelToFirestore(db: any, personnel: any[]) {
   console.log("personnel sync start", personnel.length)
@@ -264,6 +283,8 @@ export default function PersonnelPage() {
     status: "Active",
     notes: "",
   })
+  const [editPhotoFile, setEditPhotoFile] = React.useState<File | null>(null)
+  const [editPhotoPreview, setEditPhotoPreview] = React.useState("")
 
   React.useEffect(() => {
     if (!selectedEmployee || !isEditOpen) return
@@ -281,6 +302,8 @@ export default function PersonnelPage() {
       status: selectedEmployee.status || "Active",
       notes: selectedEmployee.notes || "",
     })
+    setEditPhotoFile(null)
+    setEditPhotoPreview(selectedEmployee.photoUrl || selectedEmployee.avatarUrl || "")
   }, [selectedEmployee, isEditOpen])
 
   const handleGenerateQr = React.useCallback((emp: any) => {
@@ -319,7 +342,7 @@ export default function PersonnelPage() {
     setIsEditOpen(true)
   }, [])
 
-  const handleSaveEdit = React.useCallback(() => {
+  const handleSaveEdit = React.useCallback(async () => {
     if (!selectedEmployee) return
     if (!editForm.name?.trim() || !editForm.surname?.trim()) {
       toast({
@@ -370,10 +393,33 @@ export default function PersonnelPage() {
       return
     }
 
+    let photoFields: Record<string, string> = {}
+    if (editPhotoFile) {
+      if (!PERSONNEL_PHOTO_TYPES.includes(editPhotoFile.type)) {
+        toast({ variant: "destructive", title: "Geçersiz fotoğraf", description: "Sadece JPG veya PNG yükleyebilirsiniz." })
+        return
+      }
+      if (editPhotoFile.size > PERSONNEL_PHOTO_MAX_BYTES) {
+        toast({ variant: "destructive", title: "Fotoğraf çok büyük", description: "Dosya boyutu en fazla 5 MB olabilir." })
+        return
+      }
+      try {
+        photoFields = await uploadPersonnelPhoto(editPhotoFile)
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Fotoğraf yüklenemedi",
+          description: error instanceof Error ? error.message : "Cloudinary yüklemesi başarısız oldu.",
+        })
+        return
+      }
+    }
+
     const rolePermissions = getRolePermissions(editForm.role)
     const updated = {
       ...selectedEmployee,
       ...editForm,
+      ...photoFields,
       departmentId: editForm.departmentId || undefined,
       hasAdminAccess: rolePermissions.panelAccess,
       hasMobileAccess: rolePermissions.mobileAccess,
@@ -409,8 +455,9 @@ export default function PersonnelPage() {
       // ignore access sync errors
     }
     setIsEditOpen(false)
+    setEditPhotoFile(null)
     toast({ title: "Başarılı", description: "Personel bilgileri güncellendi." })
-  }, [editForm, getRolePermissions, selectedEmployee, toast, upsertEmployee])
+  }, [editForm, editPhotoFile, getRolePermissions, selectedEmployee, toast, upsertEmployee])
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -501,7 +548,7 @@ export default function PersonnelPage() {
                   <TableRow key={emp.id} className="group hover:bg-slate-50/80 transition-all cursor-pointer">
                     <TableCell className="pl-6">
                       <Avatar className="h-12 w-12 border-2 border-white shadow-md transition-transform group-hover:scale-105">
-                        <AvatarImage src={emp.avatarUrl} alt={emp.name} className="object-cover" />
+                        <AvatarImage src={emp.photoUrl || emp.avatarUrl} alt={emp.name} className="object-cover" />
                         <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
                           {emp.name?.charAt(0)}{emp.surname?.charAt(0)}
                         </AvatarFallback>
@@ -641,7 +688,7 @@ export default function PersonnelPage() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-4">
                     <Avatar className="h-16 w-16 border-2 border-white shadow-md">
-                      <AvatarImage src={selectedEmployee.avatarUrl} alt={selectedEmployee.name} className="object-cover" />
+                      <AvatarImage src={selectedEmployee.photoUrl || selectedEmployee.avatarUrl} alt={selectedEmployee.name} className="object-cover" />
                       <AvatarFallback className="bg-primary/5 text-primary text-lg font-extrabold">
                         {selectedEmployee.name?.charAt(0)}{selectedEmployee.surname?.charAt(0)}
                       </AvatarFallback>
@@ -848,11 +895,39 @@ export default function PersonnelPage() {
                       <div className="bg-primary p-6 text-white text-center">
                         <div className="relative inline-block">
                           <Avatar className="h-24 w-24 border-4 border-white/20 shadow-xl">
-                            <AvatarImage src={selectedEmployee?.avatarUrl || ""} />
+                            <AvatarImage src={editPhotoPreview || selectedEmployee?.photoUrl || selectedEmployee?.avatarUrl || ""} />
                             <AvatarFallback className="bg-white/10 text-white text-2xl font-bold">
                               {editForm.name?.charAt(0)}{editForm.surname?.charAt(0)}
                             </AvatarFallback>
                           </Avatar>
+                          <Button
+                            type="button"
+                            size="icon"
+                            className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-accent hover:bg-accent/90 border-2 border-primary"
+                            onClick={() => document.getElementById("edit-personnel-photo-input")?.click()}
+                          >
+                            <Camera className="h-4 w-4" />
+                          </Button>
+                          <input
+                            id="edit-personnel-photo-input"
+                            type="file"
+                            accept="image/jpeg,image/png"
+                            className="hidden"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0] || null
+                              if (!file) return
+                              if (!PERSONNEL_PHOTO_TYPES.includes(file.type)) {
+                                toast({ variant: "destructive", title: "Geçersiz fotoğraf", description: "Sadece JPG veya PNG yükleyebilirsiniz." })
+                                return
+                              }
+                              if (file.size > PERSONNEL_PHOTO_MAX_BYTES) {
+                                toast({ variant: "destructive", title: "Fotoğraf çok büyük", description: "Dosya boyutu en fazla 5 MB olabilir." })
+                                return
+                              }
+                              setEditPhotoFile(file)
+                              setEditPhotoPreview(URL.createObjectURL(file))
+                            }}
+                          />
                         </div>
                         <h4 className="mt-4 text-lg font-bold truncate">
                           {editForm.name || "Ad"} {editForm.surname || "Soyad"}

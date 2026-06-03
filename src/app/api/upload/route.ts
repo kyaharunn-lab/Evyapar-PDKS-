@@ -2,17 +2,19 @@ import { NextResponse } from "next/server"
 import { v2 as cloudinary } from "cloudinary"
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "application/pdf"])
+const PERSONNEL_PHOTO_TYPES = new Set(["image/jpeg", "image/png"])
+const ALLOWED_FOLDERS = new Set(["evyapar-pdks/leave-documents", "evyapar-pdks/personnel-photos"])
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status })
 }
 
-async function uploadBuffer(buffer: Buffer, originalFilename: string, mimeType: string) {
+async function uploadBuffer(buffer: Buffer, originalFilename: string, mimeType: string, folder: string) {
   return new Promise<any>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
-        folder: "evyapar-pdks/leave-documents",
+        folder,
         resource_type: "auto",
         filename_override: originalFilename,
         use_filename: true,
@@ -56,6 +58,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData()
     const file = formData.get("file")
+    const requestedFolder = String(formData.get("folder") || "evyapar-pdks/leave-documents")
 
     if (!(file instanceof File)) {
       return jsonError("Dosya bulunamadi.", 400)
@@ -65,12 +68,20 @@ export async function POST(request: Request) {
       return jsonError("Gecersiz dosya tipi. Sadece JPG, PNG veya PDF yukleyebilirsiniz.", 400)
     }
 
+    if (!ALLOWED_FOLDERS.has(requestedFolder)) {
+      return jsonError("Gecersiz upload klasoru.", 400)
+    }
+
+    if (requestedFolder === "evyapar-pdks/personnel-photos" && !PERSONNEL_PHOTO_TYPES.has(file.type)) {
+      return jsonError("Personel fotografi icin sadece JPG veya PNG yukleyebilirsiniz.", 400)
+    }
+
     if (file.size > MAX_UPLOAD_BYTES) {
       return jsonError("Dosya boyutu en fazla 5 MB olabilir.", 400)
     }
 
     const arrayBuffer = await file.arrayBuffer()
-    const result = await uploadBuffer(Buffer.from(arrayBuffer), file.name, file.type)
+    const result = await uploadBuffer(Buffer.from(arrayBuffer), file.name, file.type, requestedFolder)
 
     return NextResponse.json({
       url: result.secure_url || result.url,
