@@ -30,8 +30,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useAuth, useFirestore } from "@/firebase"
+import { useAuth, useFirestore, useStorage } from "@/firebase"
 import { collection, getDocs } from "firebase/firestore"
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 import { loginWithLocalPersonnel } from "@/lib/auth-session"
@@ -39,6 +40,7 @@ import { loginWithFirebasePersonnel } from "@/lib/firebase-auth-personnel"
 import { formatDateTR } from "@/lib/date-time"
 import { deleteSharedRecord, useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 import { cn } from "@/lib/utils"
+import { firebaseConfig } from "@/firebase/config"
 
 const SETTINGS_KEY = "app_mobile_preview_settings"
 const ATTENDANCE_KEY = "app_mobile_attendance_preview"
@@ -48,6 +50,8 @@ const AUDIT_KEY = "app_audit_logs"
 const NONE = "__none__"
 const MOBILE_ACCESS_STORAGE_KEYS = ["app_personnel", "app_auth_session", ...ACCESS_STORAGE_KEYS] as const
 const MAX_GPS_DISTANCE_METERS = 150
+const LEAVE_ATTACHMENT_ACCEPT = ["image/jpeg", "image/png", "application/pdf"]
+const LEAVE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
 
 const screens = ["Ana", "Giriş", "QR", "GPS", "Vardiya", "İzin", "Mola", "Bildirim", "Profil"]
 const themes = ["Koyu Premium", "Açık Kurumsal", "Evyapar Kırmızı", "Mavi/Mor Premium"]
@@ -76,6 +80,10 @@ function readObject(key: string) {
 
 function writeArray(key: string, value: any[]) {
   localStorage.setItem(key, JSON.stringify(value))
+}
+
+function sanitizeStorageFilename(name: string) {
+  return name.trim().replace(/[\\/#?%*:|"<>]/g, "-").replace(/\s+/g, "-") || `attachment-${Date.now()}`
 }
 
 function getId(item: any) {
@@ -405,6 +413,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   const { toast } = useToast()
   const auth = useAuth()
   const db = useFirestore()
+  const storage = useStorage()
   const isStandaloneApp = variant === "app"
   const [accessState, setAccessState] = React.useState(() => readCurrentAccess())
   const [userModeParam, setUserModeParam] = React.useState(() => isMobileUserModeRequested())
@@ -1035,8 +1044,42 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       toast({ variant: "destructive", title: "Izin kaydedilemedi", description: "Personel bulunamadi." })
       return false
     }
+    const attachmentFile = form.attachmentFile as File | null | undefined
+    const leaveRequestId = `mobile-leave-${Date.now()}`
+    let attachment: Record<string, any> = {}
+
+    if (attachmentFile) {
+      if (!firebaseConfig.storageBucket || firebaseConfig.storageBucket.includes("placeholder")) {
+        toast({ variant: "destructive", title: "Dosya yuklenemedi", description: "Firebase Storage config eksik. Ekli izin talebi kaydedilmedi." })
+        return false
+      }
+
+      try {
+        const safeName = sanitizeStorageFilename(attachmentFile.name)
+        const uploadPath = `leave-attachments/${personId}/${leaveRequestId}/${safeName}`
+        const uploadRef = ref(storage, uploadPath)
+        const snapshot = await uploadBytes(uploadRef, attachmentFile, { contentType: attachmentFile.type })
+        const downloadURL = await getDownloadURL(snapshot.ref)
+        attachment = {
+          attachmentUrl: downloadURL,
+          attachmentName: attachmentFile.name,
+          attachmentType: attachmentFile.type,
+          attachmentSize: attachmentFile.size,
+          attachmentUploadedAt: new Date().toISOString(),
+        }
+      } catch (error) {
+        console.error("leave attachment upload failed", error)
+        toast({
+          variant: "destructive",
+          title: "Dosya yuklenemedi",
+          description: error instanceof Error ? error.message : "Firebase Storage yuklemesi basarisiz oldu.",
+        })
+        return false
+      }
+    }
+
     const record = {
-      id: `mobile-leave-${Date.now()}`,
+      id: leaveRequestId,
       personnelId: personId,
       "personelAdı": personName(selectedPerson),
       type: form.type,
@@ -1047,6 +1090,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       status: "Bekliyor",
       source: isStandaloneApp ? "mobile-app" : "mobile-preview",
       createdAt: new Date().toISOString(),
+      ...attachment,
     }
     const previousLeaves = readArray("app_leave_requests")
     writeArray("app_leave_requests", [record, ...previousLeaves])
@@ -1653,6 +1697,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
   const [endDay, setEndDay] = React.useState("")
   const [endMonth, setEndMonth] = React.useState("")
   const [endYear, setEndYear] = React.useState("")
+  const [attachmentFile, setAttachmentFile] = React.useState<File | null>(null)
   const [error, setError] = React.useState("")
   const [saving, setSaving] = React.useState(false)
   const currentYear = new Date().getFullYear()
@@ -1682,8 +1727,18 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
       setError("Bitis tarihi baslangictan once olamaz.")
       return
     }
+    if (attachmentFile) {
+      if (!LEAVE_ATTACHMENT_ACCEPT.includes(attachmentFile.type)) {
+        setError("Sadece JPG, PNG veya PDF yukleyebilirsiniz.")
+        return
+      }
+      if (attachmentFile.size > LEAVE_ATTACHMENT_MAX_BYTES) {
+        setError("Dosya boyutu en fazla 5 MB olabilir.")
+        return
+      }
+    }
     setSaving(true)
-    const saved = await onLeaveCreate({ ...form, startDate, endDate })
+    const saved = await onLeaveCreate({ ...form, startDate, endDate, attachmentFile })
     setSaving(false)
     if (saved === false) {
       setError("Kayit sirasinda hata olustu.")
@@ -1697,6 +1752,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
     setEndDay("")
     setEndMonth("")
     setEndYear("")
+    setAttachmentFile(null)
   }
   const items = leaves.slice(0, 8).map((leave: any) => ({
     title: leave.type || leave.leaveType || "İzin",
@@ -1728,6 +1784,25 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
             </div>
           </div>
           <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Açıklama" className="min-h-16 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
+          <div className="space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-white/45">Ek dosya</p>
+            <label className="block cursor-pointer rounded-2xl border border-dashed border-white/20 bg-white/10 px-3 py-3 text-xs font-bold text-white/75 transition hover:bg-white/15">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,application/pdf"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null
+                  setAttachmentFile(file)
+                  if (file && !LEAVE_ATTACHMENT_ACCEPT.includes(file.type)) setError("Sadece JPG, PNG veya PDF yukleyebilirsiniz.")
+                  else if (file && file.size > LEAVE_ATTACHMENT_MAX_BYTES) setError("Dosya boyutu en fazla 5 MB olabilir.")
+                  else setError("")
+                }}
+              />
+              {attachmentFile ? `${attachmentFile.name} · ${(attachmentFile.size / 1024 / 1024).toFixed(2)} MB` : "Görsel veya PDF yükle"}
+            </label>
+            <p className="text-[10px] font-semibold text-white/40">JPG, PNG veya PDF · Maksimum 5 MB</p>
+          </div>
           {error ? <p className="rounded-2xl border border-red-300/20 bg-red-500/15 px-3 py-2 text-xs font-bold text-red-100">{error}</p> : null}
           <Button data-mobile-action="leave-save" type="submit" disabled={saving} className="h-10 w-full rounded-2xl bg-white text-slate-950 hover:bg-white/90">{saving ? "Kaydediliyor..." : "Kaydet"}</Button>
         </form>

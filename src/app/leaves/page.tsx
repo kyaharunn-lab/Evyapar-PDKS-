@@ -638,6 +638,8 @@ export default function LeaveRequestsPage() {
                   </div>
                 </div>
 
+                <AttachmentPreview request={selectedRequest} />
+
                 {selectedRequest.status === "Rejected" && (
                   <div className="p-4 bg-red-50 border border-red-100 rounded-xl">
                     <h5 className="text-xs font-bold uppercase tracking-widest text-accent mb-2">{l.rejectionReason}</h5>
@@ -754,6 +756,45 @@ function DetailItem({ label, value }: { label: string, value: string }) {
     <div className="space-y-1">
       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</p>
       <p className="text-sm font-bold text-primary">{value}</p>
+    </div>
+  )
+}
+
+function AttachmentPreview({ request }: { request: any }) {
+  const url = request?.attachmentUrl
+  const name = request?.attachmentName || "Ek dosya"
+  const type = String(request?.attachmentType || "")
+  const size = Number(request?.attachmentSize || 0)
+  const sizeLabel = size ? `${(size / 1024 / 1024).toFixed(2)} MB` : ""
+
+  return (
+    <div className="space-y-4">
+      <h5 className="text-xs font-bold uppercase tracking-widest text-slate-400">Ek</h5>
+      {!url ? (
+        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500">Ek yok</div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm">
+          {type.startsWith("image/") ? (
+            <a href={url} target="_blank" rel="noopener noreferrer" className="block bg-slate-950">
+              <img src={url} alt={name} className="max-h-72 w-full object-contain" />
+            </a>
+          ) : null}
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/5 text-primary">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-extrabold text-primary">{name}</p>
+                <p className="text-xs font-semibold text-slate-500">{type || "Dosya"}{sizeLabel ? ` · ${sizeLabel}` : ""}</p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="h-10 rounded-xl">
+              <a href={url} target="_blank" rel="noopener noreferrer">{type === "application/pdf" ? "PDF Aç" : "Dosyayı Aç"}</a>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

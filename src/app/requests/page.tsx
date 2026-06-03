@@ -283,6 +283,7 @@ function PendingApprovalsPanel({ leaves, advances, personnel, onStatusChange }: 
                 <TableHead className="pl-6">Talep Türü</TableHead>
                 <TableHead>Personel</TableHead>
                 <TableHead>Özet</TableHead>
+                <TableHead>Ek</TableHead>
                 <TableHead>Durum</TableHead>
                 <TableHead>Tarih</TableHead>
                 <TableHead className="pr-6 text-right">Aksiyon</TableHead>
@@ -299,6 +300,16 @@ function PendingApprovalsPanel({ leaves, advances, personnel, onStatusChange }: 
                     {request.requestType === "Avans"
                       ? `${Number(request?.amount || 0).toLocaleString("tr-TR")} ${request?.currency || "₺"}`
                       : request?.leaveType || request?.type || request?.description || "İzin talebi"}
+                  </TableCell>
+                  <TableCell>
+                    {request?.attachmentUrl ? (
+                      <a href={request.attachmentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full border border-primary/10 bg-primary/5 px-2.5 py-1 text-[11px] font-bold text-primary">
+                        <FileText className="h-3.5 w-3.5" />
+                        Ek var
+                      </a>
+                    ) : (
+                      <span className="text-[11px] font-bold text-slate-400">Ek yok</span>
+                    )}
                   </TableCell>
                   <TableCell><StatusPill status={request?.status} /></TableCell>
                   <TableCell className="text-xs text-slate-500">{getDateLabel(request)}</TableCell>

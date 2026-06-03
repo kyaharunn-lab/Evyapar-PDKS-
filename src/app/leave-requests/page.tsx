@@ -915,6 +915,8 @@ export default function LeaveRequestsPage() {
                 </div>
               )}
 
+              <LeaveAttachmentBlock request={selectedRequest} />
+
               {/* Hourly Time Info */}
               {selectedRequest.leaveType === "hourly" && selectedRequest.startTime && selectedRequest.endTime && (
                 <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
@@ -1040,6 +1042,43 @@ export default function LeaveRequestsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function LeaveAttachmentBlock({ request }: { request: any }) {
+  const url = request?.attachmentUrl
+  const name = request?.attachmentName || "Ek dosya"
+  const type = String(request?.attachmentType || "")
+  const size = Number(request?.attachmentSize || 0)
+  const sizeLabel = size ? `${(size / 1024 / 1024).toFixed(2)} MB` : ""
+
+  return (
+    <div className="p-4 bg-slate-50 rounded-xl">
+      <p className="text-xs font-bold text-slate-600 mb-3">EK</p>
+      {!url ? (
+        <p className="text-sm font-bold text-slate-400">Ek yok</p>
+      ) : (
+        <div className="space-y-3">
+          {type.startsWith("image/") ? (
+            <a href={url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-xl bg-slate-950">
+              <img src={url} alt={name} className="max-h-60 w-full object-contain" />
+            </a>
+          ) : null}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <FileText className="h-5 w-5 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-extrabold text-slate-900">{name}</p>
+                <p className="text-xs font-semibold text-slate-500">{type || "Dosya"}{sizeLabel ? ` · ${sizeLabel}` : ""}</p>
+              </div>
+            </div>
+            <Button asChild variant="outline" className="h-9 rounded-xl">
+              <a href={url} target="_blank" rel="noopener noreferrer">{type === "application/pdf" ? "PDF Aç" : "Aç"}</a>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

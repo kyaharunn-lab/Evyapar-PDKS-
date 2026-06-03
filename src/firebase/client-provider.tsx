@@ -16,11 +16,11 @@ const attendanceSyncTargets = [
 ]
 
 export const FirebaseClientProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { firebaseApp, firestore, auth } = useMemo(() => initializeFirebase(), []);
+  const { firebaseApp, firestore, auth, storage } = useMemo(() => initializeFirebase(), []);
   useFirestoreLocalMirror(firestore, attendanceSyncTargets);
 
   return (
-    <FirebaseProvider firebaseApp={firebaseApp} firestore={firestore} auth={auth}>
+    <FirebaseProvider firebaseApp={firebaseApp} firestore={firestore} auth={auth} storage={storage}>
       {children}
     </FirebaseProvider>
   );
