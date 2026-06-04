@@ -58,6 +58,7 @@ import { AddPersonnelForm } from "@/components/personnel/add-personnel-form"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase"
 import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
+import { createFirebasePersonnelAuthUser } from "@/lib/firebase-auth-personnel"
 import { deleteSharedRecord, writeSharedRecord } from "@/lib/shared-data-sync"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -363,7 +364,7 @@ export default function PersonnelPage() {
       surname: selectedEmployee.surname || "",
       phone: selectedEmployee.phone || "",
       email: selectedEmployee.email || "",
-      password: selectedEmployee.password || "",
+      password: "",
       branchId: selectedEmployee.branchId || "",
       departmentId: selectedEmployee.departmentId || "",
       position: selectedEmployee.position || "",
@@ -531,14 +532,6 @@ export default function PersonnelPage() {
       })
       return
     }
-    if (!editForm.password?.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Hata",
-        description: "Şifre zorunludur.",
-      })
-      return
-    }
     if (!editForm.branchId?.trim()) {
       toast({
         variant: "destructive",
@@ -579,9 +572,33 @@ export default function PersonnelPage() {
     }
 
     const rolePermissions = getRolePermissions(editForm.role)
+    const mobilePassword = (editForm.password || "").trim()
+    let authFields: Record<string, string> = {}
+    if (mobilePassword) {
+      if (selectedEmployee.authUid) {
+        toast({
+          variant: "destructive",
+          title: "Mobil giriş şifresi güncellenemedi",
+          description: "Bu personelin Firebase Auth kullanıcısı zaten var. Şifre değişikliği Firebase Console üzerinden yapılmalıdır.",
+        })
+        return
+      }
+      const authResult = await createFirebasePersonnelAuthUser(editForm.email, mobilePassword)
+      if (!authResult.ok) {
+        toast({
+          variant: "destructive",
+          title: "Mobil giriş kullanıcısı oluşturulamadı",
+          description: authResult.error || "Firebase Auth kullanıcı oluşturma işlemi başarısız oldu.",
+        })
+        return
+      }
+      authFields = { authUid: authResult.uid, password: mobilePassword }
+    }
+    const { password: _password, ...editValues } = editForm
     const updated = {
       ...selectedEmployee,
-      ...editForm,
+      ...editValues,
+      ...authFields,
       ...photoFields,
       departmentId: editForm.departmentId || undefined,
       hasAdminAccess: rolePermissions.panelAccess,
@@ -986,8 +1003,8 @@ export default function PersonnelPage() {
                             <Input type="email" value={editForm.email} onChange={(e) => setEditForm((p: any) => ({ ...p, email: e.target.value }))} />
                           </div>
                           <div className="space-y-2">
-                            <Label>Şifre <span className="text-red-500">*</span></Label>
-                            <Input type="password" value={editForm.password} onChange={(e) => setEditForm((p: any) => ({ ...p, password: e.target.value }))} />
+                            <Label>Mobil giriş şifresi</Label>
+                            <Input type="password" placeholder="Boşsa mevcut şifre korunur" value={editForm.password} onChange={(e) => setEditForm((p: any) => ({ ...p, password: e.target.value }))} />
                           </div>
                           <div className="space-y-2">
                             <Label>Telefon <span className="text-red-500">*</span></Label>

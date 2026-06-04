@@ -60,7 +60,7 @@ const personnelSchema = z.object({
   gender: z.string().optional(),
   phone: z.string().min(10, "Geçerli bir telefon numarası girin"),
   email: z.string().email("Geçerli bir e-posta adresi girin"),
-  password: z.string().min(4, "Şifre en az 4 karakter olmalıdır"),
+  password: z.string().optional(),
   address: z.string().optional(),
   branchId: z.string().min(1, "Şube seçimi zorunludur"),
   departmentId: z.string().optional().or(z.literal("")),
@@ -307,21 +307,26 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
         }
       }
       let authUid = ""
-      const authResult = await createFirebasePersonnelAuthUser(values.email, values.password)
-      if (authResult.ok) {
-        authUid = authResult.uid
-      } else {
-        console.error("personnel firebase auth create failed", authResult.error)
-        toast({
-          variant: "destructive",
-          title: "Firebase Auth kullanicisi olusturulamadi",
-          description: authResult.error || "Personel localStorage fallback ile kaydedilecek.",
-        })
+      const mobilePassword = (values.password || "").trim()
+      if (mobilePassword) {
+        const authResult = await createFirebasePersonnelAuthUser(values.email, mobilePassword)
+        if (authResult.ok) {
+          authUid = authResult.uid
+        } else {
+          console.error("personnel firebase auth create failed", authResult.error)
+          toast({
+            variant: "destructive",
+            title: "Mobil giriş kullanıcısı oluşturulamadı",
+            description: authResult.error || "Firebase Auth kullanıcı oluşturma işlemi başarısız oldu.",
+          })
+          return
+        }
       }
       const newPersonnel = {
         id: `personnel-${createdAt}-${Math.random().toString(16).slice(2)}`,
         authUid,
         ...values,
+        password: mobilePassword || undefined,
         hasAdminAccess: rolePermissions.panelAccess,
         hasMobileAccess: rolePermissions.mobileAccess,
         pageAccess: rolePermissions.pageAccess,
@@ -493,8 +498,9 @@ export function AddPersonnelForm({ onSuccess, onCancel }: AddPersonnelFormProps)
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Şifre <span className="text-red-500">*</span></FormLabel>
-                        <FormControl><Input type="password" placeholder="Mobil/panel giriş şifresi" {...field} /></FormControl>
+                        <FormLabel>Mobil giriş şifresi</FormLabel>
+                        <FormControl><Input type="password" placeholder="Firebase Auth mobil giriş şifresi" {...field} /></FormControl>
+                        <FormDescription>Boş bırakılırsa mobil giriş kullanıcısı oluşturulmaz.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
