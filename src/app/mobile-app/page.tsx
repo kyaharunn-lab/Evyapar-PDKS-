@@ -4,8 +4,9 @@ import * as React from "react"
 
 import { MobileExperience } from "../mobile-preview/mobile-experience"
 import { useAuth, useFirestore } from "@/firebase"
-import { loginWithLocalPersonnel, readAuthSession } from "@/lib/auth-session"
-import { loginWithFirebasePersonnel } from "@/lib/firebase-auth-personnel"
+import { readAuthSession } from "@/lib/auth-session"
+import { signInWithEmailAndPassword, signOut } from "firebase/auth"
+import { collection, getDocs, query, where } from "firebase/firestore"
 
 export default function MobileAppPage() {
   const [hasSession, setHasSession] = React.useState(false)
@@ -42,6 +43,48 @@ function NativeMobileLogin({ onSuccess }: { onSuccess: () => void }) {
   const db = useFirestore()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
+
+  const writeMobileSession = React.useCallback((personnel: any, authUid: string) => {
+    const personnelId = (personnel?.id || personnel?.personnelId || personnel?.uid || personnel?.email || "").toString()
+    const sessionUser = {
+      id: personnelId,
+      authUid,
+      email: personnel?.email || "",
+      name: personnel?.fullName || [personnel?.name || personnel?.firstName, personnel?.surname || personnel?.lastName].filter(Boolean).join(" ") || personnel?.email || "Kullanici",
+      roleName: personnel?.roleName || personnel?.role || personnel?.title || "",
+      panelAccess: Boolean(personnel?.panelAccess ?? personnel?.hasAdminAccess),
+      mobileAccess: true,
+      pageAccess: Array.isArray(personnel?.pageAccess) ? personnel.pageAccess : [],
+      branchAccess: Array.isArray(personnel?.branchAccess) ? personnel.branchAccess : [],
+    }
+    const nextPersonnel = {
+      ...personnel,
+      id: personnelId,
+      authUid: personnel?.authUid || authUid,
+      hasMobileAccess: true,
+      mobileAccess: true,
+    }
+    const currentPersonnel = JSON.parse(window.localStorage.getItem("app_personnel") || "[]")
+    const personnelList = Array.isArray(currentPersonnel) ? currentPersonnel : []
+    window.localStorage.setItem("app_personnel", JSON.stringify([
+      nextPersonnel,
+      ...personnelList.filter((item: any) => (item?.id || item?.personnelId || item?.email || "").toString() !== personnelId),
+    ]))
+    window.localStorage.setItem("app_auth_session", JSON.stringify({
+      personnelId,
+      email: sessionUser.email,
+      name: sessionUser.name,
+      authUid,
+      user: sessionUser,
+      panelAccess: sessionUser.panelAccess,
+      mobileAccess: true,
+      loggedInAt: new Date().toISOString(),
+      source: "firebase-auth-mobile",
+    }))
+    window.dispatchEvent(new Event("app-personnel-updated"))
+    window.dispatchEvent(new Event("app-auth-updated"))
+    window.dispatchEvent(new Event("app-access-updated"))
+  }, [])
   const [error, setError] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -50,20 +93,40 @@ function NativeMobileLogin({ onSuccess }: { onSuccess: () => void }) {
     setError("")
     setSubmitting(true)
 
-    const firebaseResult = await loginWithFirebasePersonnel(auth, db, email, password)
-    if (firebaseResult.ok) {
+    if (!auth || !db) {
       setSubmitting(false)
-      onSuccess()
+      setError("Firebase bağlantısı hazır değil.")
       return
     }
 
-    const result = loginWithLocalPersonnel(email, password)
-    setSubmitting(false)
-    if (!result.ok) {
-      setError(result.error || firebaseResult.error || "Giriş yapılamadı.")
-      return
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password)
+      const authEmail = credential.user.email || email.trim()
+      const snapshot = await getDocs(query(collection(db, "personnel"), where("email", "==", authEmail)))
+      const personnel: any = snapshot.empty ? null : { ...snapshot.docs[0].data(), id: snapshot.docs[0].id }
+
+      if (!personnel) {
+        await signOut(auth).catch(() => undefined)
+        setError("Mobil erişim yetkiniz bulunmuyor.")
+        setSubmitting(false)
+        return
+      }
+
+      if (personnel.hasMobileAccess !== true) {
+        await signOut(auth).catch(() => undefined)
+        setError("Mobil erişim yetkiniz kapalı.")
+        setSubmitting(false)
+        return
+      }
+
+      writeMobileSession(personnel, credential.user.uid)
+      setSubmitting(false)
+      onSuccess()
+    } catch (loginError) {
+      await signOut(auth).catch(() => undefined)
+      setSubmitting(false)
+      setError(loginError instanceof Error ? loginError.message : "Giriş yapılamadı.")
     }
-    onSuccess()
   }
 
   return (

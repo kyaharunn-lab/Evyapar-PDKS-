@@ -12,6 +12,7 @@ import {
   Home,
   IdCard,
   LocateFixed,
+  LogOut,
   MapPin,
   QrCode,
   RefreshCw,
@@ -34,7 +35,7 @@ import { useAuth, useFirestore } from "@/firebase"
 import { collection, getDocs } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
-import { loginWithLocalPersonnel } from "@/lib/auth-session"
+import { loginWithLocalPersonnel, logoutLocalSession } from "@/lib/auth-session"
 import { loginWithFirebasePersonnel } from "@/lib/firebase-auth-personnel"
 import { formatDateTR } from "@/lib/date-time"
 import { deleteSharedRecord, useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
@@ -399,6 +400,19 @@ function saveFile(filename: string, content: string) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+async function downloadArchiveFile(url: string, filename: string) {
+  const response = await fetch(url)
+  const blob = await response.blob()
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = objectUrl
+  link.download = filename || "dosya"
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(objectUrl)
 }
 
 function notifyAttendanceSync() {
@@ -1435,7 +1449,7 @@ function PhoneMockup(props: any) {
           <div data-mobile-preview-scroll className="h-[610px] overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2 transition-all duration-300">
             <MobileScreen {...props} palette={palette} />
           </div>
-          <BottomNav palette={palette} active={settings.screen} setScreen={props.setScreen} />
+          <BottomNav palette={palette} active={settings.screen} setScreen={props.setScreen} isStandaloneApp={props.isStandaloneApp} />
         </div>
       </div>
     </div>
@@ -1445,7 +1459,6 @@ function PhoneMockup(props: any) {
 function MobileAppShell(props: any) {
   const { settings } = props
   const palette = getTheme(settings.theme)
-  const isAndroid = settings.device === "Android"
 
   const setMobileScreen = React.useCallback((screen: string) => {
     props.setScreen(screen === "Giriş" || screen === "GPS" ? "QR" : screen)
@@ -1453,11 +1466,10 @@ function MobileAppShell(props: any) {
 
   return (
     <div className={cn("flex h-dvh min-h-dvh w-full flex-col overflow-hidden", palette.shell)}>
-      <MobileStatusBar isAndroid={isAndroid} />
       <div data-mobile-app-scroll className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 pt-2 transition-all duration-300">
         <MobileScreen {...props} palette={palette} setScreen={setMobileScreen} />
       </div>
-      <BottomNav palette={palette} active={settings.screen} setScreen={setMobileScreen} />
+      <BottomNav palette={palette} active={settings.screen} setScreen={setMobileScreen} isStandaloneApp={props.isStandaloneApp} />
     </div>
   )
 }
@@ -1513,27 +1525,28 @@ function MobileHeader({ person, palette, title }: any) {
   )
 }
 
-function HomeScreen({ person, branch, department, position, shifts, settings, palette, setScreen, onBreak }: any) {
+function HomeScreen({ person, branch, department, position, shifts, settings, palette, setScreen, onBreak, isStandaloneApp }: any) {
   const hour = new Date().getHours()
   const greeting = hour < 11 ? "Günaydın" : hour < 18 ? "İyi günler" : "İyi akşamlar"
   const todayShift = shifts[0]
+  const hasTodayShift = Boolean(todayShift?.name)
   return (
     <div>
       <MobileHeader person={person} palette={palette} title={greeting} />
       <StatusHero state={settings.state} palette={palette} qrStatus={settings.qrStatus} gpsStatus={settings.gpsStatus} />
       <MobileCard>
         <div className="flex items-center justify-between"><span className="text-sm font-bold text-white/60">Bugünkü vardiya</span><CalendarClock className="h-4 w-4 text-white/60" /></div>
-        <div className="mt-2 text-lg font-extrabold text-white">{todayShift?.name || "Tanımlı vardiya yok"}</div>
-        <p className="text-xs text-white/50">{todayShift?.startTime || todayShift?.entryTime || "--:--"} - {todayShift?.endTime || todayShift?.exitTime || "--:--"} · {branch ? branchName(branch) : "Şube yok"}</p>
+        <div className="mt-2 text-lg font-extrabold text-white">{hasTodayShift ? todayShift.name : "Bugün için atanmış vardiya bulunamadı."}</div>
+        {hasTodayShift && <p className="text-xs text-white/50">{todayShift?.startTime || todayShift?.entryTime || "--:--"} - {todayShift?.endTime || todayShift?.exitTime || "--:--"} - {branch ? branchName(branch) : "Tanımlı değil"}</p>}
       </MobileCard>
       <MobileCard className="mt-3 grid grid-cols-2 gap-2">
-        <Info label="Şube" value={branch ? branchName(branch) : "Şube yok"} />
-        <Info label="Departman" value={department ? departmentName(department) : "Departman yok"} />
-        <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "Pozisyon yok")} />
+        <Info label="Şube" value={branch ? branchName(branch) : "Tanımlı değil"} />
+        <Info label="Departman" value={department ? departmentName(department) : "Tanımlı değil"} />
+        <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "Tanımlı değil")} />
       </MobileCard>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <QuickAction actionKey="qr" icon={QrCode} label="QR ile giriş" palette={palette} onClick={() => setScreen("QR")} />
-        <QuickAction actionKey="gps" icon={LocateFixed} label="GPS ile giriş" palette={palette} onClick={() => setScreen("GPS")} />
+        <QuickAction actionKey="qr" icon={QrCode} label={isStandaloneApp ? "QR ile Giriş / Çıkış" : "QR ile giriş"} description={isStandaloneApp ? "Mağaza QR kodunu okutarak giriş veya çıkış yap" : undefined} palette={palette} onClick={() => setScreen("QR")} className={isStandaloneApp ? "col-span-2" : undefined} />
+        {!isStandaloneApp && <QuickAction actionKey="gps" icon={LocateFixed} label="GPS ile giriş" palette={palette} onClick={() => setScreen("GPS")} />}
         <QuickAction actionKey="break" icon={Clock3} label={settings.state === "Molada" ? "Mola bitir" : "Mola başlat"} palette={palette} onClick={onBreak} />
         <QuickAction actionKey="leave" icon={CalendarClock} label="İzin talep et" palette={palette} onClick={() => setScreen("İzin")} />
         <QuickAction actionKey="shifts" icon={IdCard} label="Vardiyalarım" palette={palette} onClick={() => setScreen("Vardiya")} />
@@ -1572,7 +1585,7 @@ function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts,
   )
 }
 
-function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
+function QrScreen({ qrPoints, branch, settings, palette, onQr, isStandaloneApp }: any) {
   const activePoint = qrPoints.find((point: any) => isActiveQrPoint(point) && qrPointMatchesBranch(point, branch))
   const firstActivePoint = qrPoints.find((point: any) => isActiveQrPoint(point))
   const streamRef = React.useRef<MediaStream | null>(null)
@@ -1662,7 +1675,9 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr }: any) {
       </div>
       {cameraError ? <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">{cameraError}</p> : null}
       <Button data-mobile-action="qr-camera" onClick={scanning ? stopScanner : startCameraScan} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{scanning ? "Taramayı Durdur" : "Kamerayla QR Tara"}</Button>
+      {!isStandaloneApp && (
       <Button data-mobile-action="qr-sim" onClick={handleQr} variant="outline" className="mt-2 h-11 w-full rounded-2xl border-white/15 bg-white/10 text-sm font-extrabold text-white hover:bg-white/15">QR Simülasyonu Başlat</Button>
+      )}
       <MobileCard className="mt-4">
         <p className="text-xs font-bold uppercase tracking-widest text-white/50">Şube QR noktası</p>
         <h4 className="mt-1 text-lg font-extrabold text-white">{activePoint?.pointName || activePoint?.name || "Bu şubeye ait QR noktası bulunamadı."}</h4>
@@ -1870,25 +1885,63 @@ function NotificationScreen({ leaves, shifts, settings, notificationSettings, pa
   return <ListScreen title="Bildirimler" icon={Bell} empty="Bildirim kaydı bulunmuyor." items={items} palette={palette} />
 }
 
-function ProfileScreen({ person, branch, department, position, device, kvkk, palette }: any) {
+function ProfileScreen({ person, branch, department, position, device, kvkk, palette, leaves = [], shifts = [], setScreen }: any) {
   const maskedTckn = person?.tckn ? `${String(person.tckn).slice(0, 2)}*******${String(person.tckn).slice(-2)}` : "Tanımlı değil"
+  const archiveItems = Array.isArray(person?.digitalArchive) ? person.digitalArchive : []
+  const leaveItems = Array.isArray(leaves) ? leaves : []
+  const handleLogout = () => {
+    logoutLocalSession()
+  }
+
   return (
     <div>
       <div className="pt-5 text-center">
-        <Avatar className="mx-auto h-24 w-24 border-4 border-white/15"><AvatarImage src={person?.photo || person?.avatar} /><AvatarFallback className={cn("text-xl font-black text-white", palette.button)}>{personName(person).slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+        <Avatar className="mx-auto h-24 w-24 border-4 border-white/15"><AvatarImage src={person?.photoUrl || person?.avatarUrl || person?.photo || person?.avatar} /><AvatarFallback className={cn("text-xl font-black text-white", palette.button)}>{personName(person).slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
         <h3 className="mt-4 text-2xl font-extrabold text-white">{personName(person)}</h3>
         <p className="text-sm font-semibold text-white/50">{person?.personnelCode || person?.sicilNo || person?.id || "Sicil yok"}</p>
       </div>
       <MobileCard className="mt-6 space-y-3">
         <Info label="TCKN" value={maskedTckn} />
         <Info label="Telefon" value={valueText(person?.phone || person?.gsm, "Telefon yok")} />
-        <Info label="Şube" value={branch ? branchName(branch) : "Şube yok"} />
-        <Info label="Departman" value={department ? departmentName(department) : "Departman yok"} />
-        <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "Pozisyon yok")} />
+        <Info label="Şube" value={branch ? branchName(branch) : "Tanımlı değil"} />
+        <Info label="Departman" value={department ? departmentName(department) : "Tanımlı değil"} />
+        <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "Tanımlı değil")} />
         <Info label="Role" value={valueText(person?.role || person?.roleId, "Rol yok")} />
         <Info label="Device ID" value={device?.deviceId || device?.id || "Tanımlı değil"} />
         <Info label="KVKK" value={kvkk?.status || kvkk?.kvkkStatus || kvkk?.consentStatus || "Bekliyor"} />
         <Info label="İşe giriş" value={formatDateTR(person?.startDate || person?.hireDate || person?.employmentStartDate)} />
+      </MobileCard>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <QuickAction actionKey="profile-archive" icon={IdCard} label="Dijital Arşiv" palette={palette} onClick={() => document.getElementById("mobile-digital-archive")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
+        <QuickAction actionKey="profile-leaves" icon={CalendarClock} label="İzinlerim" palette={palette} onClick={() => document.getElementById("mobile-profile-leaves")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
+        <QuickAction actionKey="profile-shifts" icon={Clock3} label="Vardiyalarım" palette={palette} onClick={() => setScreen?.("Vardiya")} />
+        <QuickAction actionKey="profile-logout" icon={LogOut} label="Çıkış Yap" palette={palette} onClick={handleLogout} />
+      </div>
+
+      <MobileCard id="mobile-digital-archive" className="mt-4 space-y-3">
+        <div className="flex items-center justify-between"><h4 className="font-extrabold text-white">Dijital Arşiv</h4><Badge className="bg-white/15 text-white hover:bg-white/15">{archiveItems.length}</Badge></div>
+        {archiveItems.length ? archiveItems.map((item: any) => (
+          <div key={item?.id || item?.fileUrl || item?.publicId} className="rounded-2xl border border-white/10 bg-white/10 p-3">
+            <div className="font-extrabold text-white">{item?.title || item?.name || item?.fileName || "Dosya"}</div>
+            <div className="mt-1 text-xs font-semibold text-white/50">{item?.category || "Diğer"}</div>
+            <div className="mt-3 flex gap-2">
+              {item?.fileUrl && <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15"><a href={item.fileUrl} target="_blank" rel="noopener noreferrer">Görüntüle</a></Button>}
+              {item?.fileUrl && <Button size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15" onClick={() => downloadArchiveFile(item.fileUrl, item?.fileName || item?.title || "dosya")}>İndir</Button>}
+            </div>
+          </div>
+        )) : <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-center text-sm font-semibold text-white/55">Henüz dosya yok</div>}
+      </MobileCard>
+
+      <MobileCard id="mobile-profile-leaves" className="mt-4 space-y-3">
+        <div className="flex items-center justify-between"><h4 className="font-extrabold text-white">İzinlerim</h4><Badge className="bg-white/15 text-white hover:bg-white/15">{leaveItems.length}</Badge></div>
+        {leaveItems.length ? leaveItems.map((leave: any) => (
+          <div key={leave?.id || `${leave?.startDate}-${leave?.endDate}-${leave?.type}`} className="rounded-2xl border border-white/10 bg-white/10 p-3">
+            <div className="font-extrabold text-white">{leave?.leaveType || leave?.type || "İzin"}</div>
+            <div className="mt-1 text-xs font-semibold text-white/50">{formatDateTR(leave?.startDate)} - {formatDateTR(leave?.endDate || leave?.startDate)}</div>
+            <Badge className="mt-3 bg-white/15 text-white hover:bg-white/15">{normalizeStatus(leave?.status)}</Badge>
+          </div>
+        )) : <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-center text-sm font-semibold text-white/55">Henüz izin talebiniz yok</div>}
       </MobileCard>
     </div>
   )
@@ -1922,17 +1975,23 @@ function ListItems({ items, empty }: any) {
   )
 }
 
-function BottomNav({ palette, active, setScreen }: any) {
-  const items = [
+function BottomNav({ palette, active, setScreen, isStandaloneApp }: any) {
+  const items = (isStandaloneApp ? [
+    ["Ana", "home", Home],
+    ["QR", "qr", QrCode],
+    ["Profil", "profile", UserRound],
+  ] : [
     ["Ana", "home", Home],
     ["Giriş", "check", Fingerprint],
     ["QR", "qr", QrCode],
     ["Profil", "profile", UserRound],
-  ]
+  ])
+  const activeText = String(active || "").toLocaleLowerCase("tr-TR")
+  const activeScreen = isStandaloneApp && (activeText.startsWith("giri") || active === "GPS") ? "QR" : active
   return (
-    <div data-mobile-preview-bottom-nav className="mx-3 mb-3 grid h-[68px] grid-cols-4 rounded-[26px] border border-white/10 bg-black/20 px-2 py-2 backdrop-blur-xl">
+    <div data-mobile-preview-bottom-nav className={cn("mx-3 mb-3 grid h-[68px] rounded-[26px] border border-white/10 bg-black/20 px-2 py-2 backdrop-blur-xl", isStandaloneApp ? "grid-cols-3" : "grid-cols-4")}>
       {items.map(([label, key, Icon]: any) => {
-        const selected = active === label
+        const selected = activeScreen === label
         return <button key={label} data-mobile-nav={key} onClick={() => setScreen(label)} className={cn("flex flex-col items-center justify-center rounded-2xl text-[9px] font-black transition-all duration-300", selected ? `${palette.nav} text-white shadow-lg` : "text-white/45 hover:bg-white/10 hover:text-white/80")}><Icon className="mb-1 h-4 w-4" />{label}</button>
       })}
     </div>
@@ -1953,16 +2012,22 @@ function StatusHero({ state, palette, qrStatus, gpsStatus }: any) {
   )
 }
 
-function QuickAction({ icon: Icon, label, palette, onClick, actionKey }: any) {
-  return <button data-mobile-action={actionKey} onClick={onClick} className="rounded-3xl border border-white/10 bg-white/10 p-4 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-white/15"><Icon className={cn("mb-3 h-5 w-5 rounded-xl p-0.5", palette.text)} /><div className="text-xs font-extrabold">{label}</div></button>
+function QuickAction({ icon: Icon, label, description, palette, onClick, actionKey, className }: any) {
+  return (
+    <button data-mobile-action={actionKey} onClick={onClick} className={cn("rounded-3xl border border-white/10 bg-white/10 p-4 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-white/15", className)}>
+      <Icon className={cn("mb-3 h-5 w-5 rounded-xl p-0.5", palette.text)} />
+      <div className="text-xs font-extrabold">{label}</div>
+      {description && <p className="mt-1 text-[11px] font-semibold leading-4 text-white/55">{description}</p>}
+    </button>
+  )
 }
 
 function VerifyRow({ label, value, danger }: any) {
   return <div className="mt-2 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/10 px-3 py-2.5"><span className="text-xs font-bold text-white/55">{label}</span><span className={cn("text-right text-xs font-black", danger ? "text-rose-300" : "text-emerald-300")}>{value}</span></div>
 }
 
-function MobileCard({ children, className }: any) {
-  return <div className={cn("rounded-[26px] border border-white/10 bg-white/10 p-4 shadow-xl backdrop-blur-xl", className)}>{children}</div>
+function MobileCard({ children, className, id }: any) {
+  return <div id={id} className={cn("rounded-[26px] border border-white/10 bg-white/10 p-4 shadow-xl backdrop-blur-xl", className)}>{children}</div>
 }
 
 function Info({ label, value }: any) {
