@@ -3,7 +3,12 @@ import { v2 as cloudinary } from "cloudinary"
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "application/pdf"])
 const PERSONNEL_PHOTO_TYPES = new Set(["image/jpeg", "image/png"])
-const ALLOWED_FOLDERS = new Set(["evyapar-pdks/leave-documents", "evyapar-pdks/personnel-photos", "evyapar-pdks/personnel-documents"])
+const ALLOWED_FOLDERS = new Set([
+  "evyapar-pdks/leave-documents",
+  "evyapar-pdks/personnel-photos",
+  "evyapar-pdks/personnel-documents",
+  "evyapar-pdks/digital-archive",
+])
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 
 function jsonError(message: string, status: number) {

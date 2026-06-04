@@ -75,6 +75,7 @@ const PERSONNEL_PHOTO_TYPES = ["image/jpeg", "image/png"]
 const PERSONNEL_DOCUMENT_TYPES = ["image/jpeg", "image/png", "application/pdf"]
 const PERSONNEL_PHOTO_MAX_BYTES = 5 * 1024 * 1024
 const PERSONNEL_DOCUMENT_MAX_BYTES = 5 * 1024 * 1024
+const DIGITAL_ARCHIVE_CATEGORIES = ["Kimlik", "Sözleşme", "İşe Giriş Belgesi", "İzin Belgesi", "Sağlık Raporu", "Eğitim/Sertifika", "Diğer"]
 
 async function uploadPersonnelPhoto(file: File) {
   const uploadData = new FormData()
@@ -95,11 +96,30 @@ async function uploadPersonnelPhoto(file: File) {
 async function uploadPersonnelDocument(file: File) {
   const uploadData = new FormData()
   uploadData.append("file", file)
-  uploadData.append("folder", "evyapar-pdks/personnel-documents")
+  uploadData.append("folder", "evyapar-pdks/digital-archive")
   const response = await fetch("/api/upload", { method: "POST", body: uploadData })
   const result = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(result?.error || "Evrak yüklenemedi.")
   return result
+}
+
+function normalizeArchiveRecord(document: any, source = "manual") {
+  return {
+    id: document?.id || `archive-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title: document?.title || document?.name || "Evrak",
+    fileName: document?.fileName || document?.attachmentName || "evrak",
+    fileUrl: document?.fileUrl || document?.attachmentUrl || "",
+    publicId: document?.publicId || document?.attachmentPublicId || "",
+    fileType: document?.fileType || document?.attachmentType || "",
+    resourceType: document?.resourceType || document?.attachmentResourceType || "",
+    format: document?.format || "",
+    size: Number(document?.size || document?.bytes || 0),
+    category: document?.category || "Diğer",
+    source: document?.source || source,
+    relatedLeaveRequestId: document?.relatedLeaveRequestId || "",
+    uploadedAt: document?.uploadedAt || document?.attachmentUploadedAt || new Date().toISOString(),
+    uploadedBy: document?.uploadedBy || "admin",
+  }
 }
 
 async function downloadRemoteFile(url: string, filename: string) {
@@ -305,6 +325,20 @@ export default function PersonnelPage() {
     );
   }, [employees, searchTerm]);
 
+  const selectedArchiveItems = React.useMemo(() => {
+    if (!selectedEmployee) return []
+    const digitalArchive = Array.isArray(selectedEmployee.digitalArchive) ? selectedEmployee.digitalArchive : []
+    const legacyDocuments = Array.isArray(selectedEmployee.documents) ? selectedEmployee.documents : []
+    const seen = new Set<string>()
+    return [...digitalArchive.map((item: any) => normalizeArchiveRecord(item)), ...legacyDocuments.map((item: any) => normalizeArchiveRecord(item, "employmentDocument"))]
+      .filter((item) => {
+        const key = item.id || item.publicId || item.fileUrl
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+  }, [selectedEmployee])
+
   const [editForm, setEditForm] = React.useState<any>({
     name: "",
     surname: "",
@@ -380,6 +414,25 @@ export default function PersonnelPage() {
     setIsEditOpen(true)
   }, [])
 
+  const openProfileAfterMenuClose = React.useCallback((emp: any) => {
+    window.setTimeout(() => handleOpenProfile(emp), 0)
+  }, [handleOpenProfile])
+
+  const openEditAfterMenuClose = React.useCallback((emp: any) => {
+    window.setTimeout(() => handleOpenEdit(emp), 0)
+  }, [handleOpenEdit])
+
+  React.useEffect(() => {
+    if (isAddOpen || isProfileOpen || isEditOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isAddOpen, isProfileOpen, isEditOpen])
+
   const handleUploadDocument = React.useCallback(async () => {
     if (!selectedEmployee) return
     if (!documentForm.name.trim()) {
@@ -403,9 +456,9 @@ export default function PersonnelPage() {
     try {
       const result = await uploadPersonnelDocument(documentFile)
       const now = new Date().toISOString()
-      const documentRecord = {
-        id: `document-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        name: documentForm.name.trim(),
+      const archiveRecord = {
+        id: `archive-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        title: documentForm.name.trim(),
         fileName: result.originalFilename || documentFile.name,
         fileType: documentFile.type,
         fileUrl: result.url,
@@ -415,17 +468,19 @@ export default function PersonnelPage() {
         size: result.bytes || documentFile.size,
         uploadedAt: now,
         category: documentForm.category.trim() || "Diğer",
+        source: documentForm.category === "İşe Giriş Belgesi" ? "employmentDocument" : "manual",
+        uploadedBy: "admin",
       }
       const updated = {
         ...selectedEmployee,
-        documents: [documentRecord, ...(Array.isArray(selectedEmployee.documents) ? selectedEmployee.documents : [])],
+        digitalArchive: [archiveRecord, ...(Array.isArray(selectedEmployee.digitalArchive) ? selectedEmployee.digitalArchive : [])],
         updatedAt: Date.now(),
       }
       upsertEmployee(updated)
       setSelectedEmployee(updated)
       setDocumentForm({ name: "", category: "Diğer" })
       setDocumentFile(null)
-      toast({ title: "Başarılı", description: "Personel evrakı yüklendi." })
+      toast({ title: "Başarılı", description: "Dijital arşiv dosyası yüklendi." })
     } catch (error) {
       toast({
         variant: "destructive",
@@ -441,6 +496,7 @@ export default function PersonnelPage() {
     if (!selectedEmployee || !window.confirm("Bu evrak kaydını silmek istediğinize emin misiniz?")) return
     const updated = {
       ...selectedEmployee,
+      digitalArchive: (Array.isArray(selectedEmployee.digitalArchive) ? selectedEmployee.digitalArchive : []).filter((item: any) => item?.id !== documentId),
       documents: (Array.isArray(selectedEmployee.documents) ? selectedEmployee.documents : []).filter((item: any) => item?.id !== documentId),
       updatedAt: Date.now(),
     }
@@ -713,11 +769,11 @@ export default function PersonnelPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 p-1.5 rounded-xl shadow-2xl border-slate-100">
                           <DropdownMenuLabel className="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-1">{t.actions}</DropdownMenuLabel>
-                          <DropdownMenuItem className="rounded-lg py-2.5 cursor-pointer" onClick={() => handleOpenProfile(emp)}>
+                          <DropdownMenuItem className="rounded-lg py-2.5 cursor-pointer" onSelect={() => openProfileAfterMenuClose(emp)}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             <span className="font-semibold text-slate-700">{p.viewProfile}</span>
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="rounded-lg py-2.5 cursor-pointer" onClick={() => handleOpenEdit(emp)}>
+                          <DropdownMenuItem className="rounded-lg py-2.5 cursor-pointer" onSelect={() => openEditAfterMenuClose(emp)}>
                             <Edit2 className="mr-3 h-4 w-4 text-slate-400" />
                             <span className="font-semibold text-slate-700">{p.editDetails}</span>
                           </DropdownMenuItem>
@@ -822,48 +878,59 @@ export default function PersonnelPage() {
                   </div>
                   <Card className="overflow-hidden border-slate-100 shadow-sm">
                     <CardHeader className="border-b bg-slate-50/70">
-                      <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500">Personel Evrakları</CardTitle>
+                      <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500">Dijital Arsiv</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4 p-4">
                       <div className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div className="space-y-1.5">
-                            <Label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Evrak Adı</Label>
+                            <Label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Evrak Basligi</Label>
                             <Input value={documentForm.name} onChange={(event) => setDocumentForm((prev) => ({ ...prev, name: event.target.value }))} className="h-10 rounded-xl bg-white" placeholder="Kimlik Fotokopisi" />
                           </div>
                           <div className="space-y-1.5">
                             <Label className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Kategori</Label>
-                            <Input value={documentForm.category} onChange={(event) => setDocumentForm((prev) => ({ ...prev, category: event.target.value }))} className="h-10 rounded-xl bg-white" placeholder="Kimlik, Sözleşme, Diğer" />
+                            <Select value={documentForm.category} onValueChange={(value) => setDocumentForm((prev) => ({ ...prev, category: value }))}>
+                              <SelectTrigger className="h-10 rounded-xl bg-white">
+                                <SelectValue placeholder="Kategori sec" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DIGITAL_ARCHIVE_CATEGORIES.map((category) => (
+                                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                         <label className="block cursor-pointer rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-500 transition hover:bg-slate-50">
                           <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden" onChange={(event) => setDocumentFile(event.target.files?.[0] || null)} />
-                          {documentFile ? `${documentFile.name} · ${formatFileSize(documentFile.size)}` : "JPG, PNG veya PDF seç"}
+                          {documentFile ? `${documentFile.name} - ${formatFileSize(documentFile.size)}` : "JPG, PNG veya PDF sec"}
                         </label>
                         <Button type="button" disabled={documentUploading} onClick={handleUploadDocument} className="h-10 rounded-xl bg-primary hover:bg-primary/90">
-                          {documentUploading ? "Yükleniyor..." : "Evrak Yükle"}
+                          {documentUploading ? "Yukleniyor..." : "Arsive Yukle"}
                         </Button>
                       </div>
 
-                      {(Array.isArray(selectedEmployee.documents) ? selectedEmployee.documents : []).length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm font-bold text-slate-400">Henüz evrak yüklenmedi.</div>
+                      {selectedArchiveItems.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm font-bold text-slate-400">Henuz dijital arsiv dosyasi yok.</div>
                       ) : (
                         <div className="space-y-3">
-                          {(Array.isArray(selectedEmployee.documents) ? selectedEmployee.documents : []).map((document: any) => (
+                          {selectedArchiveItems.map((document: any) => (
                             <div key={document.id || document.fileUrl} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                               <div className="flex items-start gap-3">
                                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/5 text-primary">
                                   <FileText className="h-5 w-5" />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <div className="font-extrabold text-primary">{document.name || "Evrak"}</div>
-                                  <div className="mt-1 text-xs font-semibold text-slate-500">{document.fileName || "-"} · {document.fileType || "-"} · {formatFileSize(Number(document.size || 0))}</div>
-                                  <div className="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">{document.category || "Diğer"} · {document.uploadedAt ? new Date(document.uploadedAt).toLocaleDateString("tr-TR") : "-"}</div>
+                                  <div className="font-extrabold text-primary">{document.title || "Evrak"}</div>
+                                  <div className="mt-1 text-xs font-semibold text-slate-500">{document.fileName || "-"} - {document.fileType || "-"} - {formatFileSize(Number(document.size || 0))}</div>
+                                  <div className="mt-1 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                                    {document.category || "Diger"} - {document.source || "manual"} - {document.uploadedAt ? new Date(document.uploadedAt).toLocaleDateString("tr-TR") : "-"}
+                                  </div>
                                 </div>
                               </div>
                               <div className="mt-3 flex flex-wrap gap-2">
-                                <Button asChild variant="outline" size="sm" className="h-8 rounded-lg"><a href={document.fileUrl} target="_blank" rel="noopener noreferrer">Görüntüle</a></Button>
-                                <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => downloadRemoteFile(document.fileUrl, document.fileName || document.name || "evrak")}>İndir</Button>
+                                <Button asChild variant="outline" size="sm" className="h-8 rounded-lg"><a href={document.fileUrl} target="_blank" rel="noopener noreferrer">Goruntule</a></Button>
+                                <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => downloadRemoteFile(document.fileUrl, document.fileName || document.title || "evrak")}>Indir</Button>
                                 <Button variant="ghost" size="sm" className="h-8 rounded-lg text-accent hover:bg-red-50 hover:text-accent" onClick={() => handleDeleteDocument(document.id)}>
                                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                                   Sil

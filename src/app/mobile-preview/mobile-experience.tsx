@@ -80,6 +80,16 @@ function writeArray(key: string, value: any[]) {
   localStorage.setItem(key, JSON.stringify(value))
 }
 
+function upsertLocalArrayRecord(key: string, record: any) {
+  const current = readArray(key)
+  const recordId = getId(record)
+  const next = recordId
+    ? [record, ...current.filter((item: any) => getId(item) !== recordId)]
+    : [record, ...current]
+  writeArray(key, next)
+  window.dispatchEvent(new StorageEvent("storage", { key }))
+}
+
 function getId(item: any) {
   return (item?.id || item?.uid || item?.code || item?.branchCode || item?.departmentCode || item?.personnelCode || "").toString()
 }
@@ -1040,6 +1050,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     const attachmentFile = form.attachmentFile as File | null | undefined
     const leaveRequestId = `mobile-leave-${Date.now()}`
     let attachment: Record<string, any> = {}
+    let archiveRecord: Record<string, any> | null = null
 
     if (attachmentFile) {
       try {
@@ -1061,6 +1072,24 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
           attachmentName: result.originalFilename || attachmentFile.name,
           attachmentType: attachmentFile.type,
           attachmentResourceType: result.resourceType,
+          attachmentFormat: result.format,
+          attachmentSize: result.bytes || attachmentFile.size,
+        }
+        archiveRecord = {
+          id: `archive-${leaveRequestId}`,
+          title: `${form.type || "İzin"} Belgesi`,
+          fileName: result.originalFilename || attachmentFile.name,
+          fileUrl: result.url,
+          publicId: result.publicId,
+          fileType: attachmentFile.type,
+          resourceType: result.resourceType,
+          format: result.format,
+          size: result.bytes || attachmentFile.size,
+          category: "İzin Belgesi",
+          source: "leaveRequest",
+          relatedLeaveRequestId: leaveRequestId,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: selectedPerson?.email || personName(selectedPerson),
         }
       } catch (error) {
         console.error("leave attachment upload failed", error)
@@ -1092,6 +1121,16 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     const firestoreOk = await writeSharedRecord(db, "leaveRequests", record)
     if (!firestoreOk) {
       writeArray("app_leave_requests", [record, ...previousLeaves])
+    }
+    if (archiveRecord) {
+      const existingArchive = Array.isArray(selectedPerson.digitalArchive) ? selectedPerson.digitalArchive : []
+      const updatedPerson = {
+        ...selectedPerson,
+        digitalArchive: [archiveRecord, ...existingArchive.filter((item: any) => item?.id !== archiveRecord?.id)],
+        updatedAt: Date.now(),
+      }
+      upsertLocalArrayRecord("app_personnel", updatedPerson)
+      void writeSharedRecord(db, "personnel", updatedPerson)
     }
     addAudit("Mobil izin talebi oluşturuldu", `${personName(selectedPerson)} için ${form.type} talebi oluşturuldu.`, "İzin")
     updateSettings({ screen: "İzin" })
