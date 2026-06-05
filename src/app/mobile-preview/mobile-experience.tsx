@@ -339,6 +339,36 @@ function matchesBranch(record: any, branchId: string) {
   return [record?.branchId, record?.branchCode, record?.locationId].map((v) => valueText(v, "")).includes(branchId)
 }
 
+function todayDateKeyTR() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Istanbul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
+function shiftDisplayName(shift: any) {
+  return valueText(shift?.name || shift?.shiftName || shift?.title, "Vardiya")
+}
+
+function shiftDateKey(shift: any) {
+  return dateKeyFromValue(shift?.startDate || shift?.date || shift?.shiftDate || shift?.day || shift?.createdAt)
+}
+
+function shiftBranchLabel(shift: any, fallbackBranch: any) {
+  return valueText(shift?.branchName || shift?.branchLabel || shift?.branch || (fallbackBranch ? branchName(fallbackBranch) : ""), "Tanımlı değil")
+}
+
+function findTodayMobileShift(shifts: any[], personId: string, branchId: string) {
+  const today = todayDateKeyTR()
+  return (Array.isArray(shifts) ? shifts : []).find((shift: any) => {
+    const date = shiftDateKey(shift)
+    if (date !== today) return false
+    return matchesPerson(shift, personId) || matchesBranch(shift, branchId)
+  }) || null
+}
+
 function timeToMinutes(value: any) {
   const text = valueText(value, "").slice(0, 5)
   const [hour, minute] = text.split(":").map(Number)
@@ -1557,16 +1587,20 @@ function MobileHeader({ person, palette, title }: any) {
 function HomeScreen({ person, branch, department, position, shifts, settings, palette, setScreen, onBreak, isStandaloneApp, canCreateLeaveRequests }: any) {
   const hour = new Date().getHours()
   const greeting = hour < 11 ? "Günaydın" : hour < 18 ? "İyi günler" : "İyi akşamlar"
-  const todayShift = shifts[0]
-  const hasTodayShift = Boolean(todayShift?.name)
+  const personId = getId(person)
+  const branchId = getId(branch)
+  const todayShift = findTodayMobileShift(shifts, personId, branchId)
+  const hasTodayShift = Boolean(todayShift)
+  const startTime = todayShift?.startTime || todayShift?.entryTime || "--:--"
+  const endTime = todayShift?.endTime || todayShift?.exitTime || "--:--"
   return (
     <div>
       <MobileHeader person={person} palette={palette} title={greeting} />
       <StatusHero state={settings.state} palette={palette} qrStatus={settings.qrStatus} gpsStatus={settings.gpsStatus} />
       <MobileCard>
         <div className="flex items-center justify-between"><span className="text-sm font-bold text-white/60">Bugünkü vardiya</span><CalendarClock className="h-4 w-4 text-white/60" /></div>
-        <div className="mt-2 text-lg font-extrabold text-white">{hasTodayShift ? todayShift.name : "Bugün için atanmış vardiya bulunamadı."}</div>
-        {hasTodayShift && <p className="text-xs text-white/50">{todayShift?.startTime || todayShift?.entryTime || "--:--"} - {todayShift?.endTime || todayShift?.exitTime || "--:--"} - {branch ? branchName(branch) : "Tanımlı değil"}</p>}
+        <div className="mt-2 text-lg font-extrabold text-white">{hasTodayShift ? shiftDisplayName(todayShift) : "Bugün için atanmış vardiya bulunamadı."}</div>
+        {hasTodayShift && <p className="text-xs text-white/50">{startTime} - {endTime} - {shiftBranchLabel(todayShift, branch)}</p>}
       </MobileCard>
       <MobileCard className="mt-3 grid grid-cols-2 gap-2">
         <Info label="Şube" value={branch ? branchName(branch) : "Tanımlı değil"} />
