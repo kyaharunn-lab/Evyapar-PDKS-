@@ -369,6 +369,22 @@ function findTodayMobileShift(shifts: any[], personId: string, branchId: string)
   }) || null
 }
 
+function getShiftEntryWarning(shifts: any[], personId: string, branchId: string, now = new Date()) {
+  const shift = findTodayMobileShift(shifts, personId, branchId)
+  if (!shift) return "Bugün için atanmış vardiyanız bulunmuyor."
+
+  const start = timeToMinutes(shift?.startTime || shift?.entryTime || shift?.shift?.startTime)
+  const end = timeToMinutes(shift?.endTime || shift?.exitTime || shift?.shift?.endTime)
+  if (start === null || end === null) return null
+
+  const current = now.getHours() * 60 + now.getMinutes()
+  const outsideShiftHours = end >= start
+    ? current < start || current > end
+    : current < start && current > end
+
+  return outsideShiftHours ? "Vardiya saatleri dışında giriş yaptınız." : null
+}
+
 function timeToMinutes(value: any) {
   const text = valueText(value, "").slice(0, 5)
   const [hour, minute] = text.split(":").map(Number)
@@ -956,6 +972,16 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         duration: 3000,
       })
     }
+    const showShiftEntryWarning = () => {
+      const warning = getShiftEntryWarning(data.shifts, personId, branchId)
+      if (!warning) return
+      toast({
+        variant: "destructive",
+        title: "Vardiya Uyarısı",
+        description: warning,
+        duration: 3500,
+      })
+    }
     if (isQrEntryOnly(activeBranchPoint)) {
       if (inside) {
         vibrate([80, 40, 80])
@@ -964,6 +990,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       }
       showEntrySuccess()
       handleAttendance("Giriş")
+      showShiftEntryWarning()
       return
     }
     if (isQrExitOnly(activeBranchPoint)) {
@@ -976,8 +1003,14 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       handleAttendance("Çıkış")
       return
     }
-    inside ? showExitSuccess() : showEntrySuccess()
-    handleAttendance(inside ? "Çıkış" : "Giriş")
+    if (inside) {
+      showExitSuccess()
+      handleAttendance("Çıkış")
+      return
+    }
+    showEntrySuccess()
+    handleAttendance("Giriş")
+    showShiftEntryWarning()
     return
     const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
     const success = Boolean(activePoint && selectedPerson)
