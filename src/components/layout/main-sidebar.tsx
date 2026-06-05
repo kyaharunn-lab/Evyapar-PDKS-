@@ -20,7 +20,8 @@ import {
   ChevronDown,
   Network,
   KeyRound,
-  Smartphone
+  Smartphone,
+  Bell
 } from "lucide-react"
 
 import {
@@ -96,7 +97,8 @@ const navigation = [
   {
     title: "SİSTEM",
     items: [
-      { title: "Sistem Ayarları", url: "/settings", icon: Settings2, activePaths: ["/settings", "/settings/company", "/settings/notifications"] },
+      { title: "Sistem Ayarları", url: "/settings", icon: Settings2, activePaths: ["/settings", "/settings/company"] },
+      { title: "Bildirimler", url: "/settings/notifications", icon: Bell },
     ],
   },
   {
