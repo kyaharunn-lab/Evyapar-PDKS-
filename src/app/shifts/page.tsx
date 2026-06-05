@@ -21,6 +21,7 @@ import {
   List,
   Calendar as CalendarIcon,
   MapPin,
+  Edit2,
 } from "lucide-react"
 import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay } from "date-fns"
 import { tr } from "date-fns/locale"
@@ -59,7 +60,7 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { DATE_INPUT_PROPS, TIME_INPUT_PROPS, formatDateTR, formatTimeValueTR, normalizeTimeInputTR } from "@/lib/date-time"
 import { useFirestore } from "@/firebase"
-import { writeSharedRecord } from "@/lib/shared-data-sync"
+import { useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 
 const s = translations.shifts;
 const t = translations.common;
@@ -97,6 +98,7 @@ export default function ShiftsPage() {
   const [viewMode, setViewMode] = React.useState<"timeline" | "grid" | "list">("timeline")
   const [selectedDate, setSelectedDate] = React.useState(new Date())
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false)
+  const [editingShiftId, setEditingShiftId] = React.useState<string | null>(null)
   const [searchTerm, setSearchTerm] = React.useState("")
   const [shifts, setShifts] = React.useState<any[]>([])
   const [personnel, setPersonnel] = React.useState<any[]>([])
@@ -110,13 +112,30 @@ export default function ShiftsPage() {
     personnelIds: [] as string[],
   })
 
-  React.useEffect(() => {
+  const shiftSyncTargets = React.useMemo(() => [
+    { collectionName: "shifts", storageKey: SHIFTS_STORAGE_KEY },
+  ], []);
+
+  const loadShiftData = React.useCallback(() => {
     setShifts(readLocalArray([SHIFTS_STORAGE_KEY]));
     setPersonnel(readLocalArray([PERSONNEL_STORAGE_KEY]).filter((p: any) => !p?.isDeleted));
     setBranches(readLocalArray(BRANCHES_STORAGE_KEYS));
   }, []);
 
+  useFirestoreLocalMirror(db, shiftSyncTargets, loadShiftData);
+
+  React.useEffect(() => {
+    loadShiftData();
+    window.addEventListener("app-shifts-updated", loadShiftData);
+    window.addEventListener("storage", loadShiftData);
+    return () => {
+      window.removeEventListener("app-shifts-updated", loadShiftData);
+      window.removeEventListener("storage", loadShiftData);
+    };
+  }, [loadShiftData]);
+
   const resetForm = React.useCallback(() => {
+    setEditingShiftId(null);
     setFormData({
       name: "",
       startDate: "",
@@ -125,6 +144,28 @@ export default function ShiftsPage() {
       branchId: ALL_BRANCHES_VALUE,
       personnelIds: [],
     });
+  }, []);
+
+  const handleOpenCreate = React.useCallback(() => {
+    resetForm();
+    setIsCreateModalOpen(true);
+  }, [resetForm]);
+
+  const handleOpenEdit = React.useCallback((shift: any) => {
+    setEditingShiftId((shift?.id || "").toString());
+    setFormData({
+      name: shift?.name || "",
+      startDate: shift?.startDate || shift?.date || "",
+      startTime: normalizeTimeInputTR(shift?.startTime || shift?.entryTime || "08:00"),
+      endTime: normalizeTimeInputTR(shift?.endTime || shift?.exitTime || "17:00"),
+      branchId: shift?.branchId || ALL_BRANCHES_VALUE,
+      personnelIds: Array.isArray(shift?.personnelIds)
+        ? shift.personnelIds.map((id: any) => id.toString())
+        : Array.isArray(shift?.assignedPersonnel)
+          ? shift.assignedPersonnel.map((item: any) => (typeof item === "object" ? item?.id || item?.personnelId || item?.personId : item).toString()).filter(Boolean)
+          : [],
+    });
+    setIsCreateModalOpen(true);
   }, []);
 
   const selectedPersonnel = React.useMemo(() => {
@@ -176,21 +217,25 @@ export default function ShiftsPage() {
       return;
     }
 
-    const createdAt = Date.now();
-    const newShift = {
-      id: `shift-${createdAt}-${Math.random().toString(16).slice(2)}`,
+    const now = Date.now();
+    const existingShift = editingShiftId ? shifts.find((shift) => shift?.id === editingShiftId) : null;
+    const savedShift = {
+      ...(existingShift || {}),
+      id: editingShiftId || `shift-${now}-${Math.random().toString(16).slice(2)}`,
       name: formData.name.trim(),
       startDate: formData.startDate,
       startTime: formData.startTime,
       endTime: formData.endTime,
       branchId: formData.branchId,
       personnelIds: formData.personnelIds,
-      createdAt,
-      updatedAt: createdAt,
+      createdAt: existingShift?.createdAt || now,
+      updatedAt: now,
     };
 
     setShifts((prev) => {
-      const next = [newShift, ...prev];
+      const next = editingShiftId
+        ? prev.map((shift) => shift?.id === editingShiftId ? savedShift : shift)
+        : [savedShift, ...prev];
       try {
         localStorage.setItem(SHIFTS_STORAGE_KEY, JSON.stringify(next));
       } catch {
@@ -198,13 +243,12 @@ export default function ShiftsPage() {
       }
       return next;
     });
-    void writeSharedRecord(db, "shifts", newShift);
-
+    void writeSharedRecord(db, "shifts", savedShift);
     setIsCreateModalOpen(false);
     resetForm();
     toast({
       title: "Başarılı",
-      description: "Vardiya kaydedildi.",
+      description: editingShiftId ? "Vardiya güncellendi." : "Vardiya kaydedildi.",
     });
   };
 
@@ -244,7 +288,7 @@ export default function ShiftsPage() {
             Dışa Aktar
           </Button>
           <Button 
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={handleOpenCreate}
             className="h-11 px-6 bg-accent hover:bg-accent/90 shadow-lg shadow-accent/20"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -335,7 +379,7 @@ export default function ShiftsPage() {
               <p className="text-muted-foreground max-w-sm mb-8">
                 Yeni vardiya oluşturarak personel planlamasına başlayabilirsiniz.
               </p>
-              <Button onClick={() => setIsCreateModalOpen(true)} className="bg-primary hover:bg-primary/90 h-12 px-8 rounded-2xl">
+              <Button onClick={handleOpenCreate} className="bg-primary hover:bg-primary/90 h-12 px-8 rounded-2xl">
                 <Plus className="mr-2 h-5 w-5" />
                 İlk Vardiyayı Oluştur
               </Button>
@@ -380,11 +424,11 @@ export default function ShiftsPage() {
                             isSameDay(day, new Date()) && "bg-blue-50/10"
                           )}>
                             {dayShifts.map(sh => (
-                              <ShiftCard key={sh.id} shift={sh} personnel={personnel} />
+                              <ShiftCard key={sh.id} shift={sh} personnel={personnel} onEdit={handleOpenEdit} />
                             ))}
                             {dayShifts.length === 0 && (
                               <div className="h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full border border-dashed" onClick={() => setIsCreateModalOpen(true)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full border border-dashed" onClick={handleOpenCreate}>
                                   <Plus className="h-4 w-4 text-slate-400" />
                                 </Button>
                               </div>
@@ -402,7 +446,7 @@ export default function ShiftsPage() {
               {shifts.filter(s => 
                 !searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase())
               ).map(sh => (
-                <ListShiftCard key={sh.id} shift={sh} personnel={personnel} branches={branches} />
+                <ListShiftCard key={sh.id} shift={sh} personnel={personnel} branches={branches} onEdit={handleOpenEdit} />
               ))}
             </div>
           )}
@@ -437,8 +481,8 @@ export default function ShiftsPage() {
       >
         <DialogContent className="sm:max-w-[700px] p-0 border-none rounded-[32px] overflow-hidden">
           <DialogHeader className="p-8 bg-primary text-white">
-            <DialogTitle className="text-2xl font-extrabold">Yeni Vardiya Tanımla</DialogTitle>
-            <DialogDescription className="text-white/60">Sistem için yeni bir çalışma periyodu ve personel ataması oluşturun.</DialogDescription>
+            <DialogTitle className="text-2xl font-extrabold">{editingShiftId ? "Vardiya Düzenle" : "Yeni Vardiya Tanımla"}</DialogTitle>
+            <DialogDescription className="text-white/60">{editingShiftId ? "Mevcut vardiya bilgilerini güncelleyin." : "Sistem için yeni bir çalışma periyodu ve personel ataması oluşturun."}</DialogDescription>
           </DialogHeader>
           <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
@@ -560,7 +604,7 @@ export default function ShiftsPage() {
             >
               Vazgeç
             </Button>
-            <Button className="bg-primary hover:bg-primary/90 px-8 rounded-xl" onClick={handleSaveShift}>Vardiyayı Kaydet</Button>
+            <Button className="bg-primary hover:bg-primary/90 px-8 rounded-xl" onClick={handleSaveShift}>{editingShiftId ? "Vardiyayı Güncelle" : "Vardiyayı Kaydet"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -568,7 +612,7 @@ export default function ShiftsPage() {
   )
 }
 
-function ShiftCard({ shift, personnel }: { shift: any, personnel: any[] | undefined }) {
+function ShiftCard({ shift, personnel, onEdit }: { shift: any, personnel: any[] | undefined, onEdit?: (shift: any) => void }) {
   const assignedPersonnel = personnel?.filter(p => shift.personnelIds?.includes(p.id)) || [];
 
   return (
@@ -579,7 +623,18 @@ function ShiftCard({ shift, personnel }: { shift: any, personnel: any[] | undefi
     )}>
       <div className="flex justify-between items-start mb-1">
         <h4 className="text-[11px] font-bold text-primary truncate max-w-[80%]">{shift.name}</h4>
-        <MoreHorizontal className="h-3 w-3 text-slate-400" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 rounded-lg"
+          onClick={(event) => {
+            event.stopPropagation();
+            onEdit?.(shift);
+          }}
+        >
+          <Edit2 className="h-3 w-3 text-slate-400" />
+        </Button>
       </div>
       <div className="flex items-center text-[10px] font-bold text-slate-600 mb-2">
         <Clock className="mr-1 h-3 w-3" />
@@ -602,7 +657,7 @@ function ShiftCard({ shift, personnel }: { shift: any, personnel: any[] | undefi
   )
 }
 
-function ListShiftCard({ shift, personnel, branches }: { shift: any, personnel: any[] | undefined, branches: any[] | undefined }) {
+function ListShiftCard({ shift, personnel, branches, onEdit }: { shift: any, personnel: any[] | undefined, branches: any[] | undefined, onEdit?: (shift: any) => void }) {
   const branch = branches?.find(b => b.id === shift.branchId);
   const branchLabel = shift.branchId === ALL_BRANCHES_VALUE ? "Tüm Şubeler" : branch ? getBranchLabel(branch) : "Şube bulunamadı";
   const assignedPersonnel = personnel?.filter(p => shift.personnelIds?.includes(p.id)) || [];
@@ -620,8 +675,20 @@ function ListShiftCard({ shift, personnel, branches }: { shift: any, personnel: 
           </Badge>
           <CardTitle className="text-lg font-extrabold text-primary">{shift.name}</CardTitle>
         </div>
-        <div className="p-2 bg-slate-50 rounded-xl group-hover:bg-primary/5 transition-colors">
-          <CalendarClock className="h-5 w-5 text-slate-400" />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-lg text-xs font-bold"
+            onClick={() => onEdit?.(shift)}
+          >
+            <Edit2 className="mr-1.5 h-3.5 w-3.5" />
+            DÃ¼zenle
+          </Button>
+          <div className="p-2 bg-slate-50 rounded-xl group-hover:bg-primary/5 transition-colors">
+            <CalendarClock className="h-5 w-5 text-slate-400" />
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
