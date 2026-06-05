@@ -35,7 +35,7 @@ export function getOneSignalConfigStatus(): OneSignalConfigStatus {
 export function buildOneSignalPayload(input: OneSignalNotificationInput) {
   const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID
   if (!appId) {
-    throw new Error("NEXT_PUBLIC_ONESIGNAL_APP_ID eksik.")
+    throw new Error("OneSignal App ID eksik: NEXT_PUBLIC_ONESIGNAL_APP_ID env degiskenini Vercel Environment Variables alanina ekleyin.")
   }
 
   return {
@@ -52,7 +52,7 @@ export function buildOneSignalPayload(input: OneSignalNotificationInput) {
 export function assertOneSignalServerConfig() {
   const status = getOneSignalConfigStatus()
   if (!status.configured) {
-    throw new Error(`OneSignal env eksik: ${status.missing.join(", ")}`)
+    throw new Error(`OneSignal env eksik: ${status.missing.join(", ")}. Vercel Environment Variables alaninda NEXT_PUBLIC_ONESIGNAL_APP_ID ve ONESIGNAL_REST_API_KEY tanimli olmalidir.`)
   }
   return {
     appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID as string,

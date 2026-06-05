@@ -108,28 +108,36 @@ export default function MobileAppPage() {
         try {
           console.info("[OneSignal mobile] initialize starting", { appId })
           await OneSignal.init({ appId })
-          console.info("[OneSignal mobile] initialized")
+          console.info("[OneSignal mobile] OneSignal initialized")
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           if (!/already initialized/i.test(message)) {
             console.warn("[OneSignal mobile] initialize failed", error)
             return
           }
-          console.info("[OneSignal mobile] already initialized")
+          console.info("[OneSignal mobile] OneSignal initialized", { alreadyInitialized: true })
         }
 
         try {
           await OneSignal.login(personnelId)
           console.info("[OneSignal mobile] external user linked", { personnelId })
 
-          const permission = OneSignal.Notifications?.permission
+          let permission = OneSignal.Notifications?.permission
+          console.info("[OneSignal mobile] Permission current", { permission })
           if (permission !== true) {
             await OneSignal.Notifications?.requestPermission?.()
+            permission = OneSignal.Notifications?.permission
           }
+          console.info(`[OneSignal mobile] Permission ${permission ? "granted" : "denied"}`, { permission })
 
           const pushSubscription = OneSignal.User?.PushSubscription
           const oneSignalId = (pushSubscription?.id || pushSubscription?.token || "").toString()
           const subscribed = Boolean(pushSubscription?.optedIn ?? oneSignalId)
+          console.info("[OneSignal mobile] Player ID", {
+            oneSignalId: oneSignalId || null,
+            subscribed,
+            optedIn: pushSubscription?.optedIn,
+          })
           const patch = {
             oneSignalId,
             oneSignalSubscribed: subscribed,
@@ -143,11 +151,12 @@ export default function MobileAppPage() {
           }
 
           upsertLocalPersonnel(personnelId, patch)
-          await writeSharedRecord(db, "personnel", updatedPersonnel)
-          console.info("[OneSignal mobile] personnel notification sync success", {
+          const firestoreOk = await writeSharedRecord(db, "personnel", updatedPersonnel)
+          console.info(`[OneSignal mobile] Sync ${firestoreOk ? "success" : "failed"}`, {
             personnelId,
             oneSignalId,
             subscribed,
+            firestoreOk,
           })
         } catch (error) {
           console.warn("[OneSignal mobile] permission/subscription sync failed", error)
