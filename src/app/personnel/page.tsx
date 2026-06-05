@@ -18,8 +18,7 @@ import {
   Users,
   X,
   Camera,
-  FileText,
-  Trash2
+  FileText
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -97,7 +96,7 @@ async function uploadPersonnelPhoto(file: File) {
 async function uploadPersonnelDocument(file: File) {
   const uploadData = new FormData()
   uploadData.append("file", file)
-  uploadData.append("folder", "evyapar-pdks/digital-archive")
+  uploadData.append("folder", "evyapar-pdks/personnel-documents")
   const response = await fetch("/api/upload", { method: "POST", body: uploadData })
   const result = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(result?.error || "Evrak yüklenemedi.")
@@ -492,19 +491,6 @@ export default function PersonnelPage() {
       setDocumentUploading(false)
     }
   }, [documentFile, documentForm.category, documentForm.name, selectedEmployee, toast, upsertEmployee])
-
-  const handleDeleteDocument = React.useCallback((documentId: string) => {
-    if (!selectedEmployee || !window.confirm("Bu evrak kaydını silmek istediğinize emin misiniz?")) return
-    const updated = {
-      ...selectedEmployee,
-      digitalArchive: (Array.isArray(selectedEmployee.digitalArchive) ? selectedEmployee.digitalArchive : []).filter((item: any) => item?.id !== documentId),
-      documents: (Array.isArray(selectedEmployee.documents) ? selectedEmployee.documents : []).filter((item: any) => item?.id !== documentId),
-      updatedAt: Date.now(),
-    }
-    upsertEmployee(updated)
-    setSelectedEmployee(updated)
-    toast({ title: "Başarılı", description: "Evrak kaydı silindi." })
-  }, [selectedEmployee, toast, upsertEmployee])
 
   const handleSaveEdit = React.useCallback(async () => {
     if (!selectedEmployee) return
@@ -948,10 +934,6 @@ export default function PersonnelPage() {
                               <div className="mt-3 flex flex-wrap gap-2">
                                 <Button asChild variant="outline" size="sm" className="h-8 rounded-lg"><a href={document.fileUrl} target="_blank" rel="noopener noreferrer">Goruntule</a></Button>
                                 <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => downloadRemoteFile(document.fileUrl, document.fileName || document.title || "evrak")}>Indir</Button>
-                                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-accent hover:bg-red-50 hover:text-accent" onClick={() => handleDeleteDocument(document.id)}>
-                                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                  Sil
-                                </Button>
                               </div>
                             </div>
                           ))}
