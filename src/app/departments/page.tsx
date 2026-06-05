@@ -297,6 +297,25 @@ export default function DepartmentsPage() {
     setIsDetailOpen(true)
   }, [])
 
+  const openDetailAfterMenuClose = React.useCallback((dept: any) => {
+    window.setTimeout(() => handleOpenDetail(dept), 0)
+  }, [handleOpenDetail])
+
+  const openEditAfterMenuClose = React.useCallback((dept: any) => {
+    window.setTimeout(() => handleEdit(dept), 0)
+  }, [handleEdit])
+
+  React.useEffect(() => {
+    if (isCreateOpen || isDetailOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isCreateOpen, isDetailOpen])
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Üst Alan */}
@@ -395,8 +414,8 @@ export default function DepartmentsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleOpenDetail(dept)}>Detay Gör</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEdit(dept)}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(dept)}>Detay Gör</DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => openEditAfterMenuClose(dept)}>
                             Düzenle
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />

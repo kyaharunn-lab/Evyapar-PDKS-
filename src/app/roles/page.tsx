@@ -286,6 +286,25 @@ export default function RolesPage() {
     setIsAddOpen(true)
   }
 
+  const openDetailAfterMenuClose = React.useCallback((role: any) => {
+    window.setTimeout(() => handleOpenDetail(role), 0)
+  }, [])
+
+  const openEditAfterMenuClose = React.useCallback((role: any) => {
+    window.setTimeout(() => handleEdit(role), 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (isAddOpen || isDetailOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isAddOpen, isDetailOpen])
+
   const handleDelete = (role: any) => {
     if (!role?.id) return
     setRoles((prev) => {
@@ -398,10 +417,10 @@ export default function RolesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => handleOpenDetail(role)}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(role)}>
                             Detay Gör
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEdit(role)}>
+                          <DropdownMenuItem onSelect={() => openEditAfterMenuClose(role)}>
                             <Edit2 className="mr-2 h-4 w-4 text-slate-400" />
                             Düzenle
                           </DropdownMenuItem>

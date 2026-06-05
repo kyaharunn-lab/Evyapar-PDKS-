@@ -327,6 +327,38 @@ export default function LeaveRequestsPage() {
     }
   };
 
+  const openDetailAfterMenuClose = React.useCallback((request: any) => {
+    window.setTimeout(() => {
+      setSelectedRequest(request)
+      setIsDetailOpen(true)
+    }, 0)
+  }, [])
+
+  const openApproveAfterMenuClose = React.useCallback((request: any) => {
+    window.setTimeout(() => {
+      setSelectedRequest(request)
+      setIsApproveOpen(true)
+    }, 0)
+  }, [])
+
+  const openRejectAfterMenuClose = React.useCallback((request: any) => {
+    window.setTimeout(() => {
+      setSelectedRequest(request)
+      setIsRejectOpen(true)
+    }, 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (isCreateOpen || isDetailOpen || isRejectOpen || isApproveOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isCreateOpen, isDetailOpen, isRejectOpen, isApproveOpen])
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -449,18 +481,18 @@ export default function LeaveRequestsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
-                          <DropdownMenuItem onClick={() => { setSelectedRequest(req); setIsDetailOpen(true); }}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(req)}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             Detayları Gör
                           </DropdownMenuItem>
                           {req.status === "Pending" && (
                             <>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-green-600 focus:text-green-600 focus:bg-green-50" onClick={() => { setSelectedRequest(req); setIsApproveOpen(true); }}>
+                              <DropdownMenuItem className="text-green-600 focus:text-green-600 focus:bg-green-50" onSelect={() => openApproveAfterMenuClose(req)}>
                                 <Check className="mr-3 h-4 w-4" />
                                 {t.approve || "Onayla"}
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-accent focus:text-accent focus:bg-accent/5" onClick={() => { setSelectedRequest(req); setIsRejectOpen(true); }}>
+                              <DropdownMenuItem className="text-accent focus:text-accent focus:bg-accent/5" onSelect={() => openRejectAfterMenuClose(req)}>
                                 <X className="mr-3 h-4 w-4" />
                                 {t.decline || "Reddet"}
                               </DropdownMenuItem>

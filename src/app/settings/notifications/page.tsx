@@ -305,6 +305,21 @@ export default function NotificationSettingsPage() {
   if (!settings.global.email) missing.push("E-posta kanalı kapalı")
   if (!settings.schedule.criticalBypass) missing.push("Kritik uyarılar sessiz saatten muaf değil")
 
+  const openLogAfterMenuClose = React.useCallback((log: any) => {
+    window.setTimeout(() => setSelectedLog(log), 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (selectedLog || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [selectedLog])
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="relative overflow-hidden rounded-[28px] border border-white/70 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.22),transparent_28rem),radial-gradient(circle_at_82%_10%,rgba(124,58,237,0.2),transparent_26rem),linear-gradient(135deg,rgba(5,8,22,0.98),rgba(8,25,49,0.96)_56%,rgba(44,24,85,0.92))] p-8 shadow-2xl shadow-slate-950/20">
@@ -376,7 +391,7 @@ export default function NotificationSettingsPage() {
           <TabsContent value="channels"><ChannelsPanel settings={settings} update={update} testChannel={testChannel} /></TabsContent>
           <TabsContent value="templates"><TemplatesPanel settings={settings} update={update} /></TabsContent>
           <TabsContent value="schedule"><SchedulePanel settings={settings} update={update} /></TabsContent>
-          <TabsContent value="logs"><LogsPanel logs={notificationLogs} setSelectedLog={setSelectedLog} resendLog={resendLog} /></TabsContent>
+          <TabsContent value="logs"><LogsPanel logs={notificationLogs} setSelectedLog={openLogAfterMenuClose} resendLog={resendLog} /></TabsContent>
         </Tabs>
 
         <SmartSummary activeChannels={activeChannels} today={todayLogs.length} failed={failedLogs.length} critical={criticalLogs.length} settings={settings} missing={missing} logs={notificationLogs} />
@@ -480,7 +495,7 @@ function SchedulePanel({ settings, update }: any) {
 }
 
 function LogsPanel({ logs, setSelectedLog, resendLog }: any) {
-  return <Card className="premium-card overflow-hidden"><CardHeader className="border-b bg-slate-50/40"><CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Bildirim Logları</CardTitle></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><Table className="min-w-[1200px]"><TableHeader className="enterprise-table-header"><TableRow>{["Bildirim ID","Tarih","Saat","Alıcı","Rol","Şube","Bildirim Türü","Kanal","Başlık","Durum","Risk","Gönderim Detayı","İşlemler"].map((h,i)=><TableHead key={h} className={i===0?"pl-6":i===12?"text-right pr-6":""}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{logs.length===0?<TableRow><TableCell colSpan={13} className="h-72 text-center text-muted-foreground">Bildirim logu bulunmuyor.</TableCell></TableRow>:logs.map((log:any)=>{ const d = log.createdAt ? new Date(log.createdAt) : null; return <TableRow key={log.id}><TableCell className="pl-6 font-mono text-xs">{log.id}</TableCell><TableCell>{d ? d.toISOString().slice(0,10) : "-"}</TableCell><TableCell>{d ? d.toLocaleTimeString("tr-TR") : "-"}</TableCell><TableCell>{log.recipient}</TableCell><TableCell>{log.role}</TableCell><TableCell>{log.branch}</TableCell><TableCell>{log.type}</TableCell><TableCell>{log.channel}</TableCell><TableCell>{log.title}</TableCell><TableCell><StatusBadge status={log.status} /></TableCell><TableCell><RiskBadge risk={log.risk} /></TableCell><TableCell className="max-w-[240px] truncate">{log.detail}</TableCell><TableCell className="text-right pr-6"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={()=>setSelectedLog(log)}><Eye className="mr-2 h-4 w-4" />Detay gör</DropdownMenuItem><DropdownMenuItem onClick={()=>resendLog(log)}><Send className="mr-2 h-4 w-4" />Tekrar gönder</DropdownMenuItem><DropdownMenuItem onClick={()=>setSelectedLog(log)}><History className="mr-2 h-4 w-4" />Log görüntüle</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell></TableRow>})}</TableBody></Table></div></CardContent></Card>
+  return <Card className="premium-card overflow-hidden"><CardHeader className="border-b bg-slate-50/40"><CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Bildirim Logları</CardTitle></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><Table className="min-w-[1200px]"><TableHeader className="enterprise-table-header"><TableRow>{["Bildirim ID","Tarih","Saat","Alıcı","Rol","Şube","Bildirim Türü","Kanal","Başlık","Durum","Risk","Gönderim Detayı","İşlemler"].map((h,i)=><TableHead key={h} className={i===0?"pl-6":i===12?"text-right pr-6":""}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{logs.length===0?<TableRow><TableCell colSpan={13} className="h-72 text-center text-muted-foreground">Bildirim logu bulunmuyor.</TableCell></TableRow>:logs.map((log:any)=>{ const d = log.createdAt ? new Date(log.createdAt) : null; return <TableRow key={log.id}><TableCell className="pl-6 font-mono text-xs">{log.id}</TableCell><TableCell>{d ? d.toISOString().slice(0,10) : "-"}</TableCell><TableCell>{d ? d.toLocaleTimeString("tr-TR") : "-"}</TableCell><TableCell>{log.recipient}</TableCell><TableCell>{log.role}</TableCell><TableCell>{log.branch}</TableCell><TableCell>{log.type}</TableCell><TableCell>{log.channel}</TableCell><TableCell>{log.title}</TableCell><TableCell><StatusBadge status={log.status} /></TableCell><TableCell><RiskBadge risk={log.risk} /></TableCell><TableCell className="max-w-[240px] truncate">{log.detail}</TableCell><TableCell className="text-right pr-6"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={()=>setSelectedLog(log)}><Eye className="mr-2 h-4 w-4" />Detay gör</DropdownMenuItem><DropdownMenuItem onClick={()=>resendLog(log)}><Send className="mr-2 h-4 w-4" />Tekrar gönder</DropdownMenuItem><DropdownMenuItem onSelect={()=>setSelectedLog(log)}><History className="mr-2 h-4 w-4" />Log görüntüle</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell></TableRow>})}</TableBody></Table></div></CardContent></Card>
 }
 
 function SmartSummary({ activeChannels, today, failed, critical, missing, logs }: any) {

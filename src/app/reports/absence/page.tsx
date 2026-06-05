@@ -400,6 +400,28 @@ export default function AbsenceReportPage() {
     setIsNoteOpen(true)
   }
 
+  const openDetailAfterMenuClose = React.useCallback((row: any) => {
+    window.setTimeout(() => {
+      setSelectedRow(row)
+      setIsDetailOpen(true)
+    }, 0)
+  }, [])
+
+  const openNoteAfterMenuClose = React.useCallback((row: any) => {
+    window.setTimeout(() => openNote(row), 0)
+  }, [openNote])
+
+  React.useEffect(() => {
+    if (isDetailOpen || isNoteOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isDetailOpen, isNoteOpen])
+
   const saveNote = () => {
     if (!selectedRow) return
     const next = {
@@ -561,11 +583,11 @@ export default function AbsenceReportPage() {
                         <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
                           <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => { setSelectedRow(row); setIsDetailOpen(true) }}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(row)}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             Detay Gör
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openNote(row)}>
+                          <DropdownMenuItem onSelect={() => openNoteAfterMenuClose(row)}>
                             <FileText className="mr-3 h-4 w-4 text-slate-400" />
                             Açıklama Ekle
                           </DropdownMenuItem>

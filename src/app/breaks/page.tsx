@@ -159,6 +159,24 @@ export default function BreakLogsPage() {
     })
   }, [])
 
+  const openDetailAfterMenuClose = React.useCallback((log: any) => {
+    window.setTimeout(() => {
+      setSelectedLog(log)
+      setIsDetailOpen(true)
+    }, 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (isDetailOpen || isManualOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isDetailOpen, isManualOpen])
+
   // Merge log data with personnel data
   const mergedLogs = React.useMemo(() => {
     return breakLogs.map(log => ({
@@ -441,7 +459,7 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
-                          <DropdownMenuItem onClick={() => { setSelectedLog(log); setIsDetailOpen(true); }}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(log)}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             Detayları Gör
                           </DropdownMenuItem>

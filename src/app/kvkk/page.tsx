@@ -371,6 +371,25 @@ export default function KvkkPage() {
     URL.revokeObjectURL(url)
   }
 
+  const openDetailAfterMenuClose = React.useCallback((row: any) => {
+    window.setTimeout(() => setSelectedRow(row), 0)
+  }, [])
+
+  const openConsentAfterMenuClose = React.useCallback((row: any) => {
+    window.setTimeout(() => openConsentEdit(row), 0)
+  }, [openConsentEdit])
+
+  React.useEffect(() => {
+    if (selectedRow || isConsentOpen || isDocumentOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [selectedRow, isConsentOpen, isDocumentOpen])
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="relative overflow-hidden rounded-[28px] border border-white/70 bg-[radial-gradient(circle_at_15%_15%,rgba(124,58,237,0.18),transparent_28rem),linear-gradient(135deg,rgba(6,18,36,0.98),rgba(13,30,58,0.94)_55%,rgba(52,33,98,0.92))] p-8 shadow-2xl shadow-slate-950/20">
@@ -504,8 +523,8 @@ export default function KvkkPage() {
                           <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
                             <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setSelectedRow(row)}><Eye className="mr-3 h-4 w-4 text-slate-400" />Detay Modalı</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openConsentEdit(row)}><Edit2 className="mr-3 h-4 w-4 text-slate-400" />Düzenle</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(row)}><Eye className="mr-3 h-4 w-4 text-slate-400" />Detay Modalı</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openConsentAfterMenuClose(row)}><Edit2 className="mr-3 h-4 w-4 text-slate-400" />Düzenle</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => sendRenewal(row)}><RefreshCw className="mr-3 h-4 w-4 text-slate-400" />Yeniden Onay Gönder</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

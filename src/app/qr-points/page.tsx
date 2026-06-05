@@ -213,6 +213,28 @@ export default function QrPointsPage() {
     setIsFormOpen(true)
   }
 
+  const openDetailAfterMenuClose = React.useCallback((point: any) => {
+    window.setTimeout(() => {
+      setSelectedPoint(point)
+      setIsDetailOpen(true)
+    }, 0)
+  }, [])
+
+  const openEditAfterMenuClose = React.useCallback((point: any) => {
+    window.setTimeout(() => openEdit(point), 0)
+  }, [openEdit])
+
+  React.useEffect(() => {
+    if (isFormOpen || isDetailOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isFormOpen, isDetailOpen])
+
   const handleSave = () => {
     if (!formData.pointName.trim()) {
       toast({ variant: "destructive", title: "Hata", description: "Nokta adı zorunludur." })
@@ -397,11 +419,11 @@ export default function QrPointsPage() {
                         <DropdownMenuContent align="end" className="w-52 rounded-xl shadow-xl">
                           <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => { setSelectedPoint(point); setIsDetailOpen(true) }}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(point)}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             Detay Gör
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEdit(point)}>
+                          <DropdownMenuItem onSelect={() => openEditAfterMenuClose(point)}>
                             <Edit2 className="mr-3 h-4 w-4 text-slate-400" />
                             Düzenle
                           </DropdownMenuItem>

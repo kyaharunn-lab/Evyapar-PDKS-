@@ -303,6 +303,21 @@ export default function AuditPage() {
   const channelChart = buildGroupChart(filteredLogs, "channel")
   const hourlyChart = buildHourlyChart(filteredLogs)
 
+  const openLogAfterMenuClose = React.useCallback((log: any) => {
+    window.setTimeout(() => setSelectedLog(log), 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (selectedLog || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [selectedLog])
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="relative overflow-hidden rounded-[28px] border border-white/70 bg-[radial-gradient(circle_at_12%_20%,rgba(124,58,237,0.22),transparent_28rem),linear-gradient(135deg,rgba(5,8,22,0.98),rgba(8,25,49,0.96)_56%,rgba(44,24,85,0.92))] p-8 shadow-2xl shadow-slate-950/20">
@@ -476,7 +491,7 @@ export default function AuditPage() {
                                 <DropdownMenuContent align="end" className="w-60 rounded-xl shadow-xl">
                                   <DropdownMenuLabel>Aksiyonlar</DropdownMenuLabel>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => setSelectedLog(log)}><Eye className="mr-3 h-4 w-4 text-slate-400" />Detay görüntüle</DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => openLogAfterMenuClose(log)}><Eye className="mr-3 h-4 w-4 text-slate-400" />Detay görüntüle</DropdownMenuItem>
                                   <DropdownMenuItem><ShieldAlert className="mr-3 h-4 w-4 text-slate-400" />Güvenlik incelemesi başlat</DropdownMenuItem>
                                   <DropdownMenuItem><UserRound className="mr-3 h-4 w-4 text-slate-400" />Kullanıcı profiline git</DropdownMenuItem>
                                   <DropdownMenuItem><Laptop className="mr-3 h-4 w-4 text-slate-400" />Cihaz detayına git</DropdownMenuItem>

@@ -399,6 +399,21 @@ export default function OvertimeReportsPage() {
     downloadBlob(`\uFEFF${csv}`, "mesai-raporu.csv", "text/csv;charset=utf-8")
   }
 
+  const openDetailAfterMenuClose = React.useCallback((row: any) => {
+    window.setTimeout(() => setSelectedRow(row), 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (selectedRow || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [selectedRow])
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="relative overflow-hidden rounded-[28px] border border-white/70 bg-[radial-gradient(circle_at_12%_20%,rgba(59,130,246,0.22),transparent_28rem),radial-gradient(circle_at_82%_10%,rgba(124,58,237,0.2),transparent_26rem),linear-gradient(135deg,rgba(5,8,22,0.98),rgba(8,25,49,0.96)_56%,rgba(44,24,85,0.92))] p-8 shadow-2xl shadow-slate-950/20">
@@ -526,7 +541,7 @@ export default function OvertimeReportsPage() {
                               <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
                                 <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setSelectedRow(row)}><Eye className="mr-3 h-4 w-4 text-slate-400" />Detay Görüntüle</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(row)}><Eye className="mr-3 h-4 w-4 text-slate-400" />Detay Görüntüle</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => approveOvertime(row)}><CheckIcon />Yönetici onayı işle</DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>

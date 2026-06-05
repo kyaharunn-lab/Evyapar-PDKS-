@@ -192,6 +192,45 @@ export default function AdvanceRequestsPage() {
     }
   };
 
+  const openDetailAfterMenuClose = React.useCallback((request: any) => {
+    window.setTimeout(() => {
+      setSelectedRequest(request)
+      setIsDetailOpen(true)
+    }, 0)
+  }, [])
+
+  const openApproveAfterMenuClose = React.useCallback((request: any) => {
+    window.setTimeout(() => {
+      setSelectedRequest(request)
+      setIsApproveOpen(true)
+    }, 0)
+  }, [])
+
+  const openRejectAfterMenuClose = React.useCallback((request: any) => {
+    window.setTimeout(() => {
+      setSelectedRequest(request)
+      setIsRejectOpen(true)
+    }, 0)
+  }, [])
+
+  const openPaymentAfterMenuClose = React.useCallback((request: any) => {
+    window.setTimeout(() => {
+      setSelectedRequest(request)
+      setIsPaymentOpen(true)
+    }, 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (isDetailOpen || isRejectOpen || isApproveOpen || isPaymentOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isDetailOpen, isRejectOpen, isApproveOpen, isPaymentOpen])
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -310,25 +349,25 @@ export default function AdvanceRequestsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
-                          <DropdownMenuItem onClick={() => { setSelectedRequest(req); setIsDetailOpen(true); }}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(req)}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             Detayları Gör
                           </DropdownMenuItem>
                           {req.status === "Pending" && (
                             <>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-green-600" onClick={() => { setSelectedRequest(req); setIsApproveOpen(true); }}>
+                              <DropdownMenuItem className="text-green-600" onSelect={() => openApproveAfterMenuClose(req)}>
                                 <Check className="mr-3 h-4 w-4" />
                                 {t.approve}
                               </DropdownMenuItem>
-                              <DropdownMenuItem className="text-accent" onClick={() => { setSelectedRequest(req); setIsRejectOpen(true); }}>
+                              <DropdownMenuItem className="text-accent" onSelect={() => openRejectAfterMenuClose(req)}>
                                 <X className="mr-3 h-4 w-4" />
                                 {t.decline}
                               </DropdownMenuItem>
                             </>
                           )}
                           {req.status === "Approved" && (
-                            <DropdownMenuItem className="text-primary font-bold" onClick={() => { setSelectedRequest(req); setIsPaymentOpen(true); }}>
+                            <DropdownMenuItem className="text-primary font-bold" onSelect={() => openPaymentAfterMenuClose(req)}>
                               <CreditCard className="mr-3 h-4 w-4" />
                               {t.paid}
                             </DropdownMenuItem>

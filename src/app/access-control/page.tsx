@@ -244,6 +244,21 @@ export default function AccessControlPage() {
     })
   }
 
+  const openEditAfterMenuClose = React.useCallback((row?: any) => {
+    window.setTimeout(() => openEdit(row), 0)
+  }, [openEdit])
+
+  React.useEffect(() => {
+    if (isEditOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isEditOpen])
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -334,7 +349,7 @@ export default function AccessControlPage() {
                         <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
                           <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => openEdit(row)}>
+                          <DropdownMenuItem onSelect={() => openEditAfterMenuClose(row)}>
                             <Edit2 className="mr-3 h-4 w-4 text-slate-400" />
                             Erişimi Düzenle
                           </DropdownMenuItem>

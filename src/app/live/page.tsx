@@ -290,6 +290,31 @@ export default function LiveAttendancePage() {
     }
   };
 
+  const openDetailAfterMenuClose = React.useCallback((log: any) => {
+    window.setTimeout(() => {
+      setSelectedLog(log)
+      setIsDetailOpen(true)
+    }, 0)
+  }, [])
+
+  const openExitAfterMenuClose = React.useCallback((log: any) => {
+    window.setTimeout(() => {
+      setSelectedLog(log)
+      setIsExitOpen(true)
+    }, 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (isDetailOpen || isExitOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isDetailOpen, isExitOpen])
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -431,11 +456,11 @@ export default function LiveAttendancePage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
                           <DropdownMenuLabel>{t.actions}</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => { setSelectedLog(log); setIsDetailOpen(true); }}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(log)}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             {l.viewDetails}
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-accent focus:text-accent focus:bg-accent/5" onClick={() => { setSelectedLog(log); setIsExitOpen(true); }}>
+                          <DropdownMenuItem className="text-accent focus:text-accent focus:bg-accent/5" onSelect={() => openExitAfterMenuClose(log)}>
                             <LogOut className="mr-3 h-4 w-4" />
                             {l.manualExit}
                           </DropdownMenuItem>

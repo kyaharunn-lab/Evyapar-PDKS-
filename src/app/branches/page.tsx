@@ -278,6 +278,10 @@ export default function BranchesPage() {
     setIsDetailOpen(true);
   };
 
+  const openDetailAfterMenuClose = React.useCallback((branch: any) => {
+    window.setTimeout(() => handleOpenDetail(branch), 0)
+  }, [])
+
   const handleEdit = (branch: any) => {
     setEditingBranchId(branch?.id || null);
     setFormData({
@@ -297,6 +301,21 @@ export default function BranchesPage() {
     });
     setIsAddOpen(true);
   };
+
+  const openEditAfterMenuClose = React.useCallback((branch: any) => {
+    window.setTimeout(() => handleEdit(branch), 0)
+  }, [])
+
+  React.useEffect(() => {
+    if (isAddOpen || isDetailOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isAddOpen, isDetailOpen])
 
   const handleDelete = (branch: any) => {
     if (!branch?.id) return;
@@ -426,11 +445,11 @@ export default function BranchesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => handleOpenDetail(branch)}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(branch)}>
                             <Eye className="mr-2 h-4 w-4 text-slate-400" />
                             Detay Gör
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEdit(branch)}>
+                          <DropdownMenuItem onSelect={() => openEditAfterMenuClose(branch)}>
                             Düzenle
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />

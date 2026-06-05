@@ -168,6 +168,28 @@ export default function DeviceIdsPage() {
     setIsFormOpen(true)
   }
 
+  const openDetailAfterMenuClose = React.useCallback((device: any) => {
+    window.setTimeout(() => {
+      setSelectedDevice(device)
+      setIsDetailOpen(true)
+    }, 0)
+  }, [])
+
+  const openEditAfterMenuClose = React.useCallback((device: any) => {
+    window.setTimeout(() => openEdit(device), 0)
+  }, [openEdit])
+
+  React.useEffect(() => {
+    if (isFormOpen || isDetailOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isFormOpen, isDetailOpen])
+
   const handleSave = () => {
     if (!formData.personnelId) {
       toast({ variant: "destructive", title: "Hata", description: "Personel seçimi zorunludur." })
@@ -340,11 +362,11 @@ export default function DeviceIdsPage() {
                         <DropdownMenuContent align="end" className="w-52 rounded-xl shadow-xl">
                           <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => { setSelectedDevice(device); setIsDetailOpen(true) }}>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(device)}>
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             Detay Gör
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openEdit(device)}>
+                          <DropdownMenuItem onSelect={() => openEditAfterMenuClose(device)}>
                             <Smartphone className="mr-3 h-4 w-4 text-slate-400" />
                             Düzenle
                           </DropdownMenuItem>

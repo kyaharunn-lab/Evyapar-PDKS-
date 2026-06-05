@@ -273,6 +273,10 @@ export default function PositionsPage() {
     setIsDetailOpen(true)
   }, [])
 
+  const openDetailAfterMenuClose = React.useCallback((pos: any) => {
+    window.setTimeout(() => handleOpenDetail(pos), 0)
+  }, [handleOpenDetail])
+
   const handleEdit = React.useCallback((pos: any) => {
     setEditingPosId(pos?.id || null)
     setPosName(pos?.positionName || "")
@@ -286,6 +290,21 @@ export default function PositionsPage() {
     setPosStatus(pos?.status === "Inactive" ? "inactive" : "active")
     setIsCreateOpen(true)
   }, [])
+
+  const openEditAfterMenuClose = React.useCallback((pos: any) => {
+    window.setTimeout(() => handleEdit(pos), 0)
+  }, [handleEdit])
+
+  React.useEffect(() => {
+    if (isCreateOpen || isDetailOpen || typeof document === "undefined") return
+    const cleanup = window.setTimeout(() => {
+      document.body.style.pointerEvents = ""
+      document.body.style.overflow = ""
+      document.body.removeAttribute("data-scroll-locked")
+      document.body.removeAttribute("inert")
+    }, 50)
+    return () => window.clearTimeout(cleanup)
+  }, [isCreateOpen, isDetailOpen])
 
   const handleDelete = React.useCallback((pos: any) => {
     if (!pos?.id) return
@@ -483,8 +502,8 @@ export default function PositionsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleOpenDetail(pos)}>Detay Gör</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleEdit(pos)}>Düzenle</DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(pos)}>Detay Gör</DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => openEditAfterMenuClose(pos)}>Düzenle</DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleDeactivate(pos)}>Pasifleştir</DropdownMenuItem>
                           <DropdownMenuItem className="text-accent" onClick={() => handleDelete(pos)}>Sil</DropdownMenuItem>
