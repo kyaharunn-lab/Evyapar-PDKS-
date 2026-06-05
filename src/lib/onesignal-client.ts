@@ -3,7 +3,6 @@
 declare global {
   interface Window {
     OneSignalDeferred?: Array<(oneSignal: any) => void | Promise<void>>
-    OneSignal?: any
     __evyaparOneSignalScriptLoading?: boolean
   }
 }
@@ -40,6 +39,13 @@ function assertPushSupported() {
     throw new Error("Bildirimler bu tarayıcıda desteklenmiyor olabilir.")
   }
 
+  const userAgent = navigator.userAgent || ""
+  const isIos = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as any).standalone)
+  if (isIos && !isStandalone) {
+    throw new Error("Bildirimler için uygulamayı ana ekrana eklemeniz gerekebilir.")
+  }
+
   const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname)
   const isSecure = window.isSecureContext || isLocalhost
   const supported = isSecure && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window
@@ -49,35 +55,42 @@ function assertPushSupported() {
   }
 }
 
-function waitForOneSignalReady(timeoutMs = 10000) {
-  return new Promise<any>((resolve, reject) => {
+async function withOneSignal<T>(callback: (oneSignal: any) => Promise<T>, timeoutMs = 8000) {
+  const sdkPromise = new Promise<T>((resolve, reject) => {
     if (typeof window === "undefined") {
       reject(new Error("Bildirimler bu tarayıcıda desteklenmiyor olabilir."))
       return
     }
 
     let settled = false
-    const finish = (oneSignal: any) => {
-      if (settled) return
-      settled = true
-      window.clearTimeout(timer)
-      if (oneSignal) resolve(oneSignal)
-      else reject(new Error("OneSignal SDK hazır değil."))
-    }
     const timer = window.setTimeout(() => {
       if (settled) return
       settled = true
-      reject(new Error("OneSignal SDK zaman aşımına uğradı."))
+      reject(new Error("Bildirim servisi henüz hazır değil, birkaç saniye sonra tekrar deneyin."))
     }, timeoutMs)
 
-    if (window.OneSignal) {
-      window.setTimeout(() => finish(window.OneSignal), 0)
-      return
-    }
-
     window.OneSignalDeferred = window.OneSignalDeferred || []
-    window.OneSignalDeferred.push((oneSignal: any) => finish(oneSignal))
+    window.OneSignalDeferred.push(async function (OneSignal: any) {
+      if (settled) return
+      try {
+        const result = await callback(OneSignal)
+        settled = true
+        window.clearTimeout(timer)
+        resolve(result)
+      } catch (error) {
+        settled = true
+        window.clearTimeout(timer)
+        reject(error)
+      }
+    })
   })
+
+  const sdkLoaded = await loadOneSignalSdk()
+  if (!sdkLoaded) {
+    throw new Error("Bildirim servisi henüz hazır değil, birkaç saniye sonra tekrar deneyin.")
+  }
+
+  return sdkPromise
 }
 
 function readNotificationPermission(OneSignal: any) {
@@ -111,7 +124,8 @@ async function requestNotificationPermission(OneSignal: any) {
 
 function readPushSubscription(OneSignal: any) {
   try {
-    const pushSubscription = OneSignal?.User?.PushSubscription
+    const user = OneSignal && typeof OneSignal === "object" ? OneSignal.User : null
+    const pushSubscription = user && typeof user === "object" ? user.PushSubscription : null
     const oneSignalId = String(pushSubscription?.id || pushSubscription?.token || "")
     const subscribed = Boolean(pushSubscription?.optedIn ?? oneSignalId)
     return {
@@ -132,48 +146,46 @@ export async function syncOneSignalSubscription(personnelId: string, options: { 
   }
 
   assertPushSupported()
-  const sdkLoaded = await loadOneSignalSdk()
-  if (!sdkLoaded) {
-    throw new Error("OneSignal SDK yuklenemedi.")
-  }
+  return withOneSignal(async (OneSignal: any) => {
+    if (!OneSignal || typeof OneSignal.init !== "function") {
+      throw new Error("Bildirim servisi henüz hazır değil, birkaç saniye sonra tekrar deneyin.")
+    }
 
-  const OneSignal = await waitForOneSignalReady()
-  if (!OneSignal) {
-    throw new Error("OneSignal SDK hazır değil.")
-  }
+    try {
+      console.info("[OneSignal mobile] initialize starting", { appId })
+      await OneSignal.init({ appId })
+      console.info("[OneSignal mobile] OneSignal initialized")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!/already initialized/i.test(message)) throw error
+      console.info("[OneSignal mobile] OneSignal initialized", { alreadyInitialized: true })
+    }
 
-  try {
-    console.info("[OneSignal mobile] initialize starting", { appId })
-    await OneSignal.init({ appId })
-    console.info("[OneSignal mobile] OneSignal initialized")
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (!/already initialized/i.test(message)) throw error
-    console.info("[OneSignal mobile] OneSignal initialized", { alreadyInitialized: true })
-  }
+    if (typeof OneSignal.login === "function") {
+      await OneSignal.login(personnelId)
+      console.info("[OneSignal mobile] external user linked", { personnelId })
+    }
 
-  if (typeof OneSignal.login === "function") {
-    await OneSignal.login(personnelId)
-    console.info("[OneSignal mobile] external user linked", { personnelId })
-  }
+    let permission = readNotificationPermission(OneSignal)
+    console.info("[OneSignal mobile] Permission current", { permission })
+    if (options.requestPermission && !permission) {
+      permission = await requestNotificationPermission(OneSignal)
+    }
+    console.info(`[OneSignal mobile] Permission ${permission ? "granted" : "denied"}`, { permission })
 
-  let permission = readNotificationPermission(OneSignal)
-  console.info("[OneSignal mobile] Permission current", { permission })
-  if (options.requestPermission && !permission) {
-    permission = await requestNotificationPermission(OneSignal)
-  }
-  console.info(`[OneSignal mobile] Permission ${permission ? "granted" : "denied"}`, { permission })
+    const subscription = permission
+      ? readPushSubscription(OneSignal)
+      : { oneSignalId: "", subscribed: false, optedIn: undefined }
+    console.info("[OneSignal mobile] Player ID", {
+      oneSignalId: subscription.oneSignalId || null,
+      subscribed: subscription.subscribed,
+      optedIn: subscription.optedIn,
+    })
 
-  const subscription = readPushSubscription(OneSignal)
-  console.info("[OneSignal mobile] Player ID", {
-    oneSignalId: subscription.oneSignalId || null,
-    subscribed: subscription.subscribed,
-    optedIn: subscription.optedIn,
+    return {
+      oneSignalId: subscription.oneSignalId,
+      subscribed: subscription.subscribed,
+      permission,
+    }
   })
-
-  return {
-    oneSignalId: subscription.oneSignalId,
-    subscribed: subscription.subscribed,
-    permission,
-  }
 }
