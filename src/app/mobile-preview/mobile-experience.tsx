@@ -255,6 +255,23 @@ function normalizeStatus(value: any) {
   return "Bekliyor"
 }
 
+function canCreateMobileLeaveRequest(person: any, position: any) {
+  if (!person) return false
+  if (person?.hasAdminAccess === true || person?.panelAccess === true || person?.isManager === true) return true
+  const permissions = person?.permissions || person?.rolePermissions || {}
+  if (permissions?.leaveCreate === true || permissions?.canCreateLeaveRequest === true || permissions?.manageLeaves === true) return true
+  const searchable = [
+    person?.role,
+    person?.roleName,
+    person?.position,
+    person?.positionName,
+    person?.title,
+    position?.positionName,
+    position?.name,
+    position?.title,
+  ].filter(Boolean).join(" ").toLocaleLowerCase("tr-TR")
+  return ["müdür", "mudur", "manager", "admin", "yönetici", "yonetici"].some((keyword) => searchable.includes(keyword))
+}
 function isActive(value: any) {
   if (typeof value === "boolean") return value
   const raw = valueText(value, "Active").toLowerCase()
@@ -641,6 +658,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     data.branches.find((branch: any) => getId(branch) === selectedPerson?.branchId)
   const selectedDepartment = data.departments.find((department: any) => getId(department) === selectedPerson?.departmentId)
   const selectedPosition = data.positions.find((position: any) => getId(position) === selectedPerson?.positionId || positionName(position) === selectedPerson?.position)
+  const canCreateLeaveRequests = canCreateMobileLeaveRequest(selectedPerson, selectedPosition)
   const personId = selectedPerson ? getId(selectedPerson) : ""
   const branchId = selectedBranch ? getId(selectedBranch) : ""
   const personShifts = data.shifts.filter((shift: any) => matchesPerson(shift, personId) || matchesBranch(shift, branchId))
@@ -1061,6 +1079,10 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       toast({ variant: "destructive", title: "Izin kaydedilemedi", description: "Personel bulunamadi." })
       return false
     }
+    if (!canCreateLeaveRequests) {
+      toast({ variant: "destructive", title: "Yetki yok", description: "İzin talebi oluşturma yetkiniz yok." })
+      return false
+    }
     const attachmentFile = form.attachmentFile as File | null | undefined
     const leaveRequestId = `mobile-leave-${Date.now()}`
     let attachment: Record<string, any> = {}
@@ -1198,6 +1220,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       notificationSettings={data.notificationSettings}
       company={data.companySettings}
       isStandaloneApp={isStandaloneApp}
+      canCreateLeaveRequests={canCreateLeaveRequests}
       setScreen={(screen: string) => updateSettings({ screen })}
       onAttendance={handleAttendance}
       onQr={handleQrSimulation}
@@ -1243,6 +1266,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             notificationSettings={data.notificationSettings}
             company={data.companySettings}
             isStandaloneApp={isStandaloneApp}
+            canCreateLeaveRequests={canCreateLeaveRequests}
             setScreen={(screen: string) => updateSettings({ screen })}
             onAttendance={handleAttendance}
             onQr={handleQrSimulation}
@@ -1314,6 +1338,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
                 notificationSettings={data.notificationSettings}
                 company={data.companySettings}
                 isStandaloneApp={isStandaloneApp}
+                canCreateLeaveRequests={canCreateLeaveRequests}
                 setScreen={(screen: string) => updateSettings({ screen })}
                 onAttendance={handleAttendance}
                 onQr={handleQrSimulation}
@@ -1525,7 +1550,7 @@ function MobileHeader({ person, palette, title }: any) {
   )
 }
 
-function HomeScreen({ person, branch, department, position, shifts, settings, palette, setScreen, onBreak, isStandaloneApp }: any) {
+function HomeScreen({ person, branch, department, position, shifts, settings, palette, setScreen, onBreak, isStandaloneApp, canCreateLeaveRequests }: any) {
   const hour = new Date().getHours()
   const greeting = hour < 11 ? "Günaydın" : hour < 18 ? "İyi günler" : "İyi akşamlar"
   const todayShift = shifts[0]
@@ -1548,7 +1573,7 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
         <QuickAction actionKey="qr" icon={QrCode} label={isStandaloneApp ? "QR ile Giriş / Çıkış" : "QR ile giriş"} description={isStandaloneApp ? "Mağaza QR kodunu okutarak giriş veya çıkış yap" : undefined} palette={palette} onClick={() => setScreen("QR")} className={isStandaloneApp ? "col-span-2" : undefined} />
         {!isStandaloneApp && <QuickAction actionKey="gps" icon={LocateFixed} label="GPS ile giriş" palette={palette} onClick={() => setScreen("GPS")} />}
         <QuickAction actionKey="break" icon={Clock3} label={settings.state === "Molada" ? "Mola bitir" : "Mola başlat"} palette={palette} onClick={onBreak} />
-        <QuickAction actionKey="leave" icon={CalendarClock} label="İzin talep et" palette={palette} onClick={() => setScreen("İzin")} />
+        {canCreateLeaveRequests && <QuickAction actionKey="leave" icon={CalendarClock} label="İzin talep et" palette={palette} onClick={() => setScreen("İzin")} />}
         <QuickAction actionKey="shifts" icon={IdCard} label="Vardiyalarım" palette={palette} onClick={() => setScreen("Vardiya")} />
         <QuickAction actionKey="notifications" icon={Bell} label="Bildirimler" palette={palette} onClick={() => setScreen("Bildirim")} />
       </div>
@@ -1737,7 +1762,7 @@ function ShiftScreen({ shifts, branch, palette }: any) {
   return <ListScreen title="Vardiyalarım" icon={CalendarClock} empty="Bu personele atanmış vardiya bulunamadı." items={cards} palette={palette} />
 }
 
-function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
+function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }: any) {
   const [open, setOpen] = React.useState(false)
   const [form, setForm] = React.useState({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
   const [startDay, setStartDay] = React.useState("")
@@ -1762,6 +1787,11 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
     event?.preventDefault()
     if (saving) return
     setError("")
+    if (!canCreateLeaveRequests) {
+      setOpen(false)
+      setError("İzin talebi oluşturma yetkiniz yok.")
+      return
+    }
     if (!form.type.trim()) {
       setError("Izin turu zorunlu.")
       return
@@ -1812,7 +1842,22 @@ function LeaveScreen({ leaves, palette, onLeaveCreate }: any) {
   return (
     <div>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">İzin Taleplerim</h3><CalendarClock className="h-5 w-5 text-white/60" /></div>
-      <Button data-mobile-action="leave-new" onClick={() => setOpen((value) => !value)} className={cn("mb-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>Yeni izin talebi</Button>
+      <Button
+        data-mobile-action="leave-new"
+        onClick={() => {
+          if (!canCreateLeaveRequests) {
+            setOpen(false)
+            setError("İzin talebi oluşturma yetkiniz yok.")
+            return
+          }
+          setError("")
+          setOpen((value) => !value)
+        }}
+        className={cn("mb-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", canCreateLeaveRequests ? palette.button : "cursor-not-allowed bg-white/10 text-white/45 hover:bg-white/10")}
+      >
+        Yeni izin talebi
+      </Button>
+      {!canCreateLeaveRequests && error ? <p className="mb-4 rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">{error}</p> : null}
       {open && (
         <form onSubmit={submit} className="mb-4 space-y-3 rounded-[26px] border border-white/10 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
           <Input value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
