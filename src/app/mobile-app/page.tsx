@@ -5,12 +5,61 @@ import * as React from "react"
 import { MobileExperience } from "../mobile-preview/mobile-experience"
 import { useAuth, useFirestore } from "@/firebase"
 import { readAuthSession } from "@/lib/auth-session"
+import { writeSharedRecord } from "@/lib/shared-data-sync"
 import { signInWithEmailAndPassword, signOut } from "firebase/auth"
 import { collection, getDocs, query, where } from "firebase/firestore"
 
+declare global {
+  interface Window {
+    OneSignalDeferred?: Array<(oneSignal: any) => void | Promise<void>>
+    __evyaparOneSignalScriptLoading?: boolean
+  }
+}
+
+function loadOneSignalSdk() {
+  if (typeof window === "undefined") return Promise.resolve(false)
+  if (document.querySelector('script[src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"]')) {
+    return Promise.resolve(true)
+  }
+  if (window.__evyaparOneSignalScriptLoading) {
+    return Promise.resolve(true)
+  }
+
+  window.__evyaparOneSignalScriptLoading = true
+  return new Promise<boolean>((resolve) => {
+    const script = document.createElement("script")
+    script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+    script.async = true
+    script.defer = true
+    script.onload = () => resolve(true)
+    script.onerror = () => {
+      console.warn("[OneSignal mobile] SDK yuklenemedi.")
+      resolve(false)
+    }
+    document.head.appendChild(script)
+  })
+}
+
+function upsertLocalPersonnel(personnelId: string, patch: Record<string, unknown>) {
+  try {
+    const currentPersonnel = JSON.parse(window.localStorage.getItem("app_personnel") || "[]")
+    const list = Array.isArray(currentPersonnel) ? currentPersonnel : []
+    const next = list.map((person: any) => {
+      const id = (person?.id || person?.personnelId || person?.email || "").toString()
+      return id === personnelId ? { ...person, ...patch } : person
+    })
+    window.localStorage.setItem("app_personnel", JSON.stringify(next))
+    window.dispatchEvent(new Event("app-personnel-updated"))
+  } catch {
+    // local cache is best-effort only
+  }
+}
+
 export default function MobileAppPage() {
+  const db = useFirestore()
   const [hasSession, setHasSession] = React.useState(false)
   const [authLoading, setAuthLoading] = React.useState(true)
+  const oneSignalSyncRef = React.useRef("")
 
   React.useEffect(() => {
     const refresh = () => {
@@ -26,6 +75,92 @@ export default function MobileAppPage() {
       window.removeEventListener("storage", refresh)
     }
   }, [])
+
+  React.useEffect(() => {
+    if (!hasSession || typeof window === "undefined") return
+    if (!db) return
+
+    const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID
+    if (!appId) {
+      console.info("[OneSignal mobile] NEXT_PUBLIC_ONESIGNAL_APP_ID tanimli degil.")
+      return
+    }
+
+    const session = readAuthSession()
+    const sessionUser: any = session?.user || {}
+    const personnelId = (session?.personnelId || sessionUser?.id || sessionUser?.personnelId || sessionUser?.email || "").toString()
+    if (!personnelId) return
+
+    const syncKey = `${personnelId}:${appId}:${session?.loggedInAt || ""}`
+    if (oneSignalSyncRef.current === syncKey) return
+    oneSignalSyncRef.current = syncKey
+
+    let cancelled = false
+
+    const syncOneSignal = async () => {
+      const sdkLoaded = await loadOneSignalSdk()
+      if (!sdkLoaded || cancelled) return
+
+      window.OneSignalDeferred = window.OneSignalDeferred || []
+      window.OneSignalDeferred.push(async (OneSignal: any) => {
+        if (cancelled) return
+
+        try {
+          console.info("[OneSignal mobile] initialize starting", { appId })
+          await OneSignal.init({ appId })
+          console.info("[OneSignal mobile] initialized")
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (!/already initialized/i.test(message)) {
+            console.warn("[OneSignal mobile] initialize failed", error)
+            return
+          }
+          console.info("[OneSignal mobile] already initialized")
+        }
+
+        try {
+          await OneSignal.login(personnelId)
+          console.info("[OneSignal mobile] external user linked", { personnelId })
+
+          const permission = OneSignal.Notifications?.permission
+          if (permission !== true) {
+            await OneSignal.Notifications?.requestPermission?.()
+          }
+
+          const pushSubscription = OneSignal.User?.PushSubscription
+          const oneSignalId = (pushSubscription?.id || pushSubscription?.token || "").toString()
+          const subscribed = Boolean(pushSubscription?.optedIn ?? oneSignalId)
+          const patch = {
+            oneSignalId,
+            oneSignalSubscribed: subscribed,
+            lastNotificationSync: new Date().toISOString(),
+          }
+          const updatedPersonnel = {
+            ...sessionUser,
+            id: personnelId,
+            personnelId,
+            ...patch,
+          }
+
+          upsertLocalPersonnel(personnelId, patch)
+          await writeSharedRecord(db, "personnel", updatedPersonnel)
+          console.info("[OneSignal mobile] personnel notification sync success", {
+            personnelId,
+            oneSignalId,
+            subscribed,
+          })
+        } catch (error) {
+          console.warn("[OneSignal mobile] permission/subscription sync failed", error)
+        }
+      })
+    }
+
+    void syncOneSignal()
+
+    return () => {
+      cancelled = true
+    }
+  }, [db, hasSession])
 
   if (authLoading) {
     return <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-950 via-indigo-950 to-sky-950" />
