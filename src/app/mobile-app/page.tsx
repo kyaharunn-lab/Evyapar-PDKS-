@@ -5,31 +5,12 @@ import * as React from "react"
 import { MobileExperience } from "../mobile-preview/mobile-experience"
 import { useAuth, useFirestore } from "@/firebase"
 import { readAuthSession } from "@/lib/auth-session"
-import { syncOneSignalSubscription } from "@/lib/onesignal-client"
-import { writeSharedRecord } from "@/lib/shared-data-sync"
 import { signInWithEmailAndPassword, signOut } from "firebase/auth"
 import { collection, getDocs, query, where } from "firebase/firestore"
 
-function upsertLocalPersonnel(personnelId: string, patch: Record<string, unknown>) {
-  try {
-    const currentPersonnel = JSON.parse(window.localStorage.getItem("app_personnel") || "[]")
-    const list = Array.isArray(currentPersonnel) ? currentPersonnel : []
-    const next = list.map((person: any) => {
-      const id = (person?.id || person?.personnelId || person?.email || "").toString()
-      return id === personnelId ? { ...person, ...patch } : person
-    })
-    window.localStorage.setItem("app_personnel", JSON.stringify(next))
-    window.dispatchEvent(new Event("app-personnel-updated"))
-  } catch {
-    // local cache is best-effort only
-  }
-}
-
 export default function MobileAppPage() {
-  const db = useFirestore()
   const [hasSession, setHasSession] = React.useState(false)
   const [authLoading, setAuthLoading] = React.useState(true)
-  const oneSignalSyncRef = React.useRef("")
 
   React.useEffect(() => {
     const refresh = () => {
@@ -45,59 +26,6 @@ export default function MobileAppPage() {
       window.removeEventListener("storage", refresh)
     }
   }, [])
-
-  React.useEffect(() => {
-    if (!hasSession || typeof window === "undefined") return
-    if (!db) return
-
-    const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID
-    if (!appId) {
-      console.info("[OneSignal mobile] NEXT_PUBLIC_ONESIGNAL_APP_ID tanimli degil.")
-      return
-    }
-
-    const session = readAuthSession()
-    const sessionUser: any = session?.user || {}
-    const personnelId = (session?.personnelId || sessionUser?.id || sessionUser?.personnelId || sessionUser?.email || "").toString()
-    if (!personnelId) return
-
-    const syncKey = `${personnelId}:${appId}:${session?.loggedInAt || ""}`
-    if (oneSignalSyncRef.current === syncKey) return
-    oneSignalSyncRef.current = syncKey
-
-    let cancelled = false
-
-    const syncOneSignal = async () => {
-      if (cancelled) return
-      try {
-        const result = await syncOneSignalSubscription(personnelId, { requestPermission: false })
-        if (cancelled) return
-        const patch = {
-          oneSignalId: result.oneSignalId,
-          oneSignalSubscribed: result.subscribed,
-          lastNotificationSync: new Date().toISOString(),
-        }
-        const updatedPersonnel = { ...sessionUser, id: personnelId, personnelId, ...patch }
-        upsertLocalPersonnel(personnelId, patch)
-        const firestoreOk = await writeSharedRecord(db, "personnel", updatedPersonnel)
-        console.info(`[OneSignal mobile] Sync ${firestoreOk ? "success" : "failed"}`, {
-          personnelId,
-          oneSignalId: result.oneSignalId,
-          subscribed: result.subscribed,
-          firestoreOk,
-          automaticPermissionRequest: false,
-        })
-      } catch (error) {
-        console.warn("[OneSignal mobile] subscription sync skipped", error)
-      }
-    }
-
-    void syncOneSignal()
-
-    return () => {
-      cancelled = true
-    }
-  }, [db, hasSession])
 
   if (authLoading) {
     return <div className="fixed inset-0 z-50 bg-gradient-to-br from-slate-950 via-indigo-950 to-sky-950" />

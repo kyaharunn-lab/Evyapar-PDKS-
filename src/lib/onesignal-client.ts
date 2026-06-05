@@ -9,15 +9,34 @@ declare global {
 
 const ONESIGNAL_SDK_SRC = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
 
-export function loadOneSignalSdk() {
+function supportMessage() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return "Bildirimler bu tarayıcıda desteklenmiyor olabilir."
+  }
+
+  const userAgent = navigator.userAgent || ""
+  const isIos = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as any).standalone)
+  if (isIos && !isStandalone) {
+    return "Bildirimler için uygulamayı ana ekrana eklemeniz gerekebilir."
+  }
+
+  const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  const isSecure = window.isSecureContext || isLocalhost
+  if (!isSecure || !("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return "Bildirimler bu tarayıcıda desteklenmiyor olabilir."
+  }
+
+  return ""
+}
+
+function loadOneSignalSdk() {
   if (typeof window === "undefined") return Promise.resolve(false)
   window.OneSignalDeferred = window.OneSignalDeferred || []
-  if (document.querySelector(`script[src="${ONESIGNAL_SDK_SRC}"]`)) {
-    return Promise.resolve(true)
-  }
-  if (window.__evyaparOneSignalScriptLoading) {
-    return Promise.resolve(true)
-  }
+
+  const existing = document.querySelector(`script[src="${ONESIGNAL_SDK_SRC}"]`)
+  if (existing) return Promise.resolve(true)
+  if (window.__evyaparOneSignalScriptLoading) return Promise.resolve(true)
 
   window.__evyaparOneSignalScriptLoading = true
   return new Promise<boolean>((resolve) => {
@@ -34,34 +53,14 @@ export function loadOneSignalSdk() {
   })
 }
 
-function assertPushSupported() {
-  if (typeof window === "undefined" || typeof navigator === "undefined") {
+async function runWithOneSignal<T>(callback: (oneSignal: any) => Promise<T>, timeoutMs = 8000) {
+  if (typeof window === "undefined") {
     throw new Error("Bildirimler bu tarayıcıda desteklenmiyor olabilir.")
   }
 
-  const userAgent = navigator.userAgent || ""
-  const isIos = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
-  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || Boolean((navigator as any).standalone)
-  if (isIos && !isStandalone) {
-    throw new Error("Bildirimler için uygulamayı ana ekrana eklemeniz gerekebilir.")
-  }
+  window.OneSignalDeferred = window.OneSignalDeferred || []
 
-  const isLocalhost = ["localhost", "127.0.0.1"].includes(window.location.hostname)
-  const isSecure = window.isSecureContext || isLocalhost
-  const supported = isSecure && "Notification" in window && "serviceWorker" in navigator && "PushManager" in window
-
-  if (!supported) {
-    throw new Error("Bildirimler bu tarayıcıda desteklenmiyor olabilir.")
-  }
-}
-
-async function withOneSignal<T>(callback: (oneSignal: any) => Promise<T>, timeoutMs = 8000) {
-  const sdkPromise = new Promise<T>((resolve, reject) => {
-    if (typeof window === "undefined") {
-      reject(new Error("Bildirimler bu tarayıcıda desteklenmiyor olabilir."))
-      return
-    }
-
+  const ready = new Promise<T>((resolve, reject) => {
     let settled = false
     const timer = window.setTimeout(() => {
       if (settled) return
@@ -69,8 +68,7 @@ async function withOneSignal<T>(callback: (oneSignal: any) => Promise<T>, timeou
       reject(new Error("Bildirim servisi henüz hazır değil, birkaç saniye sonra tekrar deneyin."))
     }, timeoutMs)
 
-    window.OneSignalDeferred = window.OneSignalDeferred || []
-    window.OneSignalDeferred.push(async function (OneSignal: any) {
+    window.OneSignalDeferred?.push(async function (OneSignal: any) {
       if (settled) return
       try {
         const result = await callback(OneSignal)
@@ -90,52 +88,49 @@ async function withOneSignal<T>(callback: (oneSignal: any) => Promise<T>, timeou
     throw new Error("Bildirim servisi henüz hazır değil, birkaç saniye sonra tekrar deneyin.")
   }
 
-  return sdkPromise
+  return ready
 }
 
-function readNotificationPermission(OneSignal: any) {
-  try {
-    if (typeof OneSignal?.Notifications?.permission === "boolean") {
-      return OneSignal.Notifications.permission
-    }
-  } catch {
-    // Fall back to browser permission below.
-  }
-  return typeof Notification !== "undefined" ? Notification.permission === "granted" : false
-}
+async function requestPermissionWithPublicApi(OneSignal: any, shouldRequest: boolean) {
+  const current = typeof Notification !== "undefined" ? Notification.permission : "default"
+  console.info("[OneSignal mobile] Permission current", { permission: current })
 
-async function requestNotificationPermission(OneSignal: any) {
+  if (!shouldRequest || current === "granted") return current === "granted"
+  if (current === "denied") return false
+
   try {
     if (typeof OneSignal?.Notifications?.requestPermission === "function") {
       await OneSignal.Notifications.requestPermission()
-      return readNotificationPermission(OneSignal)
+    } else if (typeof Notification !== "undefined" && typeof Notification.requestPermission === "function") {
+      await Notification.requestPermission()
     }
   } catch (error) {
-    console.warn("[OneSignal mobile] SDK permission request failed", error)
+    console.warn("[OneSignal mobile] permission request failed", error)
+    throw new Error("Bildirim servisi henüz hazır değil, birkaç saniye sonra tekrar deneyin.")
   }
 
-  if (typeof Notification !== "undefined" && typeof Notification.requestPermission === "function") {
-    const result = await Notification.requestPermission()
-    return result === "granted"
-  }
-
-  return false
+  return typeof Notification !== "undefined" && Notification.permission === "granted"
 }
 
-function readPushSubscription(OneSignal: any) {
+async function readSubscriptionId(OneSignal: any) {
   try {
-    const user = OneSignal && typeof OneSignal === "object" ? OneSignal.User : null
-    const pushSubscription = user && typeof user === "object" ? user.PushSubscription : null
-    const oneSignalId = String(pushSubscription?.id || pushSubscription?.token || "")
-    const subscribed = Boolean(pushSubscription?.optedIn ?? oneSignalId)
-    return {
-      oneSignalId,
-      subscribed,
-      optedIn: pushSubscription?.optedIn,
+    if (typeof OneSignal?.User?.PushSubscription?.optIn === "function") {
+      await OneSignal.User.PushSubscription.optIn()
     }
   } catch (error) {
-    console.warn("[OneSignal mobile] Push subscription okunamadı", error)
-    return { oneSignalId: "", subscribed: false, optedIn: undefined }
+    console.warn("[OneSignal mobile] subscription opt-in failed", error)
+  }
+
+  try {
+    const subscription = OneSignal?.User?.PushSubscription
+    const oneSignalId = String(subscription?.id || subscription?.token || "")
+    const subscribed = Boolean(subscription?.optedIn ?? oneSignalId)
+    console.info("[OneSignal mobile] Subscription id", { oneSignalId: oneSignalId || null, subscribed })
+    return { oneSignalId, subscribed }
+  } catch (error) {
+    console.warn("[OneSignal mobile] subscription id okunamadı", error)
+    console.info("[OneSignal mobile] Subscription id", { oneSignalId: null, subscribed: false })
+    return { oneSignalId: "", subscribed: false }
   }
 }
 
@@ -145,14 +140,15 @@ export async function syncOneSignalSubscription(personnelId: string, options: { 
     throw new Error("NEXT_PUBLIC_ONESIGNAL_APP_ID tanimli degil.")
   }
 
-  assertPushSupported()
-  return withOneSignal(async (OneSignal: any) => {
+  const unsupported = supportMessage()
+  if (unsupported) throw new Error(unsupported)
+
+  return runWithOneSignal(async function (OneSignal: any) {
     if (!OneSignal || typeof OneSignal.init !== "function") {
       throw new Error("Bildirim servisi henüz hazır değil, birkaç saniye sonra tekrar deneyin.")
     }
 
     try {
-      console.info("[OneSignal mobile] initialize starting", { appId })
       await OneSignal.init({ appId })
       console.info("[OneSignal mobile] OneSignal initialized")
     } catch (error) {
@@ -161,26 +157,19 @@ export async function syncOneSignalSubscription(personnelId: string, options: { 
       console.info("[OneSignal mobile] OneSignal initialized", { alreadyInitialized: true })
     }
 
-    if (typeof OneSignal.login === "function") {
-      await OneSignal.login(personnelId)
-      console.info("[OneSignal mobile] external user linked", { personnelId })
+    try {
+      if (typeof OneSignal.login === "function") {
+        await OneSignal.login(personnelId)
+        console.info("[OneSignal mobile] external user linked", { personnelId })
+      }
+    } catch (error) {
+      console.warn("[OneSignal mobile] external user link failed", error)
     }
 
-    let permission = readNotificationPermission(OneSignal)
-    console.info("[OneSignal mobile] Permission current", { permission })
-    if (options.requestPermission && !permission) {
-      permission = await requestNotificationPermission(OneSignal)
-    }
+    const permission = await requestPermissionWithPublicApi(OneSignal, options.requestPermission)
     console.info(`[OneSignal mobile] Permission ${permission ? "granted" : "denied"}`, { permission })
 
-    const subscription = permission
-      ? readPushSubscription(OneSignal)
-      : { oneSignalId: "", subscribed: false, optedIn: undefined }
-    console.info("[OneSignal mobile] Player ID", {
-      oneSignalId: subscription.oneSignalId || null,
-      subscribed: subscription.subscribed,
-      optedIn: subscription.optedIn,
-    })
+    const subscription = permission ? await readSubscriptionId(OneSignal) : { oneSignalId: "", subscribed: false }
 
     return {
       oneSignalId: subscription.oneSignalId,
