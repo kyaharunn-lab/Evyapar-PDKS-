@@ -23,7 +23,7 @@ export async function GET() {
     configured: status.configured,
     appId: status.appId,
     missing: status.missing,
-    mode: "dry-run",
+    mode: "send",
   })
 }
 
@@ -45,15 +45,30 @@ export async function POST(request: Request) {
   }
 
   try {
-    assertOneSignalServerConfig()
+    const config = assertOneSignalServerConfig()
     const payload = buildOneSignalPayload(body as OneSignalNotificationInput)
+    const response = await fetch("https://onesignal.com/api/v1/notifications", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${config.restApiKey}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    const result = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      console.error("[onesignal notifications] send error", result)
+      return jsonError("OneSignal bildirimi gonderilemedi.", response.status || 500, { details: result })
+    }
 
     return NextResponse.json({
       provider: "onesignal",
-      dryRun: true,
-      message: "OneSignal bildirimi hazirlandi; gercek gonderim bu fazda devre disi.",
+      success: true,
+      message: "OneSignal bildirimi gonderildi.",
       payload,
-    }, { status: 202 })
+      result,
+    }, { status: 200 })
   } catch (error) {
     console.error("[onesignal notifications] config error", error)
     return jsonError(error instanceof Error ? error.message : "OneSignal ayarlari kontrol edilemedi.", 500)

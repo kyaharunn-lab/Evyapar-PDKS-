@@ -38,6 +38,7 @@ import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions
 import { loginWithLocalPersonnel, logoutLocalSession } from "@/lib/auth-session"
 import { loginWithFirebasePersonnel } from "@/lib/firebase-auth-personnel"
 import { formatDateTR } from "@/lib/date-time"
+import { syncOneSignalSubscription } from "@/lib/onesignal-client"
 import { deleteSharedRecord, useFirestoreLocalMirror, writeSharedRecord } from "@/lib/shared-data-sync"
 import { cn } from "@/lib/utils"
 
@@ -719,6 +720,55 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   const openAttendance = latestOpenAttendance(attendanceRecords, personId)
   const isPersonInside = Boolean(liveRecord || openAttendance)
 
+  const handleEnableNotifications = React.useCallback(async () => {
+    if (!selectedPerson || !personId) {
+      toast({ variant: "destructive", title: "Bildirimler açılamadı", description: "Personel oturumu bulunamadı." })
+      return
+    }
+
+    try {
+      const result = await syncOneSignalSubscription(personId, { requestPermission: true })
+      if (!result.permission) {
+        toast({
+          variant: "destructive",
+          title: "Bildirim izni verilmedi",
+          description: "Tarayıcı bildirim izni kapalı. Bildirim almak için izin vermeniz gerekir.",
+        })
+        return
+      }
+
+      const patch = {
+        oneSignalId: result.oneSignalId,
+        oneSignalSubscribed: true,
+        lastNotificationSync: new Date().toISOString(),
+      }
+      const updatedPerson = { ...selectedPerson, ...patch }
+      upsertLocalArrayRecord("app_personnel", updatedPerson)
+      setData((current: any) => ({
+        ...current,
+        personnel: current.personnel.map((person: any) => getId(person) === personId ? updatedPerson : person),
+      }))
+      const firestoreOk = await writeSharedRecord(db, "personnel", updatedPerson)
+      console.info(`[OneSignal mobile] Sync ${firestoreOk ? "success" : "failed"}`, {
+        personnelId: personId,
+        oneSignalId: result.oneSignalId,
+        subscribed: true,
+        firestoreOk,
+      })
+      toast({
+        title: "Bildirimler aktif",
+        description: "Mobil bildirim izniniz kaydedildi.",
+      })
+    } catch (error) {
+      console.warn("[OneSignal mobile] manual permission sync failed", error)
+      toast({
+        variant: "destructive",
+        title: "Bildirimler açılamadı",
+        description: error instanceof Error ? error.message : "OneSignal bağlantısı kurulamadı.",
+      })
+    }
+  }, [db, personId, selectedPerson, toast])
+
   const updateSettings = (patch: any) => {
     if (patch?.screen === "QR" && patch?.qrStatus === "Başarılı" && selectedPerson && !patch?.attendanceHandled) {
       const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
@@ -1294,6 +1344,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       onGps={handleGpsSimulation}
       onBreak={handleBreak}
       onLeaveCreate={createLeave}
+      onEnableNotifications={handleEnableNotifications}
     />
   )
 
@@ -1340,6 +1391,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             onGps={handleGpsSimulation}
             onBreak={handleBreak}
             onLeaveCreate={createLeave}
+            onEnableNotifications={handleEnableNotifications}
           />
         )}
       </div>
@@ -1989,8 +2041,9 @@ function BreakScreen({ breaks, settings, palette, onBreak }: any) {
   )
 }
 
-function NotificationScreen({ leaves, shifts, settings, notificationSettings, palette }: any) {
+function NotificationScreen({ leaves, shifts, settings, notificationSettings, palette, person, onEnableNotifications }: any) {
   const now = new Date().toLocaleString("tr-TR")
+  const notificationsEnabled = Boolean(person?.oneSignalSubscribed)
   const items = [
     ...leaves.slice(0, 3).map((leave: any) => ({ title: "İzin durumu", detail: `${formatDateTR(leave.startDate)} · ${normalizeStatus(leave.status)}`, badge: "İzin", time: leave.createdAt || now, unread: normalizeStatus(leave.status) === "Bekliyor" })),
     ...shifts.slice(0, 3).map((shift: any) => ({ title: "Vardiya hatırlatması", detail: `${shift.name || "Vardiya"} ${shift.startTime || "--:--"}`, badge: "Vardiya", time: shift.startDate || now })),
@@ -1998,13 +2051,30 @@ function NotificationScreen({ leaves, shifts, settings, notificationSettings, pa
     ...(settings.state === "GPS dışında" ? [{ title: "GPS güvenlik uyarısı", detail: "Personel şube lokasyonu dışında.", badge: "GPS", time: now, unread: true }] : []),
     ...(notificationSettings?.global?.push === false ? [{ title: "Mobil push kapalı", detail: "Bildirim ayarlarında mobil push pasif.", badge: "Ayar", time: now }] : []),
   ]
-  return <ListScreen title="Bildirimler" icon={Bell} empty="Bildirim kaydı bulunmuyor." items={items} palette={palette} />
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">Bildirimler</h3><Bell className="h-5 w-5 text-white/60" /></div>
+      <MobileCard className="mb-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-extrabold text-white">Mobil bildirimler</div>
+            <p className="mt-1 text-xs font-semibold text-white/50">{notificationsEnabled ? "Bildirim aboneliğiniz aktif." : "Vardiya ve onay bildirimleri için izin verin."}</p>
+          </div>
+          <Button onClick={onEnableNotifications} className={cn("h-9 rounded-2xl px-4 text-xs font-extrabold text-white", palette.button)}>
+            {notificationsEnabled ? "Yenile" : "Bildirimleri Aktif Et"}
+          </Button>
+        </div>
+      </MobileCard>
+      <ListItems items={items} empty="Bildirim kaydı bulunmuyor." />
+    </div>
+  )
 }
 
-function ProfileScreen({ person, branch, department, position, device, kvkk, palette, leaves = [], shifts = [], setScreen }: any) {
+function ProfileScreen({ person, branch, department, position, device, kvkk, palette, leaves = [], shifts = [], setScreen, onEnableNotifications }: any) {
   const maskedTckn = person?.tckn ? `${String(person.tckn).slice(0, 2)}*******${String(person.tckn).slice(-2)}` : "Tanımlı değil"
   const archiveItems = Array.isArray(person?.digitalArchive) ? person.digitalArchive : []
   const leaveItems = Array.isArray(leaves) ? leaves : []
+  const notificationsEnabled = Boolean(person?.oneSignalSubscribed)
   const handleLogout = () => {
     logoutLocalSession()
   }
@@ -2034,6 +2104,18 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
         <QuickAction actionKey="profile-shifts" icon={Clock3} label="Vardiyalarım" palette={palette} onClick={() => setScreen?.("Vardiya")} />
         <QuickAction actionKey="profile-logout" icon={LogOut} label="Çıkış Yap" palette={palette} onClick={handleLogout} />
       </div>
+
+      <MobileCard className="mt-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h4 className="font-extrabold text-white">Bildirimler</h4>
+            <p className="mt-1 text-xs font-semibold text-white/50">{notificationsEnabled ? "Mobil bildirimler aktif." : "Bildirim almak için izin verin."}</p>
+          </div>
+          <Button onClick={onEnableNotifications} className={cn("h-9 rounded-2xl px-4 text-xs font-extrabold text-white", palette.button)}>
+            {notificationsEnabled ? "Yenile" : "Bildirimleri Aktif Et"}
+          </Button>
+        </div>
+      </MobileCard>
 
       <MobileCard id="mobile-digital-archive" className="mt-4 space-y-3">
         <div className="flex items-center justify-between"><h4 className="font-extrabold text-white">Dijital Arşiv</h4><Badge className="bg-white/15 text-white hover:bg-white/15">{archiveItems.length}</Badge></div>

@@ -73,8 +73,10 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { useFirestore } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { formatDateTimeTR } from "@/lib/date-time"
+import { writeSharedRecord } from "@/lib/shared-data-sync"
 import { cn } from "@/lib/utils"
 
 const SETTINGS_KEY = "app_notification_settings"
@@ -196,6 +198,14 @@ const readArray = (key: string) => {
   }
 }
 
+function getPersonnelId(person: any) {
+  return String(person?.id || person?.personnelId || person?.uid || person?.email || "")
+}
+
+function getPersonnelName(person: any) {
+  return (person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || person?.email || getPersonnelId(person) || "Personel").toString()
+}
+
 function mergeDeep(base: any, patch: any): any {
   const output = { ...base }
   Object.keys(patch || {}).forEach((key) => {
@@ -208,15 +218,24 @@ function mergeDeep(base: any, patch: any): any {
 
 export default function NotificationSettingsPage() {
   const { toast } = useToast()
+  const db = useFirestore()
   const [settings, setSettings] = React.useState<any>(defaultSettings)
   const [savedSettings, setSavedSettings] = React.useState<any>(defaultSettings)
   const [selectedLog, setSelectedLog] = React.useState<any | null>(null)
   const [errors, setErrors] = React.useState<Record<string, string>>({})
+  const [personnel, setPersonnel] = React.useState<any[]>([])
+  const [testSending, setTestSending] = React.useState(false)
+  const [testForm, setTestForm] = React.useState({
+    title: "Evyapar PDKS Test Bildirimi",
+    message: "Bu bir test bildirimidir.",
+    target: "all",
+  })
 
   const load = React.useCallback(() => {
     const next = readSettings()
     setSettings(next)
     setSavedSettings(next)
+    setPersonnel(readArray("app_personnel").filter((person: any) => !person?.isDeleted))
   }, [])
 
   React.useEffect(() => {
@@ -288,6 +307,75 @@ export default function NotificationSettingsPage() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
     setSavedSettings(next)
     toast({ title: "Test gönderildi", description: "Kanal test bildirimi kaydedildi." })
+  }
+
+  const sendTestNotification = async () => {
+    if (!testForm.title.trim() || !testForm.message.trim()) {
+      toast({ variant: "destructive", title: "Eksik bilgi", description: "Başlık ve mesaj zorunludur." })
+      return
+    }
+
+    const selectedPerson = personnel.find((person: any) => getPersonnelId(person) === testForm.target)
+    const payload = testForm.target === "all"
+      ? { title: testForm.title.trim(), message: testForm.message.trim(), included_segments: ["Subscribed Users"] }
+      : { title: testForm.title.trim(), message: testForm.message.trim(), include_external_user_ids: [testForm.target] }
+
+    setTestSending(true)
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(result?.error || "Bildirim gönderilemedi.")
+      }
+
+      const log = {
+        id: `notif-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        createdAt: new Date().toISOString(),
+        recipient: selectedPerson ? getPersonnelName(selectedPerson) : "Tüm kullanıcılar",
+        recipientId: selectedPerson ? getPersonnelId(selectedPerson) : "all",
+        role: selectedPerson?.roleName || selectedPerson?.role || "Mobil Kullanıcı",
+        branch: selectedPerson?.branchName || selectedPerson?.branchId || "-",
+        type: "Test bildirimi",
+        channel: "Mobil Push",
+        title: testForm.title.trim(),
+        message: testForm.message.trim(),
+        status: "Gönderildi",
+        risk: "Düşük",
+        detail: result?.result?.id ? `OneSignal ID: ${result.result.id}` : "OneSignal test bildirimi gönderildi.",
+      }
+      const next = { ...settings, logs: [log, ...(settings.logs || [])] }
+      setSettings(next)
+      setSavedSettings(next)
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+      await writeSharedRecord(db, "notificationLogs", log)
+      toast({ title: "Test bildirimi gönderildi", description: log.recipient })
+    } catch (error) {
+      const log = {
+        id: `notif-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        createdAt: new Date().toISOString(),
+        recipient: selectedPerson ? getPersonnelName(selectedPerson) : "Tüm kullanıcılar",
+        recipientId: selectedPerson ? getPersonnelId(selectedPerson) : "all",
+        type: "Test bildirimi",
+        channel: "Mobil Push",
+        title: testForm.title.trim(),
+        message: testForm.message.trim(),
+        status: "Başarısız",
+        risk: "Orta",
+        detail: error instanceof Error ? error.message : "Bildirim gönderilemedi.",
+      }
+      const next = { ...settings, logs: [log, ...(settings.logs || [])] }
+      setSettings(next)
+      setSavedSettings(next)
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(next))
+      await writeSharedRecord(db, "notificationLogs", log)
+      toast({ variant: "destructive", title: "Bildirim gönderilemedi", description: log.detail })
+    } finally {
+      setTestSending(false)
+    }
   }
 
   const resendLog = (log: any) => {
@@ -367,6 +455,7 @@ export default function NotificationSettingsPage() {
               <Tab value="approvals" icon={Users} label="İzin & Onay" />
               <Tab value="security" icon={ShieldAlert} label="Güvenlik" />
               <Tab value="channels" icon={Send} label="Kanal Ayarları" />
+              <Tab value="test" icon={BellRing} label="Test Gönder" />
               <Tab value="templates" icon={FileText} label="Şablonlar" />
               <Tab value="schedule" icon={Clock3} label="Zamanlama" />
               <Tab value="logs" icon={History} label="Bildirim Logları" />
@@ -389,6 +478,42 @@ export default function NotificationSettingsPage() {
           <TabsContent value="approvals"><ApprovalPanel rules={approvalRules} settings={settings} update={update} /></TabsContent>
           <TabsContent value="security"><RulesPanel rules={securityRules} settings={settings} update={update} section="securityRules" security /></TabsContent>
           <TabsContent value="channels"><ChannelsPanel settings={settings} update={update} testChannel={testChannel} /></TabsContent>
+          <TabsContent value="test">
+            <Panel title="OneSignal Test Bildirimi" icon={BellRing}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Başlık</Label>
+                  <Input value={testForm.title} onChange={(event) => setTestForm((current) => ({ ...current, title: event.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Hedef</Label>
+                  <Select value={testForm.target} onValueChange={(value) => setTestForm((current) => ({ ...current, target: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Hedef seç" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tüm kullanıcılar</SelectItem>
+                      {personnel.map((person: any) => (
+                        <SelectItem key={getPersonnelId(person)} value={getPersonnelId(person)}>
+                          {getPersonnelName(person)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Mesaj</Label>
+                  <Textarea value={testForm.message} onChange={(event) => setTestForm((current) => ({ ...current, message: event.target.value }))} />
+                </div>
+                <div className="md:col-span-2">
+                  <Button onClick={sendTestNotification} disabled={testSending} className="rounded-2xl">
+                    <Send className="mr-2 h-4 w-4" />
+                    {testSending ? "Gönderiliyor..." : "Gönder"}
+                  </Button>
+                </div>
+              </div>
+            </Panel>
+          </TabsContent>
           <TabsContent value="templates"><TemplatesPanel settings={settings} update={update} /></TabsContent>
           <TabsContent value="schedule"><SchedulePanel settings={settings} update={update} /></TabsContent>
           <TabsContent value="logs"><LogsPanel logs={notificationLogs} setSelectedLog={openLogAfterMenuClose} resendLog={resendLog} /></TabsContent>
