@@ -1111,9 +1111,12 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
           attachmentFormat: result.format,
           attachmentSize: result.bytes || attachmentFile.size,
         }
+        const archiveTitle = form.type?.trim()
+          ? `${form.type.trim()} Belgesi`
+          : result.originalFilename || attachmentFile.name
         archiveRecord = {
           id: `archive-${leaveRequestId}`,
-          title: `${form.type || "İzin"} Belgesi`,
+          title: archiveTitle,
           fileName: result.originalFilename || attachmentFile.name,
           fileUrl: result.url,
           publicId: result.publicId,
@@ -1159,14 +1162,15 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       writeArray("app_leave_requests", [record, ...previousLeaves])
     }
     if (archiveRecord) {
-      const existingArchive = Array.isArray(selectedPerson.digitalArchive) ? selectedPerson.digitalArchive : []
+      const latestPersonnel = readArray("app_personnel").find((person: any) => matchesPerson(person, personId)) || selectedPerson
+      const existingArchive = Array.isArray(latestPersonnel.digitalArchive) ? latestPersonnel.digitalArchive : []
       const updatedPerson = {
-        ...selectedPerson,
+        ...latestPersonnel,
         digitalArchive: [archiveRecord, ...existingArchive.filter((item: any) => item?.id !== archiveRecord?.id)],
         updatedAt: Date.now(),
       }
       upsertLocalArrayRecord("app_personnel", updatedPerson)
-      void writeSharedRecord(db, "personnel", updatedPerson)
+      await writeSharedRecord(db, "personnel", updatedPerson)
     }
     addAudit("Mobil izin talebi oluşturuldu", `${personName(selectedPerson)} için ${form.type} talebi oluşturuldu.`, "İzin")
     updateSettings({ screen: "İzin" })

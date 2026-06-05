@@ -18,7 +18,8 @@ import {
   Users,
   X,
   Camera,
-  FileText
+  FileText,
+  Trash2
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -492,6 +493,20 @@ export default function PersonnelPage() {
     }
   }, [documentFile, documentForm.category, documentForm.name, selectedEmployee, toast, upsertEmployee])
 
+  const handleDeleteArchiveItem = React.useCallback((archiveId: string) => {
+    if (!selectedEmployee) return
+    if (!window.confirm("Bu arşiv dosyasını silmek istediğinize emin misiniz?")) return
+    const currentArchive = Array.isArray(selectedEmployee.digitalArchive) ? selectedEmployee.digitalArchive : []
+    const updated = {
+      ...selectedEmployee,
+      digitalArchive: currentArchive.filter((item: any) => item?.id !== archiveId),
+      updatedAt: Date.now(),
+    }
+    upsertEmployee(updated)
+    setSelectedEmployee(updated)
+    toast({ title: "Başarılı", description: "Dijital arşiv dosyası silindi." })
+  }, [selectedEmployee, toast, upsertEmployee])
+
   const handleSaveEdit = React.useCallback(async () => {
     if (!selectedEmployee) return
     if (!editForm.name?.trim() || !editForm.surname?.trim()) {
@@ -934,6 +949,10 @@ export default function PersonnelPage() {
                               <div className="mt-3 flex flex-wrap gap-2">
                                 <Button asChild variant="outline" size="sm" className="h-8 rounded-lg"><a href={document.fileUrl} target="_blank" rel="noopener noreferrer">Goruntule</a></Button>
                                 <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => downloadRemoteFile(document.fileUrl, document.fileName || document.title || "evrak")}>Indir</Button>
+                                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-accent hover:bg-red-50 hover:text-accent" onClick={() => handleDeleteArchiveItem(document.id)}>
+                                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                  Sil
+                                </Button>
                               </div>
                             </div>
                           ))}
