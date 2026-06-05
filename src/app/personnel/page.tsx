@@ -19,6 +19,7 @@ import {
   X,
   Camera,
   FileText,
+  Folder,
   Trash2
 } from "lucide-react"
 
@@ -76,7 +77,7 @@ const PERSONNEL_PHOTO_TYPES = ["image/jpeg", "image/png"]
 const PERSONNEL_DOCUMENT_TYPES = ["image/jpeg", "image/png", "application/pdf"]
 const PERSONNEL_PHOTO_MAX_BYTES = 5 * 1024 * 1024
 const PERSONNEL_DOCUMENT_MAX_BYTES = 5 * 1024 * 1024
-const DIGITAL_ARCHIVE_CATEGORIES = ["Kimlik", "Sözleşme", "İşe Giriş Belgesi", "İzin Belgesi", "Sağlık Raporu", "Eğitim/Sertifika", "Diğer"]
+const DIGITAL_ARCHIVE_CATEGORIES = ["Kimlik", "İşe Giriş Belgesi", "İzin Belgesi", "Sağlık Raporu", "Sözleşme", "KVKK", "Eğitim/Sertifika", "Diğer"]
 
 async function uploadPersonnelPhoto(file: File) {
   const uploadData = new FormData()
@@ -167,6 +168,7 @@ export default function PersonnelPage() {
   const [documentForm, setDocumentForm] = React.useState({ name: "", category: "Diğer" })
   const [documentFile, setDocumentFile] = React.useState<File | null>(null)
   const [documentUploading, setDocumentUploading] = React.useState(false)
+  const [selectedArchiveCategory, setSelectedArchiveCategory] = React.useState<string | null>(null)
 
   const [localBranches, setLocalBranches] = React.useState<any[]>([])
   const [localDepartments, setLocalDepartments] = React.useState<any[]>([])
@@ -340,6 +342,18 @@ export default function PersonnelPage() {
       })
   }, [selectedEmployee])
 
+  const archiveFolders = React.useMemo(() => {
+    return DIGITAL_ARCHIVE_CATEGORIES.map((category) => ({
+      category,
+      count: selectedArchiveItems.filter((item: any) => (item?.category || "Diğer") === category).length,
+    }))
+  }, [selectedArchiveItems])
+
+  const visibleArchiveItems = React.useMemo(() => {
+    if (!selectedArchiveCategory) return selectedArchiveItems
+    return selectedArchiveItems.filter((item: any) => (item?.category || "Diğer") === selectedArchiveCategory)
+  }, [selectedArchiveItems, selectedArchiveCategory])
+
   const [editForm, setEditForm] = React.useState<any>({
     name: "",
     surname: "",
@@ -407,6 +421,7 @@ export default function PersonnelPage() {
     setSelectedEmployee(emp)
     setDocumentForm({ name: "", category: "Diğer" })
     setDocumentFile(null)
+    setSelectedArchiveCategory(null)
     setIsProfileOpen(true)
   }, [])
 
@@ -481,6 +496,7 @@ export default function PersonnelPage() {
       setSelectedEmployee(updated)
       setDocumentForm({ name: "", category: "Diğer" })
       setDocumentFile(null)
+      setSelectedArchiveCategory(archiveRecord.category)
       toast({ title: "Başarılı", description: "Dijital arşiv dosyası yüklendi." })
     } catch (error) {
       toast({
@@ -930,9 +946,18 @@ export default function PersonnelPage() {
 
                       {selectedArchiveItems.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm font-bold text-slate-400">Henuz dijital arsiv dosyasi yok.</div>
-                      ) : (
+                      ) : selectedArchiveCategory ? (
                         <div className="space-y-3">
-                          {selectedArchiveItems.map((document: any) => (
+                          <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-100 bg-white p-3">
+                            <div>
+                              <div className="text-sm font-extrabold text-primary">{selectedArchiveCategory}</div>
+                              <div className="text-xs font-semibold text-slate-400">{visibleArchiveItems.length} dosya</div>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => setSelectedArchiveCategory(null)}>Tum klasorler</Button>
+                          </div>
+                          {visibleArchiveItems.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-sm font-bold text-slate-400">Bu klasorde dosya yok.</div>
+                          ) : visibleArchiveItems.map((document: any) => (
                             <div key={document.id || document.fileUrl} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
                               <div className="flex items-start gap-3">
                                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/5 text-primary">
@@ -955,6 +980,27 @@ export default function PersonnelPage() {
                                 </Button>
                               </div>
                             </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {archiveFolders.map((folder) => (
+                            <button
+                              type="button"
+                              key={folder.category}
+                              onClick={() => setSelectedArchiveCategory(folder.category)}
+                              className="rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="grid h-11 w-11 place-items-center rounded-xl bg-primary/5 text-primary">
+                                  <Folder className="h-5 w-5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-extrabold text-primary">{folder.category}</div>
+                                  <div className="text-xs font-semibold text-slate-400">{folder.count} dosya</div>
+                                </div>
+                              </div>
+                            </button>
                           ))}
                         </div>
                       )}
