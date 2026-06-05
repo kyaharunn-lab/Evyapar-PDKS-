@@ -165,6 +165,8 @@ export default function LiveAttendancePage() {
   const { toast } = useToast()
   
   const [searchTerm, setSearchTerm] = React.useState("")
+  const [statusFilter, setStatusFilter] = React.useState("all")
+  const [branchFilter, setBranchFilter] = React.useState("all")
   const [selectedLog, setSelectedLog] = React.useState<any>(null)
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
   const [isExitOpen, setIsExitOpen] = React.useState(false)
@@ -221,16 +223,32 @@ export default function LiveAttendancePage() {
         person: person || { fullName: displayName, name: displayName, surname: "" },
         branchName: log.branchName || log["şube"] || log["şube"] || branch?.branchName || branch?.name || person?.branchId || "-"
       };
-    }).filter(log => 
-      !searchTerm || 
-      log.personnelName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.person?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.person?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.person?.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.person?.registryNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.person?.departmentId?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [rawLogs, personnel, branches, searchTerm]);
+    }).filter(log => {
+      const query = searchTerm.trim().toLowerCase();
+      const matchesSearch = !query ||
+        log.personnelName?.toLowerCase().includes(query) ||
+        log.person?.name?.toLowerCase().includes(query) ||
+        log.person?.fullName?.toLowerCase().includes(query) ||
+        log.person?.surname?.toLowerCase().includes(query) ||
+        log.person?.registryNo?.toLowerCase().includes(query) ||
+        log.person?.departmentId?.toLowerCase().includes(query);
+      const status = String(log.isLate ? "late" : log.status || "").toLowerCase();
+      const matchesStatus = statusFilter === "all" || status === statusFilter;
+      const matchesBranch = branchFilter === "all" || String(log.branchId || log.branchName || "") === branchFilter;
+      return matchesSearch && matchesStatus && matchesBranch;
+    });
+  }, [branchFilter, rawLogs, personnel, branches, searchTerm, statusFilter]);
+
+  const branchOptions = React.useMemo(() => {
+    const map = new Map<string, string>();
+    rawLogs.forEach((log: any) => {
+      const id = String(log?.branchId || log?.branchName || "");
+      if (id) map.set(id, String(log?.branchName || id));
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [rawLogs]);
+
+  const hasLiveFilter = Boolean(searchTerm || statusFilter !== "all" || branchFilter !== "all");
 
   // KPI Calculations
   const stats = React.useMemo(() => {
@@ -367,10 +385,41 @@ export default function LiveAttendancePage() {
               />
             </div>
             <div className="flex items-center gap-3 w-full lg:w-auto">
-              <Button variant="outline" size="sm" className="h-11 px-5 border-slate-200">
-                <Filter className="mr-2 h-4 w-4" />
-                {t.filter}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-11 px-5 border-slate-200">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {t.filter}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
+                  <DropdownMenuLabel>Durum</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setStatusFilter("all")}>Tüm Durumlar</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("inside")}>İçeride</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("on_break")}>Molada</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("late")}>Geç</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Şube</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setBranchFilter("all")}>Tüm Şubeler</DropdownMenuItem>
+                  {branchOptions.map((branch) => (
+                    <DropdownMenuItem key={branch.id} onClick={() => setBranchFilter(branch.id)}>
+                      {branch.name}
+                    </DropdownMenuItem>
+                  ))}
+                  {hasLiveFilter && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => {
+                        setSearchTerm("");
+                        setStatusFilter("all");
+                        setBranchFilter("all");
+                      }}>
+                        Filtreleri Sıfırla
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Badge variant="secondary" className="h-11 px-4 rounded-xl text-xs font-bold bg-white border border-slate-200 shadow-sm text-primary">
                 {liveLogs.length} Aktif Giriş
               </Badge>
@@ -387,11 +436,21 @@ export default function LiveAttendancePage() {
               <div className="bg-secondary/50 p-6 rounded-full mb-6">
                 <Activity className="h-12 w-12 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-bold text-primary mb-2">{l.noPersonnel}</h3>
-              <p className="text-muted-foreground max-w-xs mb-6">{l.noPersonnelSub}</p>
-              <Button variant="outline" className="border-primary text-primary" asChild>
-                <a href="/attendance">{l.goToLogs}</a>
-              </Button>
+              <h3 className="text-xl font-bold text-primary mb-2">{hasLiveFilter ? "Filtreye uygun kayıt bulunamadı." : l.noPersonnel}</h3>
+              <p className="text-muted-foreground max-w-xs mb-6">{hasLiveFilter ? "Farklı filtre veya arama terimi deneyin." : l.noPersonnelSub}</p>
+              {hasLiveFilter ? (
+                <Button variant="outline" className="border-primary text-primary" onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setBranchFilter("all");
+                }}>
+                  Filtreleri Sıfırla
+                </Button>
+              ) : (
+                <Button variant="outline" className="border-primary text-primary" asChild>
+                  <a href="/attendance">{l.goToLogs}</a>
+                </Button>
+              )}
             </div>
           ) : (
             <Table>

@@ -173,6 +173,8 @@ export default function QrPointsPage() {
       .sort((a, b) => (b?.createdAt || 0) - (a?.createdAt || 0))
   }, [branchById, qrPoints, statusFilter, typeFilter])
 
+  const hasQrFilter = statusFilter !== "All" || typeFilter !== "All"
+
   const stats = React.useMemo(() => {
     return {
       total: qrPoints.length,
@@ -375,11 +377,20 @@ export default function QrPointsPage() {
               <div className="bg-secondary/50 p-6 rounded-full mb-6">
                 <QrCode className="h-12 w-12 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-bold text-primary mb-2">QR noktası bulunmuyor.</h3>
-              <p className="text-muted-foreground max-w-xs mb-6">Şube giriş/çıkışları için ilk QR noktasını tanımlayın.</p>
-              <Button variant="outline" className="border-primary text-primary hover:bg-primary/5" onClick={openCreate}>
-                İlk QR Noktasını Tanımla
-              </Button>
+              <h3 className="text-xl font-bold text-primary mb-2">{hasQrFilter ? "Filtreye uygun kayıt bulunamadı." : "QR noktası bulunmuyor."}</h3>
+              <p className="text-muted-foreground max-w-xs mb-6">{hasQrFilter ? "Filtreleri temizleyerek tüm QR noktalarını görüntüleyebilirsiniz." : "Şube giriş/çıkışları için ilk QR noktasını tanımlayın."}</p>
+              {hasQrFilter ? (
+                <Button variant="outline" className="border-primary text-primary hover:bg-primary/5" onClick={() => {
+                  setStatusFilter("All")
+                  setTypeFilter("All")
+                }}>
+                  Filtreleri Sıfırla
+                </Button>
+              ) : (
+                <Button variant="outline" className="border-primary text-primary hover:bg-primary/5" onClick={openCreate}>
+                  İlk QR Noktasını Tanımla
+                </Button>
+              )}
             </div>
           ) : (
             <Table>

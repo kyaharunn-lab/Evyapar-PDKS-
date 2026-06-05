@@ -78,6 +78,7 @@ export default function BranchesPage() {
   const [localPersonnel, setLocalPersonnel] = React.useState<any[]>([])
   const [selectedBranch, setSelectedBranch] = React.useState<any | null>(null)
   const [editingBranchId, setEditingBranchId] = React.useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = React.useState("all")
 
   // Form States
   const [formData, setFormData] = React.useState({
@@ -148,6 +149,13 @@ export default function BranchesPage() {
     const list = Array.isArray(branches) ? branches : [];
     return [...list].sort((a: any, b: any) => (b?.createdAt || 0) - (a?.createdAt || 0));
   }, [branches]);
+
+  const filteredBranches = React.useMemo(() => {
+    return sortedBranches.filter((branch: any) => {
+      if (statusFilter === "all") return true;
+      return String(branch?.status || "Active") === statusFilter;
+    });
+  }, [sortedBranches, statusFilter]);
 
   const getManagerLabel = React.useCallback((managerId: string | undefined) => {
     if (!managerId) return "Atanmadı";
@@ -354,10 +362,26 @@ export default function BranchesPage() {
           <p className="text-muted-foreground mt-1">Şirket şubelerini yönetin.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" className="h-10 rounded-xl border-slate-200">
-            <Filter className="mr-2 h-4 w-4" />
-            Filtrele
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-10 rounded-xl border-slate-200">
+                <Filter className="mr-2 h-4 w-4" />
+                Filtrele
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl">
+              <DropdownMenuLabel>Durum</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setStatusFilter("all")}>Tüm Şubeler</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("Active")}>Aktif</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("Passive")}>Pasif</DropdownMenuItem>
+              {statusFilter !== "all" && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setStatusFilter("all")}>Filtreyi Sıfırla</DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" className="h-10 rounded-xl border-slate-200">
             <MapPin className="mr-2 h-4 w-4" />
             Harita
@@ -402,6 +426,17 @@ export default function BranchesPage() {
                 İlk Şubeyi Tanımla
               </Button>
             </div>
+          ) : filteredBranches.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-20 text-center min-h-[400px]">
+              <div className="bg-secondary/50 p-6 rounded-full mb-6">
+                <Building2 className="h-12 w-12 text-muted-foreground" />
+              </div>
+              <h3 className="text-xl font-bold text-primary mb-2">Filtreye uygun kayıt bulunamadı.</h3>
+              <p className="text-muted-foreground max-w-xs mb-6">Filtreleri temizleyerek tüm şubeleri görüntüleyebilirsiniz.</p>
+              <Button variant="outline" className="border-primary text-primary hover:bg-primary/5" onClick={() => setStatusFilter("all")}>
+                Filtreyi Sıfırla
+              </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader className="enterprise-table-header">
@@ -416,7 +451,7 @@ export default function BranchesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedBranches.map((branch) => (
+                {filteredBranches.map((branch) => (
                   <TableRow key={branch.id} className="group hover:bg-slate-50/80 transition-all">
                     <TableCell className="pl-6 font-bold text-primary">{branch.branchName}</TableCell>
                     <TableCell className="font-mono text-xs">{branch.branchCode}</TableCell>

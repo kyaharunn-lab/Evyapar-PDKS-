@@ -168,6 +168,8 @@ export default function LeaveRequestsPage() {
   const db = useFirestore()
   
   const [searchTerm, setSearchTerm] = React.useState("")
+  const [statusFilter, setStatusFilter] = React.useState("all")
+  const [dateFilter, setDateFilter] = React.useState("")
   const [selectedRequest, setSelectedRequest] = React.useState<any>(null)
   const [isCreateOpen, setIsCreateOpen] = React.useState(false)
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
@@ -219,12 +221,19 @@ export default function LeaveRequestsPage() {
       notes: req.notes || req.description || "",
       totalDays: req.totalDays || calculateLeaveDays(req.startDate, req.endDate),
       person: personnel.find(p => p.id === (req.personnelId || req.personId))
-    })).filter(req => 
-      !searchTerm || 
-      getPersonnelName(req.person).toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.person?.registryNo?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [rawRequests, personnel, searchTerm]);
+    })).filter(req => {
+      const query = searchTerm.trim().toLowerCase();
+      const matchesSearch = !query ||
+        getPersonnelName(req.person).toLowerCase().includes(query) ||
+        req.person?.registryNo?.toLowerCase().includes(query) ||
+        getLeaveTypeLabel(req.leaveType).toLowerCase().includes(query);
+      const matchesStatus = statusFilter === "all" || getStatusKey(req.status) === statusFilter;
+      const matchesDate = !dateFilter || String(req.startDate || "").slice(0, 10) === dateFilter || String(req.endDate || "").slice(0, 10) === dateFilter;
+      return matchesSearch && matchesStatus && matchesDate;
+    });
+  }, [dateFilter, personnel, rawRequests, searchTerm, statusFilter]);
+
+  const hasLeaveFilter = Boolean(searchTerm || statusFilter !== "all" || dateFilter);
 
   // KPI Calculations
   const stats = React.useMemo(() => {
@@ -407,10 +416,39 @@ export default function LeaveRequestsPage() {
               />
             </div>
             <div className="flex items-center gap-3 w-full lg:w-auto">
-              <Button variant="outline" size="sm" className="h-11 px-5 border-slate-200">
-                <Filter className="mr-2 h-4 w-4" />
-                {t.filter}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-11 px-5 border-slate-200">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {t.filter}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl p-3 space-y-3">
+                  <DropdownMenuLabel>Filtreler</DropdownMenuLabel>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Durum</p>
+                    <select className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                      <option value="all">Tüm Durumlar</option>
+                      <option value="Pending">Bekliyor</option>
+                      <option value="Approved">Onaylandı</option>
+                      <option value="Rejected">Reddedildi</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tarih</p>
+                    <Input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="h-9 rounded-lg" />
+                  </div>
+                  {hasLeaveFilter && (
+                    <Button variant="ghost" size="sm" className="w-full justify-center" onClick={() => {
+                      setSearchTerm("");
+                      setStatusFilter("all");
+                      setDateFilter("");
+                    }}>
+                      Filtreleri Sıfırla
+                    </Button>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Badge variant="secondary" className="h-11 px-4 rounded-xl text-xs font-bold bg-white border border-slate-200 shadow-sm text-primary">
                 {mergedRequests.length} Toplam Talep
               </Badge>
@@ -427,8 +465,8 @@ export default function LeaveRequestsPage() {
               <div className="bg-secondary/50 p-6 rounded-full mb-6">
                 <ClipboardList className="h-12 w-12 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-bold text-primary mb-2">{l.empty}</h3>
-              <p className="text-muted-foreground max-w-xs">{l.emptySub}</p>
+              <h3 className="text-xl font-bold text-primary mb-2">{hasLeaveFilter ? "Filtreye uygun kayıt bulunamadı." : l.empty}</h3>
+              <p className="text-muted-foreground max-w-xs">{hasLeaveFilter ? "Farklı filtre veya arama terimi deneyin." : l.emptySub}</p>
             </div>
           ) : (
             <Table>

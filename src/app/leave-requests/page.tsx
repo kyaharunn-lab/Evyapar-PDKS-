@@ -131,6 +131,7 @@ export default function LeaveRequestsPage() {
   const [loading, setLoading] = React.useState(true)
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState<string>("all")
+  const [dateFilter, setDateFilter] = React.useState("")
 
   // Modal states
   const [isLeaveModalOpen, setIsLeaveModalOpen] = React.useState(false)
@@ -409,11 +410,19 @@ export default function LeaveRequestsPage() {
   // Filter data
   const filteredRequests = React.useMemo(() => {
     return leaveRequests.filter(req => {
-      const matchesSearch = req.personName.toLowerCase().includes(searchTerm.toLowerCase())
+      const query = searchTerm.trim().toLowerCase()
+      const matchesSearch = !query || [
+        req.personName,
+        req.leaveType,
+        req.description,
+      ].some((value) => String(value || "").toLowerCase().includes(query))
       const matchesStatus = statusFilter === "all" || req.status === statusFilter
-      return matchesSearch && matchesStatus
+      const matchesDate = !dateFilter || String(req.startDate || "").slice(0, 10) === dateFilter || String(req.endDate || "").slice(0, 10) === dateFilter
+      return matchesSearch && matchesStatus && matchesDate
     })
-  }, [leaveRequests, searchTerm, statusFilter])
+  }, [dateFilter, leaveRequests, searchTerm, statusFilter])
+
+  const hasFilter = Boolean(searchTerm || statusFilter !== "all" || dateFilter)
 
   const getStatusOption = (status: string) =>
     STATUS_OPTIONS.find(opt => opt.value === status)
@@ -508,6 +517,21 @@ export default function LeaveRequestsPage() {
               ))}
             </SelectContent>
           </Select>
+          <Input
+            type="date"
+            className="h-10 w-40 rounded-xl bg-white border-slate-200"
+            value={dateFilter}
+            onChange={(event) => setDateFilter(event.target.value)}
+          />
+          {hasFilter && (
+            <Button variant="outline" className="h-10 rounded-xl" onClick={() => {
+              setSearchTerm("")
+              setStatusFilter("all")
+              setDateFilter("")
+            }}>
+              Sıfırla
+            </Button>
+          )}
         </div>
       </div>
 
@@ -523,7 +547,7 @@ export default function LeaveRequestsPage() {
             <div className="flex flex-col items-center justify-center py-12 text-center opacity-40">
               <AlertCircle className="h-12 w-12 mb-4" />
               <p className="text-sm font-bold">
-                {leaveRequests.length === 0 ? "Henüz izin talebi oluşturulmadı." : "Arama kriterlerine uygun sonuç bulunamadı."}
+                {leaveRequests.length === 0 ? "Henüz izin talebi oluşturulmadı." : "Filtreye uygun kayıt bulunamadı."}
               </p>
             </div>
           ) : (

@@ -91,6 +91,10 @@ const getPersonnelLabel = (person: any) => {
   return (person?.fullName || [person?.name, person?.surname].filter(Boolean).join(" ") || person?.personnelCode || "Personel").toString();
 };
 
+const getShiftDateKey = (shift: any) => {
+  return (shift?.startDate || shift?.date || shift?.shiftDate || "").toString().slice(0, 10);
+};
+
 export default function ShiftsPage() {
   const { toast } = useToast();
   const db = useFirestore();
@@ -100,6 +104,8 @@ export default function ShiftsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false)
   const [editingShiftId, setEditingShiftId] = React.useState<string | null>(null)
   const [searchTerm, setSearchTerm] = React.useState("")
+  const [branchFilter, setBranchFilter] = React.useState("all")
+  const [dateFilter, setDateFilter] = React.useState("")
   const [shifts, setShifts] = React.useState<any[]>([])
   const [personnel, setPersonnel] = React.useState<any[]>([])
   const [branches, setBranches] = React.useState<any[]>([])
@@ -176,6 +182,25 @@ export default function ShiftsPage() {
     if (formData.branchId === ALL_BRANCHES_VALUE) return personnel;
     return personnel.filter((p) => p?.branchId === formData.branchId);
   }, [formData.branchId, personnel]);
+
+  const filteredShifts = React.useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return shifts.filter((shift: any) => {
+      const shiftPersonnel = personnel.filter((person: any) => (shift?.personnelIds || []).map(String).includes(String(person?.id)));
+      const branch = branches.find((item: any) => String(item?.id || item?.branchCode || "") === String(shift?.branchId || ""));
+      const matchesSearch = !query || [
+        shift?.name,
+        shift?.shiftName,
+        getBranchLabel(branch),
+        ...shiftPersonnel.map(getPersonnelLabel),
+      ].some((value) => value?.toString().toLowerCase().includes(query));
+      const matchesBranch = branchFilter === "all" || String(shift?.branchId || "") === branchFilter;
+      const matchesDate = !dateFilter || getShiftDateKey(shift) === dateFilter;
+      return matchesSearch && matchesBranch && matchesDate;
+    });
+  }, [branchFilter, branches, dateFilter, personnel, searchTerm, shifts]);
+
+  const hasShiftFilter = Boolean(searchTerm || dateFilter || branchFilter !== "all");
 
   const handleBranchChange = (value: string) => {
     setFormData((prev) => {
@@ -363,9 +388,45 @@ export default function ShiftsPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl">
-              <Filter className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl">
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 rounded-xl shadow-xl p-3 space-y-3">
+                <DropdownMenuLabel>Filtreler</DropdownMenuLabel>
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Şube</p>
+                  <Select value={branchFilter} onValueChange={setBranchFilter}>
+                    <SelectTrigger className="h-9 rounded-lg">
+                      <SelectValue placeholder="Şube seç" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tüm Şubeler</SelectItem>
+                      {branches.map((branch: any) => (
+                        <SelectItem key={branch?.id || branch?.branchCode} value={(branch?.id || branch?.branchCode || "").toString()}>
+                          {getBranchLabel(branch)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tarih</p>
+                  <Input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="h-9 rounded-lg" />
+                </div>
+                {hasShiftFilter && (
+                  <Button variant="ghost" size="sm" className="w-full justify-center" onClick={() => {
+                    setSearchTerm("");
+                    setBranchFilter("all");
+                    setDateFilter("");
+                  }}>
+                    Filtreleri Sıfırla
+                  </Button>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -383,6 +444,23 @@ export default function ShiftsPage() {
                 <Plus className="mr-2 h-5 w-5" />
                 İlk Vardiyayı Oluştur
               </Button>
+            </div>
+          ) : filteredShifts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-24 text-center">
+              <div className="bg-secondary/50 p-8 rounded-full mb-8">
+                <CalendarClock className="h-16 w-16 text-muted-foreground" />
+              </div>
+              <h3 className="text-2xl font-bold text-primary mb-2">Filtreye uygun kayıt bulunamadı.</h3>
+              <p className="text-muted-foreground max-w-sm mb-8">Filtreleri temizleyerek tüm vardiyaları görüntüleyebilirsiniz.</p>
+              {hasShiftFilter && (
+                <Button variant="outline" onClick={() => {
+                  setSearchTerm("");
+                  setBranchFilter("all");
+                  setDateFilter("");
+                }}>
+                  Filtreleri Sıfırla
+                </Button>
+              )}
             </div>
           ) : viewMode === "timeline" ? (
             <div className="overflow-x-auto">
@@ -413,9 +491,9 @@ export default function ShiftsPage() {
                       </div>
                       {weekDays.map((day) => {
                         const dayStr = format(day, "yyyy-MM-dd");
-                        const dayShifts = shifts.filter(s => {
+                        const dayShifts = filteredShifts.filter(s => {
                           const knownType = ["Gündüz", "Akşam", "Gece"].some((type) => s.name.includes(type));
-                          return s.startDate === dayStr && (shiftType === "Diğer" ? !knownType : s.name.includes(shiftType));
+                          return getShiftDateKey(s) === dayStr && (shiftType === "Diğer" ? !knownType : s.name.includes(shiftType));
                         });
                         
                         return (
@@ -443,9 +521,7 @@ export default function ShiftsPage() {
             </div>
           ) : (
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {shifts.filter(s => 
-                !searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase())
-              ).map(sh => (
+              {filteredShifts.map(sh => (
                 <ListShiftCard key={sh.id} shift={sh} personnel={personnel} branches={branches} onEdit={handleOpenEdit} />
               ))}
             </div>

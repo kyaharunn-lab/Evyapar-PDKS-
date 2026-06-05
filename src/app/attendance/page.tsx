@@ -188,6 +188,9 @@ export default function AttendanceLogsPage() {
   const [logs, setLogs] = React.useState<any[]>([]);
   const [shifts, setShifts] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [dateFilter, setDateFilter] = React.useState("");
+  const [branchFilter, setBranchFilter] = React.useState("all");
 
   const loadLogs = React.useCallback(() => {
     setLogs(filterDuplicateInside(readArray(ATTENDANCE_RECORDS_KEY)));
@@ -208,18 +211,49 @@ export default function AttendanceLogsPage() {
     };
   }, [loadLogs]);
 
+  const branchOptions = React.useMemo(() => {
+    const map = new Map<string, string>();
+    logs.forEach((log: any) => {
+      const id = recordBranchId(log) || String(log?.branchName || log?.location || "");
+      if (!id) return;
+      map.set(id, String(log?.branchName || log?.location || id));
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [logs]);
+
+  const filteredLogs = React.useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return logs.filter((log: any) => {
+      const row = attendanceRow(log, shifts);
+      const matchesSearch = !query || [
+        row.personel,
+        row.yontem,
+        row.durum,
+        row.konum,
+        log.personnelId,
+        log.personelId,
+      ].some((value) => String(value || "").toLowerCase().includes(query));
+      const matchesDate = !dateFilter || recordDate(log) === dateFilter;
+      const branchId = recordBranchId(log) || String(log?.branchName || log?.location || "");
+      const matchesBranch = branchFilter === "all" || branchId === branchFilter;
+      return matchesSearch && matchesDate && matchesBranch;
+    });
+  }, [branchFilter, dateFilter, logs, searchTerm, shifts]);
+
+  const hasAttendanceFilter = Boolean(searchTerm || dateFilter || branchFilter !== "all");
+
   const handleExcelExport = React.useCallback(() => {
     const headers = ["Personel", "Tarih", "Giriş", "Çıkış", "Yöntem", "Durum", "Fazla Mesai", "Konum"];
-    const rows = logs.map((log) => {
+    const rows = filteredLogs.map((log) => {
       const row = attendanceRow(log, shifts);
       return [row.personel, row.tarih, row.giris, row.cikis, row.yontem, row.durum, row.fazlaMesai, row.konum].map(csvCell).join(",");
     });
     const content = [headers.map(csvCell).join(","), ...rows].join("\n");
     downloadTextFile(`attendance-${new Date().toISOString().slice(0, 10)}.csv`, content, "text/csv;charset=utf-8");
-  }, [logs, shifts]);
+  }, [filteredLogs, shifts]);
 
   const handlePdfReport = React.useCallback(() => {
-    const rows = logs.map((log) => attendanceRow(log, shifts));
+    const rows = filteredLogs.map((log) => attendanceRow(log, shifts));
     const reportWindow = window.open("", "_blank", "width=1100,height=800");
     if (!reportWindow) {
       window.print();
@@ -258,7 +292,7 @@ export default function AttendanceLogsPage() {
     reportWindow.document.close();
     reportWindow.focus();
     reportWindow.print();
-  }, [logs, shifts]);
+  }, [filteredLogs, shifts]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -285,18 +319,48 @@ export default function AttendanceLogsPage() {
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <div className="relative flex-1 sm:w-64">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Personel ara..." className="pl-9 h-9" />
+                <Input
+                  placeholder="Personel ara..."
+                  className="pl-9 h-9"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                />
               </div>
-              <Button variant="outline" size="sm" className="h-9">
+              <div className="relative">
                 <Calendar className="mr-2 h-4 w-4" />
-                Tarih Seçin
-              </Button>
+                <Input
+                  type="date"
+                  className="h-9 w-[150px] rounded-md border-slate-200 pl-3 text-sm"
+                  value={dateFilter}
+                  onChange={(event) => setDateFilter(event.target.value)}
+                  aria-label="Tarih seçin"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="h-9 px-3 border-dashed">
                 <Filter className="mr-2 h-3 w-3" />
-                Tüm Şubeler
+                <select
+                  className="bg-transparent text-xs font-semibold outline-none"
+                  value={branchFilter}
+                  onChange={(event) => setBranchFilter(event.target.value)}
+                  aria-label="Şube filtresi"
+                >
+                  <option value="all">Tüm Şubeler</option>
+                  {branchOptions.map((branch) => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
+                </select>
               </Badge>
+              {hasAttendanceFilter && (
+                <Button variant="ghost" size="sm" className="h-9" onClick={() => {
+                  setSearchTerm("");
+                  setDateFilter("");
+                  setBranchFilter("all");
+                }}>
+                  Sıfırla
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -309,6 +373,11 @@ export default function AttendanceLogsPage() {
             <div className="p-20 text-center flex flex-col items-center opacity-40">
               <History className="h-12 w-12 mb-4" />
               <p className="text-lg font-bold">Henüz giriş/çıkış kaydı yok.</p>
+            </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="p-20 text-center flex flex-col items-center opacity-60">
+              <History className="h-12 w-12 mb-4" />
+              <p className="text-lg font-bold">Filtreye uygun kayıt bulunamadı.</p>
             </div>
           ) : (
             <Table>
@@ -325,7 +394,7 @@ export default function AttendanceLogsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {logs.map((log: any) => {
+                {filteredLogs.map((log: any) => {
                   const statusLabel = attendanceStatus(log, shifts);
                   const overtimeMinutes = attendanceOvertimeMinutes(log, shifts);
                   const isOvertimeStatus = statusLabel === "Fazla Mesai";

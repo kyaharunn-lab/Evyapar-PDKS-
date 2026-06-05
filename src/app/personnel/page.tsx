@@ -160,6 +160,8 @@ export default function PersonnelPage() {
   const [isProfileOpen, setIsProfileOpen] = React.useState(false)
   const [isEditOpen, setIsEditOpen] = React.useState(false)
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("all")
+  const [branchFilter, setBranchFilter] = React.useState("all")
 
   const PERSONNEL_STORAGE_KEY = "app_personnel"
   const [employees, setEmployees] = React.useState<any[]>([])
@@ -318,15 +320,26 @@ export default function PersonnelPage() {
 
   const filteredEmployees = React.useMemo(() => {
     if (!employees) return [];
-    return employees.filter((emp: any) => 
-      !emp.isDeleted && (
-        emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        emp.departmentId?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    );
-  }, [employees, searchTerm]);
+    const query = searchTerm.trim().toLowerCase();
+    return employees.filter((emp: any) => {
+      if (emp.isDeleted) return false;
+      const matchesSearch = !query || [
+        emp.name,
+        emp.surname,
+        emp.fullName,
+        emp.id,
+        emp.personnelCode,
+        emp.registryNo,
+        emp.email,
+        emp.departmentId,
+      ].some((value) => String(value || "").toLowerCase().includes(query));
+      const matchesStatus = statusFilter === "all" || String(emp.status || "Active") === statusFilter;
+      const matchesBranch = branchFilter === "all" || String(emp.branchId || emp.branch || "") === branchFilter;
+      return matchesSearch && matchesStatus && matchesBranch;
+    });
+  }, [branchFilter, employees, searchTerm, statusFilter]);
+
+  const hasPersonnelFilter = Boolean(searchTerm || statusFilter !== "all" || branchFilter !== "all")
 
   const selectedArchiveItems = React.useMemo(() => {
     if (!selectedEmployee) return []
@@ -691,10 +704,40 @@ export default function PersonnelPage() {
               />
             </div>
             <div className="flex items-center gap-3 w-full lg:w-auto">
-              <Button variant="outline" size="sm" className="h-11 px-5 border-slate-200">
-                <Filter className="mr-2 h-4 w-4" />
-                {t.filter}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-11 px-5 border-slate-200">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {t.filter}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
+                  <DropdownMenuLabel>Durum</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setStatusFilter("all")}>Tüm Durumlar</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("Active")}>Aktif</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("Passive")}>Pasif</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Şube</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setBranchFilter("all")}>Tüm Şubeler</DropdownMenuItem>
+                  {localBranches.map((branch: any) => (
+                    <DropdownMenuItem key={branch?.id || branch?.branchCode} onClick={() => setBranchFilter(String(branch?.id || branch?.branchCode || ""))}>
+                      {branch?.branchName || branch?.name || branch?.title || branch?.branchCode}
+                    </DropdownMenuItem>
+                  ))}
+                  {hasPersonnelFilter && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => {
+                        setSearchTerm("");
+                        setStatusFilter("all");
+                        setBranchFilter("all");
+                      }}>
+                        Filtreleri Sıfırla
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Badge variant="secondary" className="h-11 px-4 rounded-xl text-xs font-bold bg-white border border-slate-200 shadow-sm text-primary">
                 {p.totalCount.replace('{count}', (filteredEmployees?.length || 0).toString())}
               </Badge>
@@ -716,11 +759,11 @@ export default function PersonnelPage() {
               <div className="bg-secondary/50 p-6 rounded-full mb-6">
                 <Users className="h-12 w-12 text-muted-foreground" />
               </div>
-              <h3 className="text-xl font-bold text-primary mb-2">{searchTerm ? t.noData : p.empty}</h3>
+              <h3 className="text-xl font-bold text-primary mb-2">{hasPersonnelFilter ? "Filtreye uygun kayıt bulunamadı." : p.empty}</h3>
               <p className="text-muted-foreground max-w-xs mb-6">
-                {searchTerm ? "Farklı bir arama terimi deneyin." : p.emptySub}
+                {hasPersonnelFilter ? "Farklı filtre veya arama terimi deneyin." : p.emptySub}
               </p>
-              {!searchTerm && (
+              {!hasPersonnelFilter && (
                 <Button onClick={() => setIsAddOpen(true)} className="bg-primary hover:bg-primary/90">
                   <Plus className="mr-2 h-4 w-4" />
                   {p.addEmployee}
