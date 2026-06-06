@@ -2,19 +2,48 @@ import { NextResponse } from "next/server"
 import {
   ONESIGNAL_API_URL,
   assertOneSignalServerConfig,
-  buildOneSignalPayload,
   getOneSignalConfigStatus,
   type OneSignalNotificationInput,
 } from "@/lib/onesignal"
+
+type NotificationRequest = Partial<OneSignalNotificationInput> & {
+  include_subscription_ids?: string[]
+  oneSignalSubscriptionId?: string
+  personnel?: {
+    oneSignalSubscriptionId?: string
+  }
+}
 
 function jsonError(message: string, status: number, details?: Record<string, unknown>) {
   return NextResponse.json({ error: message, ...(details || {}) }, { status })
 }
 
-function isValidAudience(body: Partial<OneSignalNotificationInput>) {
+function getSubscriptionIds(body: NotificationRequest) {
+  const directIds = Array.isArray(body.include_subscription_ids) ? body.include_subscription_ids : []
+  const singleId = body.oneSignalSubscriptionId || body.personnel?.oneSignalSubscriptionId || ""
+  return [...directIds, singleId].map((id) => String(id || "").trim()).filter(Boolean)
+}
+
+function isValidAudience(body: NotificationRequest) {
   const hasSegments = Array.isArray(body.included_segments) && body.included_segments.length > 0
   const hasExternalUsers = Array.isArray(body.include_external_user_ids) && body.include_external_user_ids.length > 0
-  return hasSegments !== hasExternalUsers
+  const hasSubscriptions = getSubscriptionIds(body).length > 0
+  return [hasSegments, hasExternalUsers, hasSubscriptions].filter(Boolean).length === 1
+}
+
+function buildPayload(body: NotificationRequest, appId: string) {
+  const subscriptionIds = getSubscriptionIds(body)
+
+  return {
+    app_id: appId,
+    headings: { tr: body.title, en: body.title },
+    contents: { tr: body.message, en: body.message },
+    ...(body.url ? { url: body.url } : {}),
+    ...(body.data ? { data: body.data } : {}),
+    ...(subscriptionIds.length > 0 ? { include_subscription_ids: subscriptionIds } : {}),
+    ...(subscriptionIds.length === 0 && body.included_segments ? { included_segments: body.included_segments } : {}),
+    ...(subscriptionIds.length === 0 && body.include_external_user_ids ? { include_external_user_ids: body.include_external_user_ids } : {}),
+  }
 }
 
 function normalizeOneSignalResult(result: any, status: number) {
@@ -23,6 +52,7 @@ function normalizeOneSignalResult(result: any, status: number) {
 
   return {
     oneSignalStatus: status,
+    id: typeof result?.id === "string" ? result.id : null,
     oneSignalId: typeof result?.id === "string" ? result.id : null,
     recipients,
     errors,
@@ -41,7 +71,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let body: Partial<OneSignalNotificationInput>
+  let body: NotificationRequest
 
   try {
     body = await request.json()
@@ -54,12 +84,12 @@ export async function POST(request: Request) {
   }
 
   if (!isValidAudience(body)) {
-    return jsonError("included_segments veya include_external_user_ids alanlarindan yalnizca biri zorunludur.", 400)
+    return jsonError("included_segments, include_external_user_ids veya include_subscription_ids alanlarindan yalnizca biri zorunludur.", 400)
   }
 
   try {
     const config = assertOneSignalServerConfig()
-    const payload = buildOneSignalPayload(body as OneSignalNotificationInput)
+    const payload = buildPayload(body, config.appId)
     const response = await fetch(ONESIGNAL_API_URL, {
       method: "POST",
       headers: {
@@ -81,7 +111,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       provider: "onesignal",
       success: true,
-      message: "OneSignal bildirimi gonderildi.",
+      message: debug.recipients === 0 ? "Abone var ama hedef eslesmedi." : "OneSignal bildirimi gonderildi.",
       ...debug,
     }, { status: 200 })
   } catch (error) {
