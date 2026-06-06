@@ -35,6 +35,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
+import { useFirestore } from "@/firebase"
+import { writeSharedRecord } from "@/lib/shared-data-sync"
 
 const PERSONNEL_STORAGE_KEY = "app_personnel"
 const ACCESS_STORAGE_KEYS = ["app_access_control", "app_access_controls", "app_access_management", "app_user_access", "accessControls"] as const
@@ -91,6 +93,7 @@ function getPersonnelKey(record: any, fallback: string) {
 
 export default function RolesPage() {
   const { toast } = useToast()
+  const db = useFirestore()
   const [isAddOpen, setIsAddOpen] = React.useState(false)
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
   const [roles, setRoles] = React.useState<any[]>([])
@@ -205,10 +208,13 @@ export default function RolesPage() {
     try {
       localStorage.setItem(ROLES_STORAGE_KEY, JSON.stringify(next))
       window.dispatchEvent(new Event("app-access-updated"))
+      next.forEach((role) => {
+        void writeSharedRecord(db, "roles", role)
+      })
     } catch {
       // ignore storage errors (quota, blocked, etc.)
     }
-  }, [])
+  }, [db])
 
   const handleCreateRole = () => {
     if (!roleName.trim()) {

@@ -268,7 +268,12 @@ function findRoleForPerson(person: any, roles: any[]) {
     person?.assignedRole,
     person?.accessRole,
     person?.permissionRole,
-  ].map(normalizeRoleToken).filter(Boolean)
+  ].flatMap((value) => {
+    if (value && typeof value === "object") {
+      return [value.id, value.roleCode, value.code, value.roleName, value.name].map(normalizeRoleToken)
+    }
+    return [normalizeRoleToken(value)]
+  }).filter(Boolean)
   if (!assigned.length) return null
 
   return roles.find((role) => {
@@ -286,23 +291,22 @@ function normalizeStatus(value: any) {
   return "Bekliyor"
 }
 
-function canCreateMobileLeaveRequest(person: any, position: any, role: any = null) {
+function canCreateMobileLeaveRequest(person: any, role: any = null) {
   if (!person) return false
-  if (person?.hasAdminAccess === true || person?.panelAccess === true || person?.isManager === true) return true
   const permissions = {
     ...(role?.permissions || {}),
     ...(person?.permissions || person?.rolePermissions || {}),
   }
-  if (permissions?.leaveCreate === true || permissions?.canCreateLeaveRequest === true || permissions?.manageLeaves === true) return true
+  return permissions?.canCreateLeaveRequest === true ||
+    permissions?.leaveCreate === true ||
+    permissions?.createLeaveRequest === true ||
+    permissions?.manageLeaves === true
   const searchable = [
     person?.role,
     person?.roleName,
     person?.position,
     person?.positionName,
     person?.title,
-    position?.positionName,
-    position?.name,
-    position?.title,
   ].filter(Boolean).join(" ").toLocaleLowerCase("tr-TR")
   return ["müdür", "mudur", "manager", "admin", "yönetici", "yonetici"].some((keyword) => searchable.includes(keyword))
 }
@@ -563,6 +567,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     { collectionName: "personnel", storageKey: "app_personnel" },
     { collectionName: "qrPoints", storageKey: "app_qr_points" },
     { collectionName: "shifts", storageKey: "app_shifts" },
+    { collectionName: "roles", storageKey: "app_roles" },
     { collectionName: "leaveRequests", storageKey: "app_leave_requests" },
     { collectionName: "attendance", storageKey: "app_attendance_records" },
     { collectionName: "livePresence", storageKey: "app_live_presence" },
@@ -741,7 +746,15 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   const selectedDepartment = data.departments.find((department: any) => getId(department) === selectedPerson?.departmentId)
   const selectedPosition = data.positions.find((position: any) => getId(position) === selectedPerson?.positionId || positionName(position) === selectedPerson?.position)
   const selectedRole = findRoleForPerson(selectedPerson, data.roles)
-  const canCreateLeaveRequests = canCreateMobileLeaveRequest(selectedPerson, selectedPosition, selectedRole)
+  const selectedPersonWithPermissions = selectedPerson ? {
+    ...selectedPerson,
+    rolePermissions: selectedRole?.permissions || selectedPerson?.rolePermissions || {},
+    permissions: {
+      ...(selectedRole?.permissions || {}),
+      ...(selectedPerson?.permissions || {}),
+    },
+  } : selectedPerson
+  const canCreateLeaveRequests = canCreateMobileLeaveRequest(selectedPersonWithPermissions, selectedRole)
   const personId = selectedPerson ? getId(selectedPerson) : ""
   const branchId = selectedBranch ? getId(selectedBranch) : ""
   const personShifts = data.shifts.filter((shift: any) => matchesPerson(shift, personId) || matchesBranch(shift, branchId))
@@ -1394,7 +1407,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   ) : (
     <PhoneMockup
       settings={settings}
-      person={selectedPerson}
+      person={selectedPersonWithPermissions}
       branch={selectedBranch}
       department={selectedDepartment}
       position={selectedPosition}
@@ -1441,7 +1454,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         ) : (
           <MobileAppShell
             settings={settings}
-            person={selectedPerson}
+            person={selectedPersonWithPermissions}
             branch={selectedBranch}
             department={selectedDepartment}
             position={selectedPosition}
@@ -1514,7 +1527,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             ) : (
               <PhoneMockup
                 settings={settings}
-                person={selectedPerson}
+                person={selectedPersonWithPermissions}
                 branch={selectedBranch}
                 department={selectedDepartment}
                 position={selectedPosition}
@@ -1972,6 +1985,9 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }:
   const dayOptions = React.useMemo(() => Array.from({ length: 31 }, (_, index) => `${index + 1}`.padStart(2, "0")), [])
   const monthOptions = React.useMemo(() => Array.from({ length: 12 }, (_, index) => `${index + 1}`.padStart(2, "0")), [])
   const yearOptions = React.useMemo(() => Array.from({ length: 4 }, (_, index) => `${currentYear + index}`), [currentYear])
+  React.useEffect(() => {
+    if (!canCreateLeaveRequests && open) setOpen(false)
+  }, [canCreateLeaveRequests, open])
   const isValidDateParts = (day: string, month: string, year: string) => Boolean(day && month && /^\d{4}$/.test(year))
   const toIsoDate = (day: string, month: string, year: string) => {
     if (!isValidDateParts(day, month, year)) return ""
@@ -2036,7 +2052,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }:
   return (
     <div>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">İzin Taleplerim</h3><CalendarClock className="h-5 w-5 text-white/60" /></div>
-      <Button
+      {canCreateLeaveRequests && <Button
         data-mobile-action="leave-new"
         onClick={() => {
           if (!canCreateLeaveRequests) {
@@ -2050,7 +2066,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }:
         className={cn("mb-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", canCreateLeaveRequests ? palette.button : "cursor-not-allowed bg-white/10 text-white/45 hover:bg-white/10")}
       >
         Yeni izin talebi
-      </Button>
+      </Button>}
       {!canCreateLeaveRequests && error ? <p className="mb-4 rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">{error}</p> : null}
       {open && (
         <form onSubmit={submit} className="mb-4 space-y-3 rounded-[26px] border border-white/10 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
