@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import {
+  ONESIGNAL_API_URL,
   assertOneSignalServerConfig,
   buildOneSignalPayload,
   getOneSignalConfigStatus,
@@ -14,6 +15,18 @@ function isValidAudience(body: Partial<OneSignalNotificationInput>) {
   const hasSegments = Array.isArray(body.included_segments) && body.included_segments.length > 0
   const hasExternalUsers = Array.isArray(body.include_external_user_ids) && body.include_external_user_ids.length > 0
   return hasSegments !== hasExternalUsers
+}
+
+function normalizeOneSignalResult(result: any, status: number) {
+  const recipients = Number(result?.recipients ?? result?.successful ?? 0) || 0
+  const errors = result?.errors || result?.error || null
+
+  return {
+    oneSignalStatus: status,
+    oneSignalId: typeof result?.id === "string" ? result.id : null,
+    recipients,
+    errors,
+  }
 }
 
 export async function GET() {
@@ -47,7 +60,7 @@ export async function POST(request: Request) {
   try {
     const config = assertOneSignalServerConfig()
     const payload = buildOneSignalPayload(body as OneSignalNotificationInput)
-    const response = await fetch("https://onesignal.com/api/v1/notifications", {
+    const response = await fetch(ONESIGNAL_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -56,18 +69,20 @@ export async function POST(request: Request) {
       body: JSON.stringify(payload),
     })
     const result = await response.json().catch(() => ({}))
+    const debug = normalizeOneSignalResult(result, response.status)
 
     if (!response.ok) {
       console.error("[onesignal notifications] send error", result)
-      return jsonError("OneSignal bildirimi gonderilemedi.", response.status || 500, { details: result })
+      return jsonError("OneSignal bildirimi gonderilemedi.", response.status || 500, {
+        ...debug,
+      })
     }
 
     return NextResponse.json({
       provider: "onesignal",
       success: true,
       message: "OneSignal bildirimi gonderildi.",
-      payload,
-      result,
+      ...debug,
     }, { status: 200 })
   } catch (error) {
     console.error("[onesignal notifications] config error", error)

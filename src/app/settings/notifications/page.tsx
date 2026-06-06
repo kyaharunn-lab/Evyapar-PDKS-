@@ -43,6 +43,15 @@ type NotificationLog = {
   detail?: string
   type?: string
   channel?: string
+  oneSignalId?: string | null
+  recipients?: number
+  errors?: unknown
+}
+
+type SendResult = {
+  status: "success" | "warning" | "error"
+  message: string
+  recipients?: number
 }
 
 function readArray(key: string) {
@@ -73,6 +82,16 @@ function getPersonnelName(person: any) {
   return (person?.fullName || [person?.name || person?.firstName, person?.surname || person?.lastName].filter(Boolean).join(" ") || person?.email || getPersonnelId(person) || "Personel").toString()
 }
 
+function formatNotificationError(error: unknown) {
+  if (!error) return "Bildirim gonderilemedi."
+  if (typeof error === "string") return error
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return "Bildirim gonderilemedi."
+  }
+}
+
 export default function NotificationSettingsPage() {
   const db = useFirestore()
   const { toast } = useToast()
@@ -83,6 +102,7 @@ export default function NotificationSettingsPage() {
   const [targetMode, setTargetMode] = React.useState<"all" | "person">("all")
   const [selectedPersonnelId, setSelectedPersonnelId] = React.useState("")
   const [sending, setSending] = React.useState(false)
+  const [lastResult, setLastResult] = React.useState<SendResult | null>(null)
 
   const load = React.useCallback(() => {
     setPersonnel(readArray(PERSONNEL_KEY).filter((person: any) => !person?.isDeleted))
@@ -136,6 +156,13 @@ export default function NotificationSettingsPage() {
 
     const recipient = targetMode === "all" ? "Tüm kullanıcılar" : getPersonnelName(selectedPerson)
     const recipientId = targetMode === "all" ? "all" : getPersonnelId(selectedPerson)
+    if (targetMode === "person" && !selectedPerson?.oneSignalId) {
+      const noSubscriberMessage = "Seçili personelin OneSignal aboneliği bulunamadı."
+      setLastResult({ status: "error", message: noSubscriberMessage, recipients: 0 })
+      toast({ variant: "destructive", title: "Hedef abone yok", description: noSubscriberMessage })
+      return
+    }
+
     const payload = targetMode === "all"
       ? { title: cleanTitle, message: cleanMessage, included_segments: ["Subscribed Users"] }
       : { title: cleanTitle, message: cleanMessage, include_external_user_ids: [recipientId] }
@@ -149,8 +176,18 @@ export default function NotificationSettingsPage() {
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) {
-        throw new Error(result?.error || "Bildirim gönderilemedi.")
+        throw new Error(formatNotificationError(result?.errors || result?.error || "Bildirim gonderilemedi."))
       }
+      const recipients = Number(result?.recipients ?? 0) || 0
+      const oneSignalId = typeof result?.oneSignalId === "string" ? result.oneSignalId : null
+      const resultMessage = recipients === 0
+        ? "Bildirim gönderildi ama hedef abone bulunamadı."
+        : `Bildirim ${recipients} hedef aboneye gönderildi.`
+      setLastResult({
+        status: recipients === 0 ? "warning" : "success",
+        message: resultMessage,
+        recipients,
+      })
 
       const log: NotificationLog = {
         id: `notif-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -162,12 +199,17 @@ export default function NotificationSettingsPage() {
         createdAt: new Date().toISOString(),
         type: "Manuel bildirim",
         channel: "OneSignal",
-        detail: result?.result?.id ? `OneSignal ID: ${result.result.id}` : "OneSignal bildirimi gönderildi.",
+        oneSignalId,
+        recipients,
+        errors: result?.errors || null,
+        detail: oneSignalId ? `${resultMessage} OneSignal ID: ${oneSignalId}` : resultMessage,
       }
       await persistLog(log)
       resetMessage()
-      toast({ title: "Bildirim gönderildi", description: recipient })
+      toast({ title: recipients === 0 ? "Hedef abone bulunamadı" : "Bildirim gönderildi", description: resultMessage })
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Bildirim gonderilemedi."
+      setLastResult({ status: "error", message: errorMessage })
       const log: NotificationLog = {
         id: `notif-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         title: cleanTitle,
@@ -263,6 +305,19 @@ export default function NotificationSettingsPage() {
               {sending ? "Gönderiliyor..." : "Gönder"}
             </Button>
           </div>
+
+          {lastResult && (
+            <div
+              className={[
+                "rounded-2xl border px-4 py-3 text-sm font-semibold",
+                lastResult.status === "success" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "",
+                lastResult.status === "warning" ? "border-amber-200 bg-amber-50 text-amber-800" : "",
+                lastResult.status === "error" ? "border-rose-200 bg-rose-50 text-rose-800" : "",
+              ].join(" ")}
+            >
+              {lastResult.message}
+            </div>
+          )}
         </CardContent>
       </Card>
 
