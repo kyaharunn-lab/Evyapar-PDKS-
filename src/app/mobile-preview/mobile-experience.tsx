@@ -758,7 +758,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         oneSignalSubscribed: Boolean(result.subscribed),
         oneSignalPermission: result.permission ? "granted" : "denied",
         oneSignalSdkReady: Boolean(result.sdkReady),
-        oneSignalSubscriptionError: result.subscribed ? "" : "Permission granted, ancak push subscription olusmadi.",
+        oneSignalSubscriptionError: result.subscribed ? "" : "Bildirim aboneliği oluşmadı.",
         lastNotificationSync: new Date().toISOString(),
       }
       const updatedPerson = { ...selectedPerson, ...patch }
@@ -772,12 +772,13 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         personnelId: personId,
         oneSignalId: result.oneSignalId,
         oneSignalSubscriptionId: result.oneSignalSubscriptionId,
+        oneSignalSubscriptionToken: result.oneSignalSubscriptionToken ? "var" : "yok",
         subscribed: result.subscribed,
         firestoreOk,
       })
       toast({
         title: result.subscribed ? "Bildirimler aktif" : "Abonelik tamamlanamadı",
-        description: result.subscribed ? "Mobil bildirim izniniz kaydedildi." : "İzin verildi ama OneSignal aboneliği oluşmadı.",
+        description: result.subscribed ? "Mobil bildirim izniniz kaydedildi." : "Bildirim aboneliği oluşmadı.",
       })
     } catch (error) {
       console.warn("[OneSignal mobile] manual permission sync failed", error)

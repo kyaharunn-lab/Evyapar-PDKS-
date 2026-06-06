@@ -112,35 +112,55 @@ async function requestPermissionWithPublicApi(OneSignal: any, shouldRequest: boo
   return typeof Notification !== "undefined" && Notification.permission === "granted"
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+async function readPushSubscription(OneSignal: any) {
+  const subscription = OneSignal?.User?.PushSubscription
+  return {
+    subscriptionId: String(subscription?.id || ""),
+    subscriptionToken: String(subscription?.token || ""),
+    optedIn: Boolean(subscription?.optedIn),
+  }
+}
+
 async function readSubscriptionId(OneSignal: any) {
   try {
     if (typeof OneSignal?.User?.PushSubscription?.optIn === "function") {
       await OneSignal.User.PushSubscription.optIn()
+      console.info("[OneSignal mobile] PushSubscription optIn called")
     }
   } catch (error) {
     console.warn("[OneSignal mobile] subscription opt-in failed", error)
   }
 
   try {
-    const subscription = OneSignal?.User?.PushSubscription
     const oneSignalUserId = String(
       OneSignal?.User?.onesignalId ||
       OneSignal?.User?.onesignal_id ||
       (typeof OneSignal?.User?.getOnesignalId === "function" ? await OneSignal.User.getOnesignalId() : "") ||
       ""
     )
-    const subscriptionId = String(subscription?.id || "")
-    const subscriptionToken = String(subscription?.token || "")
-    const subscribed = Boolean(subscription?.optedIn ?? subscriptionId)
+    let subscription = await readPushSubscription(OneSignal)
+
+    for (let attempt = 0; attempt < 6 && !subscription.subscriptionId; attempt += 1) {
+      await wait(500)
+      subscription = await readPushSubscription(OneSignal)
+    }
+
+    const subscribed = Boolean(subscription.subscriptionId)
     console.info("[OneSignal mobile] Subscription id", {
       oneSignalId: oneSignalUserId || null,
-      subscriptionId: subscriptionId || null,
+      subscriptionId: subscription.subscriptionId || null,
+      subscriptionToken: subscription.subscriptionToken ? "var" : "yok",
+      optedIn: subscription.optedIn,
       subscribed,
     })
     return {
-      oneSignalId: oneSignalUserId || subscriptionId,
-      subscriptionId,
-      subscriptionToken,
+      oneSignalId: oneSignalUserId || subscription.subscriptionId,
+      subscriptionId: subscription.subscriptionId,
+      subscriptionToken: subscription.subscriptionToken,
       subscribed,
     }
   } catch (error) {
