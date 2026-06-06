@@ -729,6 +729,20 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     try {
       const result = await syncOneSignalSubscription(personId, { requestPermission: true })
       if (!result.permission) {
+        const deniedPatch = {
+          oneSignalPermission: "denied",
+          oneSignalSdkReady: Boolean(result.sdkReady),
+          oneSignalSubscribed: false,
+          oneSignalSubscriptionError: "Tarayici bildirim izni reddedildi.",
+          lastNotificationSync: new Date().toISOString(),
+        }
+        const deniedPerson = { ...selectedPerson, ...deniedPatch }
+        upsertLocalArrayRecord("app_personnel", deniedPerson)
+        setData((current: any) => ({
+          ...current,
+          personnel: current.personnel.map((person: any) => getId(person) === personId ? deniedPerson : person),
+        }))
+        await writeSharedRecord(db, "personnel", deniedPerson)
         toast({
           variant: "destructive",
           title: "Bildirim izni verilmedi",
@@ -739,7 +753,12 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
 
       const patch = {
         oneSignalId: result.oneSignalId,
-        oneSignalSubscribed: true,
+        oneSignalSubscriptionId: result.oneSignalSubscriptionId,
+        oneSignalSubscriptionToken: result.oneSignalSubscriptionToken,
+        oneSignalSubscribed: Boolean(result.subscribed),
+        oneSignalPermission: result.permission ? "granted" : "denied",
+        oneSignalSdkReady: Boolean(result.sdkReady),
+        oneSignalSubscriptionError: result.subscribed ? "" : "Permission granted, ancak push subscription olusmadi.",
         lastNotificationSync: new Date().toISOString(),
       }
       const updatedPerson = { ...selectedPerson, ...patch }
@@ -752,15 +771,30 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       console.info(`[OneSignal mobile] Sync ${firestoreOk ? "success" : "failed"}`, {
         personnelId: personId,
         oneSignalId: result.oneSignalId,
-        subscribed: true,
+        oneSignalSubscriptionId: result.oneSignalSubscriptionId,
+        subscribed: result.subscribed,
         firestoreOk,
       })
       toast({
-        title: "Bildirimler aktif",
-        description: "Mobil bildirim izniniz kaydedildi.",
+        title: result.subscribed ? "Bildirimler aktif" : "Abonelik tamamlanamadı",
+        description: result.subscribed ? "Mobil bildirim izniniz kaydedildi." : "İzin verildi ama OneSignal aboneliği oluşmadı.",
       })
     } catch (error) {
       console.warn("[OneSignal mobile] manual permission sync failed", error)
+      const errorMessage = error instanceof Error ? error.message : "OneSignal baglantisi kurulamadi."
+      const errorPatch = {
+        oneSignalSdkReady: false,
+        oneSignalSubscribed: false,
+        oneSignalSubscriptionError: errorMessage,
+        lastNotificationSync: new Date().toISOString(),
+      }
+      const errorPerson = { ...selectedPerson, ...errorPatch }
+      upsertLocalArrayRecord("app_personnel", errorPerson)
+      setData((current: any) => ({
+        ...current,
+        personnel: current.personnel.map((person: any) => getId(person) === personId ? errorPerson : person),
+      }))
+      await writeSharedRecord(db, "personnel", errorPerson)
       toast({
         variant: "destructive",
         title: "Bildirimler açılamadı",
@@ -2075,6 +2109,17 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
   const archiveItems = Array.isArray(person?.digitalArchive) ? person.digitalArchive : []
   const leaveItems = Array.isArray(leaves) ? leaves : []
   const notificationsEnabled = Boolean(person?.oneSignalSubscribed)
+  const oneSignalPermission = person?.oneSignalPermission || (typeof Notification !== "undefined" ? Notification.permission : "unknown")
+  const oneSignalSubscriptionId = person?.oneSignalSubscriptionId || ""
+  const oneSignalId = person?.oneSignalId || ""
+  const oneSignalSdkReady = person?.oneSignalSdkReady === true || Boolean(oneSignalId || oneSignalSubscriptionId)
+  const oneSignalSubscriptionActive = Boolean(person?.oneSignalSubscribed && (oneSignalId || oneSignalSubscriptionId))
+  const oneSignalReason = person?.oneSignalSubscriptionError || (
+    !oneSignalSdkReady ? "SDK henuz hazir degil veya senkron edilmedi." :
+    oneSignalPermission !== "granted" ? "Bildirim izni verilmedi." :
+    !oneSignalSubscriptionActive ? "Permission granted, ancak push subscription olusmadi." :
+    "Abonelik aktif."
+  )
   const handleLogout = () => {
     logoutLocalSession()
   }
@@ -2115,6 +2160,25 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
             {notificationsEnabled ? "Yenile" : "Bildirimleri Aktif Et"}
           </Button>
         </div>
+      </MobileCard>
+
+      <MobileCard className="mt-4 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="font-extrabold text-white">OneSignal Durumu</h4>
+          <Badge className={cn("hover:bg-white/15", oneSignalSubscriptionActive ? "bg-emerald-500/20 text-emerald-100" : "bg-amber-500/20 text-amber-100")}>
+            {oneSignalSubscriptionActive ? "Aktif" : "Debug"}
+          </Badge>
+        </div>
+        <Info label="SDK hazir mi" value={oneSignalSdkReady ? "Evet" : "Hayir"} />
+        <Info label="Permission" value={oneSignalPermission || "Bilinmiyor"} />
+        <Info label="Subscription aktif mi" value={oneSignalSubscriptionActive ? "Evet" : "Hayir"} />
+        <Info label="OneSignal ID" value={oneSignalId || "Yok"} />
+        <Info label="Subscription ID" value={oneSignalSubscriptionId || "Yok"} />
+        {!oneSignalSubscriptionActive && (
+          <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs font-semibold text-amber-50">
+            {oneSignalReason}
+          </div>
+        )}
       </MobileCard>
 
       <MobileCard id="mobile-digital-archive" className="mt-4 space-y-3">

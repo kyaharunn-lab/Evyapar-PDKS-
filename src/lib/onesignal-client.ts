@@ -123,14 +123,30 @@ async function readSubscriptionId(OneSignal: any) {
 
   try {
     const subscription = OneSignal?.User?.PushSubscription
-    const oneSignalId = String(subscription?.id || subscription?.token || "")
-    const subscribed = Boolean(subscription?.optedIn ?? oneSignalId)
-    console.info("[OneSignal mobile] Subscription id", { oneSignalId: oneSignalId || null, subscribed })
-    return { oneSignalId, subscribed }
+    const oneSignalUserId = String(
+      OneSignal?.User?.onesignalId ||
+      OneSignal?.User?.onesignal_id ||
+      (typeof OneSignal?.User?.getOnesignalId === "function" ? await OneSignal.User.getOnesignalId() : "") ||
+      ""
+    )
+    const subscriptionId = String(subscription?.id || "")
+    const subscriptionToken = String(subscription?.token || "")
+    const subscribed = Boolean(subscription?.optedIn ?? subscriptionId)
+    console.info("[OneSignal mobile] Subscription id", {
+      oneSignalId: oneSignalUserId || null,
+      subscriptionId: subscriptionId || null,
+      subscribed,
+    })
+    return {
+      oneSignalId: oneSignalUserId || subscriptionId,
+      subscriptionId,
+      subscriptionToken,
+      subscribed,
+    }
   } catch (error) {
     console.warn("[OneSignal mobile] subscription id okunamadı", error)
-    console.info("[OneSignal mobile] Subscription id", { oneSignalId: null, subscribed: false })
-    return { oneSignalId: "", subscribed: false }
+    console.info("[OneSignal mobile] Subscription id", { oneSignalId: null, subscriptionId: null, subscribed: false })
+    return { oneSignalId: "", subscriptionId: "", subscriptionToken: "", subscribed: false }
   }
 }
 
@@ -169,10 +185,13 @@ export async function syncOneSignalSubscription(personnelId: string, options: { 
     const permission = await requestPermissionWithPublicApi(OneSignal, options.requestPermission)
     console.info(`[OneSignal mobile] Permission ${permission ? "granted" : "denied"}`, { permission })
 
-    const subscription = permission ? await readSubscriptionId(OneSignal) : { oneSignalId: "", subscribed: false }
+    const subscription = permission ? await readSubscriptionId(OneSignal) : { oneSignalId: "", subscriptionId: "", subscriptionToken: "", subscribed: false }
 
     return {
+      sdkReady: true,
       oneSignalId: subscription.oneSignalId,
+      oneSignalSubscriptionId: subscription.subscriptionId,
+      oneSignalSubscriptionToken: subscription.subscriptionToken,
       subscribed: subscription.subscribed,
       permission,
     }
