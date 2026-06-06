@@ -153,10 +153,11 @@ function getPersonDisplayName(person: any) {
 
 function getPersonName(request: any, personnel: any[] = []) {
   const directName = (
-    request?.personName ||
     request?.personnelName ||
     request?.employeeName ||
+    request?.staffName ||
     request?.fullName ||
+    request?.personName ||
     request?.personnelFullName ||
     getPersonDisplayName(request?.personnel) ||
     getPersonDisplayName(request?.employee) ||
