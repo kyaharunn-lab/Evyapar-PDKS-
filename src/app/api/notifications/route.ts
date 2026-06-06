@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server"
+import { getApp, getApps, initializeApp } from "firebase/app"
+import { collection, getDocs, getFirestore, query, where } from "firebase/firestore"
+
+import { firebaseConfig } from "@/firebase/config"
 import {
   ONESIGNAL_API_URL,
   assertOneSignalServerConfig,
@@ -21,7 +25,7 @@ function jsonError(message: string, status: number, details?: Record<string, unk
 function getSubscriptionIds(body: NotificationRequest) {
   const directIds = Array.isArray(body.include_subscription_ids) ? body.include_subscription_ids : []
   const singleId = body.oneSignalSubscriptionId || body.personnel?.oneSignalSubscriptionId || ""
-  return [...directIds, singleId].map((id) => String(id || "").trim()).filter(Boolean)
+  return Array.from(new Set([...directIds, singleId].map((id) => String(id || "").trim()).filter(Boolean)))
 }
 
 function isValidAudience(body: NotificationRequest) {
@@ -32,9 +36,21 @@ function isValidAudience(body: NotificationRequest) {
   return [hasExternalUsers, hasSubscriptions].filter(Boolean).length === 1
 }
 
-function buildPayload(body: NotificationRequest, appId: string) {
+async function getAllPersonnelSubscriptionIds() {
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
+  const db = getFirestore(app)
+  const snapshot = await getDocs(query(collection(db, "personnel"), where("oneSignalSubscribed", "==", true)))
+
+  return Array.from(new Set(
+    snapshot.docs
+      .map((docSnap) => String(docSnap.data()?.oneSignalSubscriptionId || "").trim())
+      .filter(Boolean)
+  ))
+}
+
+async function buildPayload(body: NotificationRequest, appId: string) {
   const hasSegments = Array.isArray(body.included_segments) && body.included_segments.length > 0
-  const subscriptionIds = getSubscriptionIds(body)
+  const subscriptionIds = hasSegments ? await getAllPersonnelSubscriptionIds() : getSubscriptionIds(body)
 
   return {
     app_id: appId,
@@ -42,8 +58,7 @@ function buildPayload(body: NotificationRequest, appId: string) {
     contents: { tr: body.message, en: body.message },
     ...(body.url ? { url: body.url } : {}),
     ...(body.data ? { data: body.data } : {}),
-    ...(hasSegments ? { included_segments: ["Subscribed Users"] } : {}),
-    ...(!hasSegments && subscriptionIds.length > 0 ? { include_subscription_ids: subscriptionIds } : {}),
+    ...(subscriptionIds.length > 0 ? { include_subscription_ids: subscriptionIds } : {}),
     ...(!hasSegments && subscriptionIds.length === 0 && body.include_external_user_ids ? { include_external_user_ids: body.include_external_user_ids } : {}),
   }
 }
@@ -91,7 +106,20 @@ export async function POST(request: Request) {
 
   try {
     const config = assertOneSignalServerConfig()
-    const payload = buildPayload(body, config.appId)
+    const payload = await buildPayload(body, config.appId)
+    if (Array.isArray(body.included_segments) && body.included_segments.length > 0 && !("include_subscription_ids" in payload)) {
+      return NextResponse.json({
+        provider: "onesignal",
+        success: false,
+        message: "Aktif abone bulunamadı.",
+        oneSignalStatus: 0,
+        id: null,
+        oneSignalId: null,
+        recipients: 0,
+        errors: "Aktif abone bulunamadı.",
+      }, { status: 200 })
+    }
+
     const response = await fetch(ONESIGNAL_API_URL, {
       method: "POST",
       headers: {
