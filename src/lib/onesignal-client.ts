@@ -185,7 +185,11 @@ export async function syncOneSignalSubscription(personnelId: string, options: { 
     }
 
     try {
-      await OneSignal.init({ appId })
+      await OneSignal.init({
+        appId,
+        serviceWorkerParam: { scope: "/" },
+        serviceWorkerPath: "OneSignalSDKWorker.js",
+      })
       console.info("[OneSignal mobile] OneSignal initialized")
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
