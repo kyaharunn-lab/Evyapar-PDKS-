@@ -101,6 +101,21 @@ const getPersonnelName = (person: any) => {
   return (person?.fullName || [person?.name, person?.surname].filter(Boolean).join(" ") || [person?.firstName, person?.lastName].filter(Boolean).join(" ") || person?.personnelCode || "Personel").toString()
 }
 
+const getLeavePersonName = (request: any) => {
+  return (
+    request?.personnelName ||
+    request?.personName ||
+    request?.employeeName ||
+    request?.staffName ||
+    request?.personelName ||
+    request?.fullName ||
+    request?.personnelFullName ||
+    request?.requestedForName ||
+    request?.requestedByName ||
+    "Personel"
+  ).toString()
+}
+
 interface LeaveRequest {
   id: string
   personId: string
@@ -571,7 +586,7 @@ export default function LeaveRequestsPage() {
                     return (
                       <TableRow key={request.id} className="border-slate-100 hover:bg-slate-50/50">
                         <TableCell className="font-bold text-slate-900">
-                          {request.personName}
+                          {getLeavePersonName(request)}
                         </TableCell>
                         <TableCell className="text-slate-700">
                           {getLeaveTypeLabel(request.leaveType)}
@@ -843,9 +858,16 @@ export default function LeaveRequestsPage() {
               <div className="p-4 bg-slate-50 rounded-xl">
                 <p className="text-xs font-bold text-slate-600 mb-3">PERSONELİ</p>
                 <p className="text-lg font-extrabold text-slate-900">
-                  {selectedRequest.personName}
+                  {getLeavePersonName(selectedRequest)}
                 </p>
               </div>
+
+              {selectedRequest.requestedByName && (
+                <div className="p-4 bg-slate-50 rounded-xl">
+                  <p className="text-xs font-bold text-slate-600 mb-3">TALEBI OLUSTURAN</p>
+                  <p className="text-sm font-bold text-slate-900">{selectedRequest.requestedByName}</p>
+                </div>
+              )}
 
               {/* Leave Type & Days */}
               <div className="grid grid-cols-2 gap-4">
