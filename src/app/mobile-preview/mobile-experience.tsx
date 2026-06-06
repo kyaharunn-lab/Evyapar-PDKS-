@@ -1033,7 +1033,15 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     }
     const record = {
       id: `mobile-att-${Date.now()}`,
-      personnelId: personId,
+      personnelId: targetPersonId,
+      personnelName: personName(targetPerson),
+      personnelEmail: targetPerson?.email || "",
+      branchId: targetPerson?.branchId || "",
+      branchName: targetPerson?.branchName || (selectedBranch && String(targetPerson?.branchId || "") === branchId ? branchName(selectedBranch) : ""),
+      requestedById: personId,
+      requestedByName: personName(selectedPerson),
+      requestedByEmail: selectedPerson?.email || "",
+      requestedByRole: "manager",
       personnelName: personName(selectedPerson),
       branchId,
       branchName: selectedBranch ? branchName(selectedBranch) : "",
@@ -1280,6 +1288,18 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       toast({ variant: "destructive", title: "Yetki yok", description: "İzin talebi oluşturma yetkiniz yok." })
       return false
     }
+    const targetPersonnelId = String(form.selectedPersonnelId || "").trim()
+    const targetPerson = data.personnel.find((person: any) => getId(person) === targetPersonnelId)
+    if (!targetPerson) {
+      toast({ variant: "destructive", title: "Personel seçin", description: "İzin talebi için personel seçimi zorunludur." })
+      return false
+    }
+    const targetPersonId = getId(targetPerson)
+    const targetBranchId = String(targetPerson?.branchId || "")
+    if (targetPersonId !== personId && targetBranchId !== String(selectedPerson?.branchId || branchId || "")) {
+      toast({ variant: "destructive", title: "Yetki yok", description: "Sadece kendi şubenizdeki personel için talep oluşturabilirsiniz." })
+      return false
+    }
     const attachmentFile = form.attachmentFile as File | null | undefined
     const leaveRequestId = `mobile-leave-${Date.now()}`
     let attachment: Record<string, any> = {}
@@ -1359,7 +1379,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       writeArray("app_leave_requests", [record, ...previousLeaves])
     }
     if (archiveRecord) {
-      const latestPersonnel = readArray("app_personnel").find((person: any) => matchesPerson(person, personId)) || selectedPerson
+      const latestPersonnel = readArray("app_personnel").find((person: any) => matchesPerson(person, targetPersonId)) || targetPerson
       const existingArchive = Array.isArray(latestPersonnel.digitalArchive) ? latestPersonnel.digitalArchive : []
       const updatedPerson = {
         ...latestPersonnel,
@@ -1420,6 +1440,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       isPersonInside={isPersonInside}
       notificationSettings={data.notificationSettings}
       company={data.companySettings}
+      personnel={data.personnel}
       isStandaloneApp={isStandaloneApp}
       canCreateLeaveRequests={canCreateLeaveRequests}
       setScreen={(screen: string) => updateSettings({ screen })}
@@ -1467,6 +1488,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             isPersonInside={isPersonInside}
             notificationSettings={data.notificationSettings}
             company={data.companySettings}
+            personnel={data.personnel}
             isStandaloneApp={isStandaloneApp}
             canCreateLeaveRequests={canCreateLeaveRequests}
             setScreen={(screen: string) => updateSettings({ screen })}
@@ -1540,6 +1562,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
                 isPersonInside={isPersonInside}
                 notificationSettings={data.notificationSettings}
                 company={data.companySettings}
+                personnel={data.personnel}
                 isStandaloneApp={isStandaloneApp}
                 canCreateLeaveRequests={canCreateLeaveRequests}
                 setScreen={(screen: string) => updateSettings({ screen })}
@@ -1969,8 +1992,9 @@ function ShiftScreen({ shifts, branch, palette }: any) {
   return <ListScreen title="Vardiyalarım" icon={CalendarClock} empty="Bu personele atanmış vardiya bulunamadı." items={cards} palette={palette} />
 }
 
-function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }: any) {
+function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, personnel = [], person, branch }: any) {
   const [open, setOpen] = React.useState(false)
+  const [selectedPersonnelId, setSelectedPersonnelId] = React.useState("")
   const [form, setForm] = React.useState({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
   const [startDay, setStartDay] = React.useState("")
   const [startMonth, setStartMonth] = React.useState("")
@@ -1982,6 +2006,16 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }:
   const [error, setError] = React.useState("")
   const [saving, setSaving] = React.useState(false)
   const currentYear = new Date().getFullYear()
+  const currentPersonId = getId(person)
+  const currentBranchId = String(person?.branchId || getId(branch) || "")
+  const selectablePersonnel = React.useMemo(() => {
+    const list = Array.isArray(personnel) ? personnel : []
+    return list.filter((item: any) => {
+      const itemId = getId(item)
+      if (itemId === currentPersonId) return true
+      return Boolean(currentBranchId && String(item?.branchId || "") === currentBranchId)
+    })
+  }, [currentBranchId, currentPersonId, personnel])
   const dayOptions = React.useMemo(() => Array.from({ length: 31 }, (_, index) => `${index + 1}`.padStart(2, "0")), [])
   const monthOptions = React.useMemo(() => Array.from({ length: 12 }, (_, index) => `${index + 1}`.padStart(2, "0")), [])
   const yearOptions = React.useMemo(() => Array.from({ length: 4 }, (_, index) => `${currentYear + index}`), [currentYear])
@@ -2000,6 +2034,10 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }:
     if (!canCreateLeaveRequests) {
       setOpen(false)
       setError("İzin talebi oluşturma yetkiniz yok.")
+      return
+    }
+    if (!selectedPersonnelId) {
+      setError("Personel seçimi zorunlu.")
       return
     }
     if (!form.type.trim()) {
@@ -2027,7 +2065,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }:
       }
     }
     setSaving(true)
-    const saved = await onLeaveCreate({ ...form, startDate, endDate, attachmentFile })
+    const saved = await onLeaveCreate({ ...form, startDate, endDate, attachmentFile, selectedPersonnelId })
     setSaving(false)
     if (saved === false) {
       setError("Kayit sirasinda hata olustu.")
@@ -2042,6 +2080,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }:
     setEndMonth("")
     setEndYear("")
     setAttachmentFile(null)
+    setSelectedPersonnelId("")
   }
   const items = leaves.slice(0, 8).map((leave: any) => ({
     title: leave.type || leave.leaveType || "İzin",
@@ -2070,6 +2109,21 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests }:
       {!canCreateLeaveRequests && error ? <p className="mb-4 rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">{error}</p> : null}
       {open && (
         <form onSubmit={submit} className="mb-4 space-y-3 rounded-[26px] border border-white/10 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
+          <div className="space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-white/45">Personel Seç</p>
+            <select
+              value={selectedPersonnelId}
+              onChange={(event) => setSelectedPersonnelId(event.target.value)}
+              className="h-10 w-full rounded-2xl border border-white/10 bg-white/10 px-3 text-xs font-bold text-white"
+            >
+              <option value="">Personel seçin</option>
+              {selectablePersonnel.map((item: any) => (
+                <option key={getId(item)} value={getId(item)}>
+                  {personName(item)}
+                </option>
+              ))}
+            </select>
+          </div>
           <Input value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))} className="h-10 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
           <div className="space-y-2">
             <p className="text-[11px] font-black uppercase tracking-widest text-white/45">Baslangic tarihi</p>
