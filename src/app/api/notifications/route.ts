@@ -28,10 +28,12 @@ function isValidAudience(body: NotificationRequest) {
   const hasSegments = Array.isArray(body.included_segments) && body.included_segments.length > 0
   const hasExternalUsers = Array.isArray(body.include_external_user_ids) && body.include_external_user_ids.length > 0
   const hasSubscriptions = getSubscriptionIds(body).length > 0
-  return [hasSegments, hasExternalUsers, hasSubscriptions].filter(Boolean).length === 1
+  if (hasSegments) return true
+  return [hasExternalUsers, hasSubscriptions].filter(Boolean).length === 1
 }
 
 function buildPayload(body: NotificationRequest, appId: string) {
+  const hasSegments = Array.isArray(body.included_segments) && body.included_segments.length > 0
   const subscriptionIds = getSubscriptionIds(body)
 
   return {
@@ -40,9 +42,9 @@ function buildPayload(body: NotificationRequest, appId: string) {
     contents: { tr: body.message, en: body.message },
     ...(body.url ? { url: body.url } : {}),
     ...(body.data ? { data: body.data } : {}),
-    ...(subscriptionIds.length > 0 ? { include_subscription_ids: subscriptionIds } : {}),
-    ...(subscriptionIds.length === 0 && body.included_segments ? { included_segments: body.included_segments } : {}),
-    ...(subscriptionIds.length === 0 && body.include_external_user_ids ? { include_external_user_ids: body.include_external_user_ids } : {}),
+    ...(hasSegments ? { included_segments: ["Subscribed Users"] } : {}),
+    ...(!hasSegments && subscriptionIds.length > 0 ? { include_subscription_ids: subscriptionIds } : {}),
+    ...(!hasSegments && subscriptionIds.length === 0 && body.include_external_user_ids ? { include_external_user_ids: body.include_external_user_ids } : {}),
   }
 }
 
