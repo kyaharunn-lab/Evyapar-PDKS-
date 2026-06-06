@@ -249,6 +249,36 @@ function valueText(value: any, fallback = "-") {
   return value === undefined || value === null || value === "" ? fallback : String(value)
 }
 
+function normalizeRoleToken(value: any) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-z0-9]+/g, "")
+}
+
+function findRoleForPerson(person: any, roles: any[]) {
+  if (!person || !Array.isArray(roles)) return null
+  const assigned = [
+    person?.roleId,
+    person?.role,
+    person?.roleName,
+    person?.assignedRole,
+    person?.accessRole,
+    person?.permissionRole,
+  ].map(normalizeRoleToken).filter(Boolean)
+  if (!assigned.length) return null
+
+  return roles.find((role) => {
+    const tokens = [role?.id, role?.roleCode, role?.code, role?.roleName, role?.name]
+      .map(normalizeRoleToken)
+      .filter(Boolean)
+    return tokens.some((token) => assigned.includes(token))
+  }) || null
+}
+
 function normalizeStatus(value: any) {
   const raw = valueText(value, "Bekliyor").toLowerCase()
   if (raw.includes("approved") || raw.includes("onay")) return "Onaylandı"
@@ -256,10 +286,13 @@ function normalizeStatus(value: any) {
   return "Bekliyor"
 }
 
-function canCreateMobileLeaveRequest(person: any, position: any) {
+function canCreateMobileLeaveRequest(person: any, position: any, role: any = null) {
   if (!person) return false
   if (person?.hasAdminAccess === true || person?.panelAccess === true || person?.isManager === true) return true
-  const permissions = person?.permissions || person?.rolePermissions || {}
+  const permissions = {
+    ...(role?.permissions || {}),
+    ...(person?.permissions || person?.rolePermissions || {}),
+  }
   if (permissions?.leaveCreate === true || permissions?.canCreateLeaveRequest === true || permissions?.manageLeaves === true) return true
   const searchable = [
     person?.role,
@@ -508,6 +541,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     breaks: [],
     devices: [],
     qrPoints: [],
+    roles: [],
     kvkk: [],
     notificationSettings: {},
     companySettings: {},
@@ -547,6 +581,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       breaks: readArray("app_break_records"),
       devices: readArray("app_device_ids"),
       qrPoints: readArray("app_qr_points"),
+      roles: readArray("app_roles"),
       kvkk: readArray("app_kvkk_consents"),
       notificationSettings: readObject("app_notification_settings"),
       companySettings: readObject("app_company_settings"),
@@ -705,7 +740,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     data.branches.find((branch: any) => getId(branch) === selectedPerson?.branchId)
   const selectedDepartment = data.departments.find((department: any) => getId(department) === selectedPerson?.departmentId)
   const selectedPosition = data.positions.find((position: any) => getId(position) === selectedPerson?.positionId || positionName(position) === selectedPerson?.position)
-  const canCreateLeaveRequests = canCreateMobileLeaveRequest(selectedPerson, selectedPosition)
+  const selectedRole = findRoleForPerson(selectedPerson, data.roles)
+  const canCreateLeaveRequests = canCreateMobileLeaveRequest(selectedPerson, selectedPosition, selectedRole)
   const personId = selectedPerson ? getId(selectedPerson) : ""
   const branchId = selectedBranch ? getId(selectedBranch) : ""
   const personShifts = data.shifts.filter((shift: any) => matchesPerson(shift, personId) || matchesBranch(shift, branchId))

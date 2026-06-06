@@ -107,6 +107,7 @@ export default function RolesPage() {
   const [roleMobileAccess, setRoleMobileAccess] = React.useState(true)
   const [roleOrganizationAccess, setRoleOrganizationAccess] = React.useState(false)
   const [roleLeaveAccess, setRoleLeaveAccess] = React.useState(false)
+  const [roleCanCreateLeaveRequest, setRoleCanCreateLeaveRequest] = React.useState(false)
   const [roleBranchAccess, setRoleBranchAccess] = React.useState("")
 
   const ROLES_STORAGE_KEY = "app_roles"
@@ -119,6 +120,7 @@ export default function RolesPage() {
     setRoleMobileAccess(true)
     setRoleOrganizationAccess(false)
     setRoleLeaveAccess(false)
+    setRoleCanCreateLeaveRequest(false)
     setRoleBranchAccess("")
     setEditingRoleId(null)
   }, [])
@@ -132,9 +134,11 @@ export default function RolesPage() {
         ...((roleOrganizationAccess || managerRole) ? ["organization"] : []),
         ...((roleLeaveAccess || managerRole) ? ["leave_requests", "requests"] : []),
       ],
+      canCreateLeaveRequest: roleCanCreateLeaveRequest || managerRole,
+      leaveCreate: roleCanCreateLeaveRequest || managerRole,
       branchAccess: roleBranchAccess.split(",").map((item) => item.trim()).filter(Boolean),
     }
-  }, [roleBranchAccess, roleLeaveAccess, roleMobileAccess, roleName, roleOrganizationAccess, rolePanelAccess])
+  }, [roleBranchAccess, roleCanCreateLeaveRequest, roleLeaveAccess, roleMobileAccess, roleName, roleOrganizationAccess, rolePanelAccess])
 
   React.useEffect(() => {
     const loadRoleData = () => {
@@ -282,6 +286,7 @@ export default function RolesPage() {
     setRoleMobileAccess(permissions.mobileAccess ?? role?.mobileAccess ?? true)
     setRoleOrganizationAccess(pageAccess.includes("organization"))
     setRoleLeaveAccess(pageAccess.includes("leave_requests") || pageAccess.includes("requests"))
+    setRoleCanCreateLeaveRequest(Boolean(permissions.canCreateLeaveRequest || permissions.leaveCreate))
     setRoleBranchAccess(Array.isArray(permissions.branchAccess) ? permissions.branchAccess.join(", ") : "")
     setIsAddOpen(true)
   }
@@ -530,6 +535,7 @@ export default function RolesPage() {
                   <ToggleRow title="Mobil erişim" checked={roleMobileAccess} onCheckedChange={setRoleMobileAccess} />
                   <ToggleRow title="Organizasyon erişimi" checked={roleOrganizationAccess} onCheckedChange={setRoleOrganizationAccess} />
                   <ToggleRow title="İzin talepleri erişimi" checked={roleLeaveAccess} onCheckedChange={setRoleLeaveAccess} />
+                  <ToggleRow title="İzin Talebi Oluşturabilir" checked={roleCanCreateLeaveRequest} onCheckedChange={setRoleCanCreateLeaveRequest} />
                   <div className="space-y-1.5">
                     <Label htmlFor="role-branches" className="text-[11px] font-bold text-slate-500 uppercase">Şube erişimleri</Label>
                     <Input
@@ -586,6 +592,7 @@ export default function RolesPage() {
                     <InfoRow label="Açıklama" value={selectedRole.description || "-"} />
                     <InfoRow label="Panel Erişimi" value={(selectedRole.permissions?.panelAccess ?? selectedRole.panelAccess) ? "Açık" : "Kapalı"} />
                     <InfoRow label="Mobil Erişim" value={(selectedRole.permissions?.mobileAccess ?? selectedRole.mobileAccess) ? "Açık" : "Kapalı"} />
+                    <InfoRow label="İzin Talebi Oluşturabilir" value={(selectedRole.permissions?.canCreateLeaveRequest || selectedRole.permissions?.leaveCreate) ? "Açık" : "Kapalı"} />
                     <InfoRow label="Seviye" value={(selectedRole.level || 1).toString()} />
                     <InfoRow label="Durum" value={selectedRole.status === "Active" ? "Aktif" : "Pasif"} />
                   </>
