@@ -487,6 +487,14 @@ function isOpenAttendance(record: any, personId: string) {
     && !record?.exitTime
 }
 
+function isActiveLivePresence(record: any, personId: string) {
+  if (!matchesPerson(record, personId)) return false
+  const status = String(record?.status || "").toLowerCase()
+  const isClosed = Boolean(record?.checkOutTime || record?.exitTime) || status === "outside" || status.includes("çıkış")
+  if (isClosed) return false
+  return !status || status === "inside" || status === "on_break" || status === "molada"
+}
+
 function latestOpenAttendance(records: any[], personId: string) {
   return records
     .filter((record) => isOpenAttendance(record, personId))
@@ -765,9 +773,9 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   const branchQrPoints = data.qrPoints.filter((point: any) => matchesBranch(point, branchId))
   const livePresence = readArray(LIVE_PRESENCE_KEY)
   const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
-  const liveRecord = livePresence.find((item: any) => matchesPerson(item, personId))
+  const liveRecord = livePresence.find((item: any) => isActiveLivePresence(item, personId))
   const openAttendance = latestOpenAttendance(attendanceRecords, personId)
-  const isPersonInside = Boolean(liveRecord || openAttendance)
+  const isPersonInside = Boolean(liveRecord)
   const latestAttendance = attendanceRecords
     .filter((item: any) => matchesPerson(item, personId))
     .sort((a: any, b: any) => attendanceTime(b) - attendanceTime(a))[0]
@@ -891,14 +899,14 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
           hasNoCheckout(item)
         const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
         const livePresence = readArray(LIVE_PRESENCE_KEY)
-        const liveRecord = livePresence.find((item: any) => samePersonnel(item))
+        const liveRecord = livePresence.find((item: any) => isActiveLivePresence(item, personId))
         const currentMinute = nowIso.slice(0, 16)
         const sameMinuteQr = [...attendanceRecords, ...readArray(ATTENDANCE_KEY)].some((item: any) => {
           const actionMinute = String(item?.checkInTime || item?.checkOutTime || item?.entryTime || item?.exitTime || item?.createdAt || item?.updatedAt || "").slice(0, 16)
           const method = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doğrulamaYöntemi"] || "").toLowerCase()
           return samePersonnel(item) && actionMinute === currentMinute && method.includes("qr")
         })
-        if (liveRecord?.status === "inside" || sameMinuteQr) return
+        if (liveRecord || sameMinuteQr) return
         const hasOpenAttendance = false
         const lateInfo = calculateLateInfo(data.shifts, personId, branchId, now)
         const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
@@ -996,9 +1004,14 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     const method = qrStatus === "QR bekleniyor" ? (gpsStatus.includes("GPS") || gpsStatus.includes("konumu") ? "Mobil" : "GPS") : "QR"
     const livePresence = readArray(LIVE_PRESENCE_KEY)
     const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
-    const liveRecord = livePresence.find((item: any) => matchesPerson(item, personId))
+    const liveRecord = livePresence.find((item: any) => isActiveLivePresence(item, personId))
     const openAttendance = latestOpenAttendance(attendanceRecords, personId)
-    const isCurrentlyInside = Boolean(liveRecord || openAttendance)
+    const isCurrentlyInside = Boolean(liveRecord)
+    console.log("[mobile-qr-attendance]", {
+      hasActivePresence: isCurrentlyInside,
+      action: isEntry ? "checkIn" : "checkOut",
+      personnelId: personId,
+    })
     if (isEntry && isCurrentlyInside) {
       toast({ title: "Personel zaten içeride." })
       return
@@ -1036,9 +1049,29 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         exitTime: nowIso,
         updatedAt: nowIso,
       }
-      writeArray(ATTENDANCE_RECORDS_KEY, attendanceRecords.map((item: any) => isOpenAttendance(item, personId) ? { ...item, ...closePatch } : item))
-      writeArray(ATTENDANCE_KEY, readArray(ATTENDANCE_KEY).map((item: any) => isOpenAttendance(item, personId) ? { ...item, ...closePatch } : item))
+      const exitRecord = openAttendance
+        ? null
+        : {
+            ...(liveRecord || {}),
+            id: `mobile-exit-${Date.now()}`,
+            personnelId: personId,
+            personnelName: personName(selectedPerson),
+            branchId,
+            branchName: selectedBranch ? branchName(selectedBranch) : "",
+            date: nowIso.slice(0, 10),
+            method,
+            verificationMethod: method,
+            ...closePatch,
+          }
+      writeArray(ATTENDANCE_RECORDS_KEY, openAttendance
+        ? attendanceRecords.map((item: any) => isOpenAttendance(item, personId) ? { ...item, ...closePatch } : item)
+        : [exitRecord, ...attendanceRecords])
+      const previewRecords = readArray(ATTENDANCE_KEY)
+      writeArray(ATTENDANCE_KEY, openAttendance
+        ? previewRecords.map((item: any) => isOpenAttendance(item, personId) ? { ...item, ...closePatch } : item)
+        : [exitRecord, ...previewRecords])
       writeArray(LIVE_PRESENCE_KEY, livePresence.filter((item: any) => !matchesPerson(item, personId)))
+      console.log("[mobile-qr-attendance] livePresence updated", { action: "checkOut", personnelId: personId })
       notifyAttendanceSync()
       updateSettings({ state: "Çıkış yaptı", screen: "Giriş", gpsStatus: effectiveGpsStatus, qrStatus })
       addAudit("Mobil çıkış simülasyonu yapıldı", `${personName(selectedPerson)} için çıkış kaydı kapatıldı.`)
@@ -1084,6 +1117,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
     if (record.status === "inside") {
       writeArray(LIVE_PRESENCE_KEY, [record, ...livePresence.filter((item: any) => !matchesPerson(item, personId))])
+      console.log("[mobile-qr-attendance] livePresence updated", { action: "checkIn", personnelId: personId })
     } else {
       writeArray(LIVE_PRESENCE_KEY, livePresence.map((item: any) =>
         matchesPerson(item, personId) ? { ...item, ...overtimeInfo, status: "outside", checkOutTime: nowIso, exitTime: nowIso, updatedAt: nowIso } : item
@@ -1109,8 +1143,14 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       return
     }
     const liveRecords = readArray(LIVE_PRESENCE_KEY)
-    const inside = liveRecords.some((item: any) => matchesPerson(item, personId))
+    const activePresence = liveRecords.find((item: any) => isActiveLivePresence(item, personId))
+    const inside = Boolean(activePresence)
     const openAttendance = readArray(ATTENDANCE_RECORDS_KEY).find((item: any) => matchesPerson(item, personId) && item?.status === "inside" && !item?.checkOutTime)
+    console.log("[mobile-qr-toggle]", {
+      hasActivePresence: inside,
+      action: inside ? "checkOut" : "checkIn",
+      personnelId: personId,
+    })
     const showEntrySuccess = () => {
       vibrate(90)
       toast({
