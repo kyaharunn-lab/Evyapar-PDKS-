@@ -768,6 +768,19 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   const liveRecord = livePresence.find((item: any) => matchesPerson(item, personId))
   const openAttendance = latestOpenAttendance(attendanceRecords, personId)
   const isPersonInside = Boolean(liveRecord || openAttendance)
+  const latestAttendance = attendanceRecords
+    .filter((item: any) => matchesPerson(item, personId))
+    .sort((a: any, b: any) => attendanceTime(b) - attendanceTime(a))[0]
+  const shiftEntryWarning = isPersonInside ? getShiftEntryWarning(data.shifts, personId, branchId) : null
+  const presenceState = String(liveRecord?.status || "").toLowerCase() === "on_break"
+    ? "Molada"
+    : isPersonInside
+      ? shiftEntryWarning
+        ? "İçeride (Vardiya Dışı)"
+        : "İçeride"
+      : latestAttendance && (latestAttendance?.checkOutTime || latestAttendance?.exitTime || String(latestAttendance?.status || "").toLowerCase().includes("outside") || String(latestAttendance?.status || "").includes("Çıkış"))
+        ? "Dışarıda"
+        : settings.state
 
   const handleEnableNotifications = React.useCallback(async () => {
     if (!selectedPerson || !personId) {
@@ -1477,6 +1490,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       kvkk={personKvkk}
       qrPoints={branchQrPoints}
       isPersonInside={isPersonInside}
+      presenceState={presenceState}
       notificationSettings={data.notificationSettings}
       company={data.companySettings}
       personnel={data.personnel}
@@ -1525,6 +1539,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             kvkk={personKvkk}
             qrPoints={branchQrPoints}
             isPersonInside={isPersonInside}
+            presenceState={presenceState}
             notificationSettings={data.notificationSettings}
             company={data.companySettings}
             personnel={data.personnel}
@@ -1599,6 +1614,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
                 kvkk={personKvkk}
                 qrPoints={branchQrPoints}
                 isPersonInside={isPersonInside}
+                presenceState={presenceState}
                 notificationSettings={data.notificationSettings}
                 company={data.companySettings}
                 personnel={data.personnel}
@@ -1815,7 +1831,7 @@ function MobileHeader({ person, palette, title }: any) {
   )
 }
 
-function HomeScreen({ person, branch, department, position, shifts, settings, palette, setScreen, onBreak, isStandaloneApp, canCreateLeaveRequests }: any) {
+function HomeScreen({ person, branch, department, position, shifts, settings, palette, setScreen, onBreak, isStandaloneApp, canCreateLeaveRequests, presenceState }: any) {
   const hour = new Date().getHours()
   const greeting = hour < 11 ? "Günaydın" : hour < 18 ? "İyi günler" : "İyi akşamlar"
   const personId = getId(person)
@@ -1827,7 +1843,7 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
   return (
     <div>
       <MobileHeader person={person} palette={palette} title={greeting} />
-      <StatusHero state={settings.state} palette={palette} qrStatus={settings.qrStatus} gpsStatus={settings.gpsStatus} />
+      <StatusHero state={presenceState || settings.state} palette={palette} qrStatus={settings.qrStatus} gpsStatus={settings.gpsStatus} />
       <MobileCard>
         <div className="flex items-center justify-between"><span className="text-sm font-bold text-white/60">Bugünkü vardiya</span><CalendarClock className="h-4 w-4 text-white/60" /></div>
         <div className="mt-2 text-lg font-extrabold text-white">{hasTodayShift ? shiftDisplayName(todayShift) : "Bugün için atanmış vardiya bulunamadı."}</div>
