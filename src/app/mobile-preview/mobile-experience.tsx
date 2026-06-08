@@ -136,17 +136,38 @@ function qrValueMatchesPoint(qrCode: string, point: any) {
 }
 
 function normalizeQrType(point: any) {
-  return (point?.type || point?.qrType || point?.kind || "Genel").toString().toLocaleLowerCase("tr-TR")
+  return normalizeActionText(point?.type || point?.qrType || point?.kind || "Genel")
 }
 
 function isQrEntryOnly(point: any) {
   const type = normalizeQrType(point)
-  return (type.includes("giriş") || type.includes("giris")) && !(type.includes("çıkış") || type.includes("cikis") || type.includes("genel"))
+  return type.includes("giris") && !type.includes("cikis") && !type.includes("genel")
 }
 
 function isQrExitOnly(point: any) {
   const type = normalizeQrType(point)
-  return (type.includes("çıkış") || type.includes("cikis")) && !(type.includes("giriş") || type.includes("giris") || type.includes("genel"))
+  return type.includes("cikis") && !type.includes("giris") && !type.includes("genel")
+}
+
+function normalizeActionText(value: any) {
+  return String(value || "")
+    .toLocaleLowerCase("tr-TR")
+    .replace(/ı/g, "i")
+    .replace(/ş/g, "s")
+    .replace(/ç/g, "c")
+    .replace(/ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/ö/g, "o")
+}
+
+function isCheckInAction(value: any) {
+  const text = normalizeActionText(value)
+  return text.includes("giris") || text.includes("entry") || text.includes("checkin")
+}
+
+function isCheckOutAction(value: any) {
+  const text = normalizeActionText(value)
+  return text.includes("cikis") || text.includes("exit") || text.includes("checkout")
 }
 
 function vibrate(pattern: number | number[] = 80) {
@@ -1029,7 +1050,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     const now = new Date()
     const nowIso = now.toISOString()
     const time = now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
-    const isEntry = type.toLowerCase().startsWith("giri")
+    const isEntry = isCheckInAction(type) && !isCheckOutAction(type)
     const qrStatus = settings.qrStatus === "Başarılı" || branchQrPoints.some((point: any) => isActive(point?.status)) ? "Başarılı" : "QR bekleniyor"
     const gpsStatus = settings.state === "GPS dışında" ? "GPS dışında" : hasBranchLocation(selectedBranch) ? "Doğrulandı" : "Şube konumu tanımlı değil"
     const method = qrStatus === "QR bekleniyor" ? (gpsStatus.includes("GPS") || gpsStatus.includes("konumu") ? "Mobil" : "GPS") : "QR"
@@ -1038,10 +1059,19 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     const liveRecord = livePresence.find((item: any) => isActiveLivePresence(item, personId))
     const openAttendance = latestOpenAttendance(attendanceRecords, personId)
     const isCurrentlyInside = Boolean(liveRecord)
+    const lastAttendance = attendanceRecords
+      .filter((item: any) => matchesPerson(item, personId))
+      .sort((a: any, b: any) => attendanceTime(b) - attendanceTime(a))[0]
+    const lastAttendanceAction = lastAttendance
+      ? lastAttendance?.checkOutTime || lastAttendance?.exitTime || isCheckOutAction(lastAttendance?.status) || isCheckOutAction(lastAttendance?.["işlemTipi"] || lastAttendance?.islemTipi)
+        ? "checkOut"
+        : "checkIn"
+      : "none"
     console.log("[mobile-qr-attendance]", {
-      hasActivePresence: isCurrentlyInside,
-      action: isEntry ? "checkIn" : "checkOut",
       personnelId: personId,
+      lastAttendanceAction,
+      hasActivePresence: isCurrentlyInside,
+      selectedAction: isEntry ? "checkIn" : "checkOut",
     })
     if (isEntry && isCurrentlyInside) {
       toast({ title: "Personel zaten içeride." })
@@ -1122,16 +1152,9 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     }
     const record = {
       id: `mobile-att-${Date.now()}`,
-      personnelId: targetPersonId,
-      personnelName: personName(targetPerson),
-      personnelEmail: targetPerson?.email || "",
-      branchId: targetPerson?.branchId || "",
-      branchName: targetPerson?.branchName || (selectedBranch && String(targetPerson?.branchId || "") === branchId ? branchName(selectedBranch) : ""),
-      requestedById: personId,
-      requestedByName: personName(selectedPerson),
-      requestedByEmail: selectedPerson?.email || "",
-      requestedByRole: "manager",
+      personnelId: personId,
       personnelName: personName(selectedPerson),
+      personnelEmail: selectedPerson?.email || "",
       branchId,
       branchName: selectedBranch ? branchName(selectedBranch) : "",
       checkInTime: isEntry ? nowIso : undefined,
@@ -1200,16 +1223,27 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     const liveRecords = readArray(LIVE_PRESENCE_KEY)
     const activePresence = liveRecords.find((item: any) => isActiveLivePresence(item, personId))
     const inside = Boolean(activePresence)
-    const openAttendance = readArray(ATTENDANCE_RECORDS_KEY).find((item: any) => matchesPerson(item, personId) && item?.status === "inside" && !item?.checkOutTime)
+    const qrAttendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
+    const openAttendance = latestOpenAttendance(qrAttendanceRecords, personId)
+    const lastAttendance = qrAttendanceRecords
+      .filter((item: any) => matchesPerson(item, personId))
+      .sort((a: any, b: any) => attendanceTime(b) - attendanceTime(a))[0]
+    const lastAttendanceAction = lastAttendance
+      ? lastAttendance?.checkOutTime || lastAttendance?.exitTime || isCheckOutAction(lastAttendance?.status) || isCheckOutAction(lastAttendance?.["işlemTipi"] || lastAttendance?.islemTipi)
+        ? "checkOut"
+        : "checkIn"
+      : "none"
+    const selectedAction = inside ? "checkOut" : "checkIn"
     console.log("[mobile-qr-toggle]", {
-      hasActivePresence: inside,
-      action: inside ? "checkOut" : "checkIn",
       personnelId: personId,
+      lastAttendanceAction,
+      hasActivePresence: inside,
+      selectedAction,
     })
     const showEntrySuccess = () => {
       vibrate(90)
       toast({
-        title: "Giriş Başarılı",
+        title: "Giriş oluşturuldu",
         description: `${personName(selectedPerson)} • ${selectedBranch ? branchName(selectedBranch) : "Şube"} • Giriş saati: ${new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`,
         duration: 3000,
       })
@@ -1217,7 +1251,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     const showExitSuccess = () => {
       vibrate([70, 35, 70])
       toast({
-        title: "Çıkış Başarılı",
+        title: "Çıkış oluşturuldu",
         description: `${personName(selectedPerson)} • ${selectedBranch ? branchName(selectedBranch) : "Şube"} • Çalışma süresi: ${formatWorkDuration(openAttendance)}`,
         duration: 3000,
       })
