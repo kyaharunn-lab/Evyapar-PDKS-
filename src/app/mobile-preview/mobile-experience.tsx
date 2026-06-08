@@ -568,6 +568,10 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     state: "Mesai dışında",
     qrStatus: "QR bekleniyor",
     gpsStatus: "Bekleniyor",
+    isInside: false,
+    currentStatus: "outside",
+    activeAttendanceId: null,
+    activePresenceId: null,
   })
   const [firestoreBootstrapped, setFirestoreBootstrapped] = React.useState(false)
   const sharedSyncTargets = React.useMemo(() => [
@@ -780,15 +784,42 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     .filter((item: any) => matchesPerson(item, personId))
     .sort((a: any, b: any) => attendanceTime(b) - attendanceTime(a))[0]
   const shiftEntryWarning = isPersonInside ? getShiftEntryWarning(data.shifts, personId, branchId) : null
+  const currentStatus = String(settings.currentStatus || "").toLowerCase()
+  const latestAttendanceIsExit = Boolean(latestAttendance && (
+    latestAttendance?.checkOutTime ||
+    latestAttendance?.exitTime ||
+    String(latestAttendance?.status || "").toLowerCase().includes("outside") ||
+    String(latestAttendance?.status || "").includes("Çıkış")
+  ))
+  const latestAttendanceIsEntry = Boolean(latestAttendance && !latestAttendanceIsExit && String(latestAttendance?.status || "").toLowerCase() === "inside")
+  const homeStatusSource = liveRecord
+    ? "livePresence"
+    : currentStatus
+      ? "currentStatus"
+      : latestAttendance
+        ? "attendance"
+        : "settings.state"
   const presenceState = String(liveRecord?.status || "").toLowerCase() === "on_break"
     ? "Molada"
-    : isPersonInside
+    : liveRecord
       ? shiftEntryWarning
         ? "İçeride (Vardiya Dışı)"
         : "İçeride"
-      : latestAttendance && (latestAttendance?.checkOutTime || latestAttendance?.exitTime || String(latestAttendance?.status || "").toLowerCase().includes("outside") || String(latestAttendance?.status || "").includes("Çıkış"))
+      : currentStatus === "inside"
+        ? "İçeride"
+      : currentStatus === "outside"
+        ? "Dışarıda"
+      : latestAttendanceIsEntry
+        ? "İçeride"
+      : latestAttendanceIsExit
         ? "Dışarıda"
         : settings.state
+  console.log("[mobile-home-status]", {
+    livePresenceFound: Boolean(liveRecord),
+    updatedCurrentStatus: settings.currentStatus || null,
+    homeStatusSource,
+    personnelId: personId,
+  })
 
   const handleEnableNotifications = React.useCallback(async () => {
     if (!selectedPerson || !personId) {
@@ -1073,7 +1104,19 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       writeArray(LIVE_PRESENCE_KEY, livePresence.filter((item: any) => !matchesPerson(item, personId)))
       console.log("[mobile-qr-attendance] livePresence updated", { action: "checkOut", personnelId: personId })
       notifyAttendanceSync()
-      updateSettings({ state: "Çıkış yaptı", screen: "Giriş", gpsStatus: effectiveGpsStatus, qrStatus })
+      console.log("[mobile-qr-state]", { qrAction: "checkOut", updatedCurrentStatus: "outside", livePresenceFound: false, personnelId: personId })
+      updateSettings({
+        state: "Dışarıda",
+        screen: "Giriş",
+        gpsStatus: effectiveGpsStatus,
+        qrStatus,
+        isInside: false,
+        currentStatus: "outside",
+        activeAttendanceId: null,
+        activePresenceId: null,
+        lastQrVerifiedAt: method === "QR" ? nowIso : settings.lastQrVerifiedAt,
+        lastGpsVerifiedAt: gpsCheck.ok ? nowIso : settings.lastGpsVerifiedAt,
+      })
       addAudit("Mobil çıkış simülasyonu yapıldı", `${personName(selectedPerson)} için çıkış kaydı kapatıldı.`)
       return
     }
@@ -1124,7 +1167,19 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       ))
     }
     notifyAttendanceSync()
-    updateSettings({ state: type === "Giriş" ? "İçeride" : "Çıkış yaptı", screen: "Giriş", gpsStatus: effectiveGpsStatus, qrStatus })
+    console.log("[mobile-qr-state]", { qrAction: "checkIn", updatedCurrentStatus: "inside", livePresenceFound: true, personnelId: personId })
+    updateSettings({
+      state: "İçeride",
+      screen: "Giriş",
+      gpsStatus: effectiveGpsStatus,
+      qrStatus,
+      isInside: true,
+      currentStatus: "inside",
+      lastQrVerifiedAt: method === "QR" ? nowIso : settings.lastQrVerifiedAt,
+      lastGpsVerifiedAt: gpsCheck.ok ? nowIso : settings.lastGpsVerifiedAt,
+      activeAttendanceId: record.id,
+      activePresenceId: record.id,
+    })
     addAudit(`Mobil ${type.toLowerCase()} simülasyonu yapıldı`, `${personName(selectedPerson)} için ${type.toLowerCase()} kaydı oluşturuldu.`)
   }
 
@@ -1883,7 +1938,7 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
   return (
     <div>
       <MobileHeader person={person} palette={palette} title={greeting} />
-      <StatusHero state={presenceState || settings.state} palette={palette} qrStatus={settings.qrStatus} gpsStatus={settings.gpsStatus} />
+      <StatusHero state={presenceState || settings.state} palette={palette} qrStatus={settings.qrStatus} gpsStatus={settings.gpsStatus} lastQrVerifiedAt={settings.lastQrVerifiedAt} lastGpsVerifiedAt={settings.lastGpsVerifiedAt} />
       <MobileCard>
         <div className="flex items-center justify-between"><span className="text-sm font-bold text-white/60">Bugünkü vardiya</span><CalendarClock className="h-4 w-4 text-white/60" /></div>
         <div className="mt-2 text-lg font-extrabold text-white">{hasTodayShift ? shiftDisplayName(todayShift) : "Bugün için atanmış vardiya bulunamadı."}</div>
@@ -2462,8 +2517,11 @@ function BottomNav({ palette, active, setScreen, isStandaloneApp }: any) {
   )
 }
 
-function StatusHero({ state, palette, qrStatus, gpsStatus }: any) {
+function StatusHero({ state, palette, qrStatus, gpsStatus, lastQrVerifiedAt, lastGpsVerifiedAt }: any) {
   const danger = state === "Geç kaldı" || state === "GPS dışında" || state === "QR bekleniyor"
+  const qrText = lastQrVerifiedAt || qrStatus === "Başarılı" ? "QR doğrulandı" : qrStatus || "Bekleniyor"
+  const gpsText = lastGpsVerifiedAt || gpsStatus === "GPS başarılı" || gpsStatus === "Doğrulandı" ? "GPS doğrulandı" : gpsStatus
+  const showGps = Boolean(gpsText && gpsText !== "Bekleniyor")
   return (
     <div className={cn("mb-4 rounded-[30px] p-5 text-white shadow-xl", danger ? "bg-gradient-to-br from-rose-500 to-orange-700" : palette.button)}>
       <p className="text-xs font-bold uppercase tracking-widest text-white/70">Durum</p>
@@ -2471,7 +2529,7 @@ function StatusHero({ state, palette, qrStatus, gpsStatus }: any) {
         <span className="text-2xl font-black">{state}</span>
         {danger ? <XCircle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
       </div>
-      <p className="mt-2 text-xs font-semibold text-white/75">QR: {qrStatus || "Bekleniyor"} · GPS: {gpsStatus || "Bekleniyor"}</p>
+      <p className="mt-2 text-xs font-semibold text-white/75">QR: {qrText}{showGps ? ` · GPS: ${gpsText}` : ""}</p>
     </div>
   )
 }
