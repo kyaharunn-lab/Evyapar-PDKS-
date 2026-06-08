@@ -799,6 +799,10 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   const livePresence = readArray(LIVE_PRESENCE_KEY)
   const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
   const liveRecord = livePresence.find((item: any) => isActiveLivePresence(item, personId))
+  const activeBreak = readArray("app_break_records").find((item: any) => {
+    const status = String(item?.status || "").toLowerCase()
+    return matchesPerson(item, personId) && (status === "active" || status === "on_break") && !item?.endTime && !item?.breakEnd
+  })
   const openAttendance = latestOpenAttendance(attendanceRecords, personId)
   const isPersonInside = Boolean(liveRecord)
   const latestAttendance = attendanceRecords
@@ -820,7 +824,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       : latestAttendance
         ? "attendance"
         : "settings.state"
-  const presenceState = String(liveRecord?.status || "").toLowerCase() === "on_break"
+  const presenceState = activeBreak || String(liveRecord?.status || "").toLowerCase() === "on_break" || currentStatus === "active" || currentStatus === "on_break"
     ? "Molada"
     : liveRecord
       ? shiftEntryWarning
@@ -1371,72 +1375,66 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     toast({ variant: success ? "default" : "destructive", title: success ? "GPS başarılı" : "GPS başarısız", description: success ? "Personel şube konumu içinde." : "Şube konumu dışında" })
   }
 
-  const handleBreak = () => {
+  const handleBreak = async () => {
     if (!selectedPerson) return
-    const livePresence = readArray("app_live_presence")
-    const liveRecord = livePresence.find((item: any) => matchesPerson(item, personId))
-    const active = readArray("app_break_records").find((item: any) => matchesPerson(item, personId) && item?.status === "on_break" && !item.endTime && !item.breakEnd)
+    const livePresence = readArray(LIVE_PRESENCE_KEY)
+    const liveRecord = livePresence.find((item: any) => isActiveLivePresence(item, personId))
+    const breakRecords = readArray("app_break_records")
+    const active = breakRecords.find((item: any) => {
+      const status = String(item?.status || "").toLowerCase()
+      return matchesPerson(item, personId) && (status === "active" || status === "on_break") && !item?.endTime && !item?.breakEnd
+    })
     if (active) {
       const ended = new Date()
       const breakStart = active.breakStart || active.startTime || active.startedAt || active.createdAt || ended.toISOString()
       const startedAt = new Date(breakStart).getTime()
       const durationMinutes = Math.max(1, Math.round((ended.getTime() - (Number.isNaN(startedAt) ? ended.getTime() : startedAt)) / 60000))
-      writeArray("app_break_records", readArray("app_break_records").map((item: any) =>
-        item.id === active.id ? { ...item, breakEnd: ended.toISOString(), endTime: ended.toISOString(), durationMinutes, status: "completed", updatedAt: ended.toISOString() } : item
-      ))
-      writeArray("app_live_presence", livePresence.map((item: any) => matchesPerson(item, personId) ? { ...item, status: "inside", updatedAt: ended.toISOString() } : item))
+      const updatedBreak = { ...active, breakEnd: ended.toISOString(), endTime: ended.toISOString(), durationMinutes, status: "completed", updatedAt: ended.toISOString() }
+      writeArray("app_break_records", breakRecords.map((item: any) => item.id === active.id ? updatedBreak : item))
+      writeArray(LIVE_PRESENCE_KEY, livePresence.map((item: any) => matchesPerson(item, personId) ? { ...item, status: "inside", currentStatus: "inside", updatedAt: ended.toISOString() } : item))
+      await writeSharedRecord(db, "breaks", updatedBreak)
       notifyAttendanceSync()
       window.dispatchEvent(new Event("app-break-records-updated"))
-      updateSettings({ state: "İçeride", screen: "Mola" })
+      updateSettings({ state: "İçeride", currentStatus: "inside", isInside: true, screen: "Mola" })
       addAudit("Mobil mola bitirildi", `${personName(selectedPerson)} mola kaydını bitirdi.`, "Mobil")
+      toast({ title: "Molayı Bitir", description: `${durationMinutes} dk mola tamamlandı.` })
       load()
       return
     }
-    const isInsideForBreak = liveRecord?.status === "inside"
+    const isInsideForBreak = Boolean(liveRecord) && String(liveRecord?.status || "").toLowerCase() !== "on_break"
     if (!isInsideForBreak) {
-      toast({ variant: "destructive", title: "Mola başlatılamadı", description: "Personel içeride değil." })
+      toast({ variant: "destructive", title: "Mola başlatılamadı", description: "Mola başlatmak için önce giriş yapmalısınız." })
       return
     }
     const now = new Date()
+    const nowIso = now.toISOString()
     const record = {
       id: `mobile-break-${Date.now()}`,
-      personId: targetPersonId,
-      personnelId: targetPersonId,
-      personelId: targetPersonId,
-      employeeId: targetPersonId,
-      staffId: targetPersonId,
-      userId: targetPersonId,
-      personName: personName(targetPerson),
-      personnelName: personName(targetPerson),
-      employeeName: personName(targetPerson),
-      staffName: personName(targetPerson),
-      personelName: personName(targetPerson),
-      fullName: personName(targetPerson),
-      personnelEmail: targetPerson?.email || "",
-      employeeEmail: targetPerson?.email || "",
-      branchId: targetPerson?.branchId || "",
-      branchName: targetPerson?.branchName || (selectedBranch && String(targetPerson?.branchId || "") === branchId ? branchName(selectedBranch) : ""),
-      requestedById: personId,
-      requestedByName: personName(selectedPerson),
-      requestedByEmail: selectedPerson?.email || "",
-      requestedByRole: "manager",
+      personId,
+      personnelId: personId,
+      personelId: personId,
       personnelName: personName(selectedPerson),
+      personName: personName(selectedPerson),
       branchId,
       branchName: selectedBranch ? branchName(selectedBranch) : "",
-      breakStart: now.toISOString(),
+      startTime: nowIso,
+      endTime: null,
+      breakStart: nowIso,
       breakType: "Standart Mola",
-      status: "on_break",
-      startTime: now.toISOString(),
-      startedAt: now.toISOString(),
-      date: now.toISOString().slice(0, 10),
-      source: "mobile-preview",
+      status: "active",
+      startedAt: nowIso,
+      createdAt: nowIso,
+      date: nowIso.slice(0, 10),
+      source: isStandaloneApp ? "mobile-app" : "mobile-preview",
     }
-    writeArray("app_break_records", [record, ...readArray("app_break_records")])
-    writeArray("app_live_presence", livePresence.map((item: any) => matchesPerson(item, personId) ? { ...item, status: "on_break", breakStart: record.breakStart, updatedAt: record.breakStart } : item))
+    writeArray("app_break_records", [record, ...breakRecords])
+    writeArray(LIVE_PRESENCE_KEY, livePresence.map((item: any) => matchesPerson(item, personId) ? { ...item, status: "on_break", currentStatus: "on_break", breakStart: record.breakStart, updatedAt: record.breakStart } : item))
+    await writeSharedRecord(db, "breaks", record)
     notifyAttendanceSync()
     window.dispatchEvent(new Event("app-break-records-updated"))
-    updateSettings({ state: "Molada", screen: "Mola" })
+    updateSettings({ state: "Molada", currentStatus: "on_break", isInside: true, screen: "Mola" })
     addAudit("Mobil mola başlatıldı", `${personName(selectedPerson)} için mola kaydı oluşturuldu.`)
+    toast({ title: "Mola Başlatıldı", description: "Aktif mola kaydı oluşturuldu." })
     load()
   }
 
@@ -1986,7 +1984,7 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
       <div className="mt-4 grid grid-cols-2 gap-3">
         <QuickAction actionKey="qr" icon={QrCode} label={isStandaloneApp ? "QR ile Giriş / Çıkış" : "QR ile giriş"} description={isStandaloneApp ? "Mağaza QR kodunu okutarak giriş veya çıkış yap" : undefined} palette={palette} onClick={() => setScreen("QR")} className={isStandaloneApp ? "col-span-2" : undefined} />
         {!isStandaloneApp && <QuickAction actionKey="gps" icon={LocateFixed} label="GPS ile giriş" palette={palette} onClick={() => setScreen("GPS")} />}
-        <QuickAction actionKey="break" icon={Clock3} label={settings.state === "Molada" ? "Mola bitir" : "Mola başlat"} palette={palette} onClick={onBreak} />
+        <QuickAction actionKey="break" icon={Clock3} label={presenceState === "Molada" ? "Molayı Bitir" : "Mola Başlat"} palette={palette} onClick={onBreak} />
         {canCreateLeaveRequests && <QuickAction actionKey="leave" icon={CalendarClock} label="İzin talep et" palette={palette} onClick={() => setScreen("İzin")} />}
         <QuickAction actionKey="shifts" icon={IdCard} label="Vardiyalarım" palette={palette} onClick={() => setScreen("Vardiya")} />
         <QuickAction actionKey="notifications" icon={Bell} label="Bildirimler" palette={palette} onClick={() => setScreen("Bildirim")} />
@@ -2355,12 +2353,15 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, p
 }
 
 function BreakScreen({ breaks, settings, palette, onBreak }: any) {
-  const active = breaks.find((item: any) => !item.endTime)
-  const items = breaks.slice(0, 6).map((item: any) => ({ title: item.endTime ? "Mola tamamlandı" : "Aktif mola", detail: `${item.date || ""} · ${item.startTime || "-"} - ${item.endTime || "Devam ediyor"}`, badge: item.durationMinutes ? `${item.durationMinutes} dk` : settings.state }))
+  const active = breaks.find((item: any) => {
+    const status = String(item?.status || "").toLowerCase()
+    return (status === "active" || status === "on_break") && !item?.endTime && !item?.breakEnd
+  })
+  const items = breaks.slice(0, 6).map((item: any) => ({ title: item.endTime || item.breakEnd ? "Mola tamamlandı" : "Aktif mola", detail: `${item.date || ""} · ${item.startTime || item.breakStart || "-"} - ${item.endTime || item.breakEnd || "Devam ediyor"}`, badge: item.durationMinutes ? `${item.durationMinutes} dk` : settings.state }))
   return (
     <div>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">Mola</h3><Clock3 className="h-5 w-5 text-white/60" /></div>
-      <Button data-mobile-action="break-toggle" onClick={onBreak} className={cn("mb-4 h-12 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{active ? "Mola bitir" : "Mola başlat"}</Button>
+      <Button data-mobile-action="break-toggle" onClick={onBreak} className={cn("mb-4 h-12 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{active ? "Molayı Bitir" : "Mola Başlat"}</Button>
       <ListItems items={items} empty="Henüz mola kaydı bulunamadı." />
     </div>
   )
