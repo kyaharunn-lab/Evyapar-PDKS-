@@ -1984,7 +1984,7 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
       <div className="mt-4 grid grid-cols-2 gap-3">
         <QuickAction actionKey="qr" icon={QrCode} label={isStandaloneApp ? "QR ile Giriş / Çıkış" : "QR ile giriş"} description={isStandaloneApp ? "Mağaza QR kodunu okutarak giriş veya çıkış yap" : undefined} palette={palette} onClick={() => setScreen("QR")} className={isStandaloneApp ? "col-span-2" : undefined} />
         {!isStandaloneApp && <QuickAction actionKey="gps" icon={LocateFixed} label="GPS ile giriş" palette={palette} onClick={() => setScreen("GPS")} />}
-        <QuickAction actionKey="break" icon={Clock3} label={presenceState === "Molada" ? "Molayı Bitir" : "Mola Başlat"} palette={palette} onClick={onBreak} />
+        <QuickAction actionKey="break" icon={Clock3} label={presenceState === "Molada" ? "Moladasınız" : "Mola"} palette={palette} onClick={() => setScreen("Mola")} />
         {canCreateLeaveRequests && <QuickAction actionKey="leave" icon={CalendarClock} label="İzin talep et" palette={palette} onClick={() => setScreen("İzin")} />}
         <QuickAction actionKey="shifts" icon={IdCard} label="Vardiyalarım" palette={palette} onClick={() => setScreen("Vardiya")} />
         <QuickAction actionKey="notifications" icon={Bell} label="Bildirimler" palette={palette} onClick={() => setScreen("Bildirim")} />
@@ -2352,17 +2352,42 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, p
   )
 }
 
-function BreakScreen({ breaks, settings, palette, onBreak }: any) {
+function BreakScreen({ breaks, settings, palette, onBreak, isPersonInside }: any) {
   const active = breaks.find((item: any) => {
     const status = String(item?.status || "").toLowerCase()
     return (status === "active" || status === "on_break") && !item?.endTime && !item?.breakEnd
   })
-  const items = breaks.slice(0, 6).map((item: any) => ({ title: item.endTime || item.breakEnd ? "Mola tamamlandı" : "Aktif mola", detail: `${item.date || ""} · ${item.startTime || item.breakStart || "-"} - ${item.endTime || item.breakEnd || "Devam ediyor"}`, badge: item.durationMinutes ? `${item.durationMinutes} dk` : settings.state }))
+  const today = todayDateKeyTR()
+  const todayBreaks = breaks.filter((item: any) => String(item?.date || item?.breakStart || item?.startTime || "").slice(0, 10) === today)
+  const totalTodayMinutes = todayBreaks.reduce((total: number, item: any) => {
+    if (Number(item?.durationMinutes)) return total + Number(item.durationMinutes)
+    const start = new Date(item?.breakStart || item?.startTime || item?.createdAt || "").getTime()
+    const endValue = item?.breakEnd || item?.endTime
+    if (!endValue) return total
+    const end = new Date(endValue).getTime()
+    if (Number.isNaN(start) || Number.isNaN(end)) return total
+    return total + Math.max(1, Math.round((end - start) / 60000))
+  }, 0)
+  const items = todayBreaks.slice(0, 6).map((item: any) => ({ title: item.endTime || item.breakEnd ? "Mola tamamlandı" : "Aktif mola", detail: `${item.date || ""} · ${formatTimeTR(item.startTime || item.breakStart)} - ${item.endTime || item.breakEnd ? formatTimeTR(item.endTime || item.breakEnd) : "Devam ediyor"}`, badge: item.durationMinutes ? `${item.durationMinutes} dk` : settings.state }))
   return (
     <div>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">Mola</h3><Clock3 className="h-5 w-5 text-white/60" /></div>
-      <Button data-mobile-action="break-toggle" onClick={onBreak} className={cn("mb-4 h-12 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{active ? "Molayı Bitir" : "Mola Başlat"}</Button>
-      <ListItems items={items} empty="Henüz mola kaydı bulunamadı." />
+      <MobileCard className="mb-4 space-y-3">
+        <Info label="Mevcut durum" value={active ? "Molada" : "Molada değil"} />
+        <Info label="Bugünkü toplam mola" value={`${totalTodayMinutes} dk`} />
+        <Info label="Aktif mola başlangıcı" value={active ? formatTimeTR(active.breakStart || active.startTime) : "-"} />
+        {!isPersonInside && <p className="rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">Mola başlatmak için önce giriş yapmalısınız.</p>}
+      </MobileCard>
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        {!active && (
+          <Button data-mobile-action="break-start" disabled={!isPersonInside} onClick={onBreak} className={cn("h-12 rounded-2xl text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-45", palette.button)}>Mola Başlat</Button>
+        )}
+        {active && (
+          <Button data-mobile-action="break-end" onClick={onBreak} className={cn("col-span-2 h-12 rounded-2xl text-sm font-extrabold text-white", palette.button)}>Molayı Bitir</Button>
+        )}
+      </div>
+      <div className="mb-3 text-xs font-black uppercase tracking-widest text-white/45">Bugünkü mola geçmişi</div>
+      <ListItems items={items} empty="Bugün mola kaydı bulunamadı." />
     </div>
   )
 }

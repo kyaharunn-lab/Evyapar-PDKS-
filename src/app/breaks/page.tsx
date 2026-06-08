@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { collection, onSnapshot } from "firebase/firestore"
 import { 
   Coffee, 
   Search, 
@@ -70,6 +71,8 @@ import { translations } from "@/lib/translations"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { TIME_INPUT_PROPS, formatTimeTR, getCurrentTimeInputValueTR, normalizeTimeInputTR } from "@/lib/date-time"
+import { useFirestore } from "@/firebase/provider"
+import { deleteSharedRecord, writeSharedRecord } from "@/lib/shared-data-sync"
 
 const b = translations.breaks;
 const t = translations.common;
@@ -100,8 +103,14 @@ const getBranchName = (branch: any) => {
   return (branch?.branchName || branch?.name || branch?.branchCode || "Şube").toString();
 };
 
+const isActiveBreakStatus = (status: any) => {
+  const value = String(status || "").toLowerCase();
+  return value === "active" || value === "on_break";
+};
+
 export default function BreakLogsPage() {
   const { toast } = useToast()
+  const db = useFirestore()
   const [searchTerm, setSearchTerm] = React.useState("")
   const [selectedLog, setSelectedLog] = React.useState<any>(null)
   const [isDetailOpen, setIsDetailOpen] = React.useState(false)
@@ -139,6 +148,25 @@ export default function BreakLogsPage() {
       window.removeEventListener("storage", load)
     }
   }, [])
+
+  React.useEffect(() => {
+    if (!db) return
+    try {
+      return onSnapshot(collection(db, "breaks"), (snapshot) => {
+        const docs = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))
+        setBreakLogs(docs)
+        try {
+          localStorage.setItem(BREAKS_STORAGE_KEY, JSON.stringify(docs))
+        } catch {
+          // Firestore remains the visible source when cache write fails
+        }
+      }, (error) => {
+        console.warn("Firestore breaks listen failed; localStorage fallback active.", error)
+      })
+    } catch (error) {
+      console.warn("Firestore breaks listener unavailable; localStorage fallback active.", error)
+    }
+  }, [db])
 
   const persistBreaks = React.useCallback((next: any[]) => {
     try {
@@ -193,15 +221,23 @@ export default function BreakLogsPage() {
 
   // KPI Calculations
   const stats = React.useMemo(() => {
-    const active = mergedLogs.filter(log => log.status === "Active" || log.status === "on_break").length;
-    const totalToday = mergedLogs.length;
+    const today = new Date().toISOString().slice(0, 10);
+    const todayLogs = mergedLogs.filter((log) => String(log.date || log.breakStart || log.startTime || "").slice(0, 10) === today);
+    const active = mergedLogs.filter(log => isActiveBreakStatus(log.status) && !log.endTime && !log.breakEnd).length;
+    const totalToday = todayLogs.length;
     const exceeded = mergedLogs.filter(log => log.exceededLimit).length;
-    const totalDuration = mergedLogs.reduce((total, log) => {
-      if (log.status === "Active" || log.status === "on_break") return total;
-      return total + Number(log.duration || 0);
+    const totalDuration = todayLogs.reduce((total, log) => {
+      if (isActiveBreakStatus(log.status) && !log.endTime && !log.breakEnd) return total;
+      return total + Number(log.durationMinutes || log.duration || 0);
     }, 0);
+    const personnelTotals = todayLogs.reduce((acc: Record<string, number>, log) => {
+      const key = String(log.personnelId || log.personelId || log.personId || "");
+      if (!key) return acc;
+      acc[key] = (acc[key] || 0) + Number(log.durationMinutes || log.duration || 0);
+      return acc;
+    }, {});
     
-    return { active, totalToday, exceeded, totalDuration };
+    return { active, totalToday, exceeded, totalDuration, personnelTotals };
   }, [mergedLogs]);
 
   const formatElapsedTime = (startTime: any) => {
@@ -251,9 +287,10 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
       branchId: formData.branchId || selectedPerson?.branchId || "",
       breakType: formData.breakType,
       startTime: start.toISOString(),
+      endTime: null,
       estimatedDuration: formData.estimatedDuration,
       notes: formData.description,
-      status: "Active",
+      status: "active",
       createdAt,
       updatedAt: createdAt,
     };
@@ -263,6 +300,7 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
       persistBreaks(next);
       return next;
     });
+    void writeSharedRecord(db, "breaks", newBreak);
 
     setIsManualOpen(false);
     resetForm();
@@ -283,7 +321,7 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
         const startedAt = log.breakStart || log.startTime || log.startedAt || endedAt;
         const startedMs = new Date(startedAt).getTime();
         const durationMinutes = Number.isNaN(startedMs) ? 1 : Math.max(1, Math.ceil((endedMs - startedMs) / 60000));
-        return {
+        const updatedLog = {
           ...log,
           breakEnd: endedAt,
           endTime: endedAt,
@@ -292,6 +330,8 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
           status: "completed",
           updatedAt: Date.now(),
         };
+        void writeSharedRecord(db, "breaks", updatedLog);
+        return updatedLog;
       });
       persistBreaks(next);
       return next;
@@ -317,6 +357,7 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
       persistBreaks(next);
       return next;
     });
+    void deleteSharedRecord(db, "breaks", logId);
     toast({ title: "Başarılı", description: "Mola kaydı silindi." });
   };
 
@@ -359,6 +400,22 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
         <KPICard title="Bugünkü Toplam Süre" value={`${stats.totalDuration} dk`} icon={Clock} color="text-primary" bg="bg-primary/5" />
       </div>
 
+      <Card className="premium-card">
+        <CardContent className="flex flex-wrap items-center gap-2 p-4">
+          <span className="text-xs font-black uppercase tracking-widest text-slate-400">Personel bazlı bugün</span>
+          {Object.keys(stats.personnelTotals).length === 0 ? (
+            <span className="text-sm font-semibold text-slate-500">Bugün tamamlanan mola yok.</span>
+          ) : Object.entries(stats.personnelTotals).map(([personId, minutes]) => {
+            const person = personnel.find((item) => (item.id || item.personnelId || item.personnelCode || "").toString() === personId)
+            return (
+              <Badge key={personId} variant="outline" className="rounded-xl border-slate-200 bg-white px-3 py-1 font-bold text-primary">
+                {getPersonnelName(person)}: {Number(minutes)} dk
+              </Badge>
+            )
+          })}
+        </CardContent>
+      </Card>
+
       <Card className="premium-card overflow-hidden">
         <CardHeader className="pb-6 border-b bg-slate-50/30">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
@@ -399,9 +456,11 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
                   <TableHead className="pl-6">{t.personnel}</TableHead>
                   <TableHead>Şube</TableHead>
                   <TableHead>{b.breakType}</TableHead>
-                  <TableHead>{b.startTime}</TableHead>
-                  <TableHead>{b.elapsed}</TableHead>
+                  <TableHead>Başlangıç</TableHead>
+                  <TableHead>Bitiş</TableHead>
+                  <TableHead>Süre</TableHead>
                   <TableHead>{t.status}</TableHead>
+                  <TableHead>Tarih</TableHead>
                   <TableHead className="text-right pr-6">{t.actions}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -437,7 +496,10 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {log.status === "Active" || log.status === "on_break" ? (
+                      <span className="text-sm font-medium text-slate-600">{log.endTime || log.breakEnd ? formatTimeTR(log.endTime || log.breakEnd) : "Devam ediyor"}</span>
+                    </TableCell>
+                    <TableCell>
+                      {isActiveBreakStatus(log.status) && !log.endTime && !log.breakEnd ? (
                         <span className={cn(
                           "text-sm font-bold tabular-nums",
                           log.exceededLimit ? "text-accent animate-pulse" : "text-primary"
@@ -451,6 +513,9 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
                     <TableCell>
                       <BreakStatusBadge status={log.status} exceeded={log.exceededLimit} />
                     </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-semibold text-slate-500">{String(log.date || log.breakStart || log.startTime || "").slice(0, 10) || "-"}</span>
+                    </TableCell>
                     <TableCell className="text-right pr-6">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -463,7 +528,7 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
                             <Eye className="mr-3 h-4 w-4 text-slate-400" />
                             Detayları Gör
                           </DropdownMenuItem>
-                          {(log.status === "Active" || log.status === "on_break") && (
+                          {isActiveBreakStatus(log.status) && !log.endTime && !log.breakEnd && (
                             <DropdownMenuItem className="text-accent" onClick={() => handleEndBreak(log.id)}>
                               <LogOut className="mr-3 h-4 w-4" />
                               {b.manualEnd}
@@ -644,7 +709,7 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
                   <DetailItem label="Mola Türü" value={getBreakTypeLabel(selectedLog.breakType)} />
                   <DetailItem label="Başlangıç" value={formatTimeTR(selectedLog.startTime, { seconds: true })} />
                   <DetailItem label="Bitiş" value={selectedLog.endTime ? formatTimeTR(selectedLog.endTime, { seconds: true }) : "Devam Ediyor..."} />
-                  <DetailItem label="Toplam Süre" value={selectedLog.status === "Active" ? formatElapsedTime(selectedLog.startTime) : `${selectedLog.duration || 0} dk`} />
+                  <DetailItem label="Toplam Süre" value={isActiveBreakStatus(selectedLog.status) && !selectedLog.endTime && !selectedLog.breakEnd ? formatElapsedTime(selectedLog.breakStart || selectedLog.startTime) : `${selectedLog.durationMinutes || selectedLog.duration || 0} dk`} />
                   <DetailItem label="Şube" value={selectedLog.branch ? getBranchName(selectedLog.branch) : "-"} />
                   <DetailItem label="Departman" value={selectedLog.person?.departmentId || "-"} />
                 </div>
@@ -688,6 +753,7 @@ function BreakStatusBadge({ status, exceeded }: { status: string, exceeded?: boo
   
   switch (status) {
     case "Active":
+    case "active":
     case "on_break":
       return <Badge className="bg-yellow-50 text-yellow-700 border-yellow-100 font-bold px-3 py-1 rounded-lg">{b.status.active}</Badge>;
     case "Completed":
