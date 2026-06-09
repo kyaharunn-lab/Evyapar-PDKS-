@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { collection, onSnapshot } from "firebase/firestore"
 import {
   Activity,
   BadgeCheck,
@@ -74,6 +75,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { useFirestore } from "@/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { DATE_INPUT_PROPS, formatDateTimeTR } from "@/lib/date-time"
 import { cn } from "@/lib/utils"
@@ -155,6 +157,51 @@ const getBranchName = (branch: any) => (branch?.branchName || branch?.name || br
 const getDepartmentId = (department: any) => (department?.id || department?.departmentCode || department?.code || "").toString()
 const getDepartmentName = (department: any) => (department?.departmentName || department?.name || department?.departmentCode || "Departman").toString()
 
+const boolField = (...values: any[]) => values.some((value) => value === true || value === "true" || value === "granted" || value === "Granted" || value === "approved" || value === "Approved")
+
+const timestampValue = (value: any) => {
+  if (!value) return ""
+  if (typeof value?.toDate === "function") return value.toDate().toISOString()
+  return value
+}
+
+const consentFromPersonnel = (person: any, legacyConsent: any = {}) => {
+  const kvkkAccepted = person?.kvkkAccepted === true
+  const locationPermissionGranted = boolField(
+    person?.locationPermissionGranted,
+    person?.gpsPermissionGranted,
+    person?.gpsConsent,
+    person?.locationConsent,
+    person?.locationPermission,
+    person?.permissions?.locationPermissionGranted,
+    legacyConsent?.gpsConsent
+  )
+  return {
+    ...legacyConsent,
+    status: kvkkAccepted ? "Approved" : "Pending",
+    signedAt: kvkkAccepted ? timestampValue(person?.kvkkAcceptedAt || legacyConsent?.signedAt) : "",
+    updatedAt: timestampValue(person?.kvkkAcceptedAt || person?.updatedAt || legacyConsent?.updatedAt),
+    gpsConsent: locationPermissionGranted,
+    cameraConsent: boolField(person?.cameraConsent, person?.cameraPermissionGranted, legacyConsent?.cameraConsent),
+    faceConsent: boolField(person?.faceConsent, person?.facePermissionGranted, legacyConsent?.faceConsent),
+    deviceTrackingConsent: boolField(person?.deviceTrackingConsent, person?.devicePermissionGranted, legacyConsent?.deviceTrackingConsent),
+    deviceId: person?.deviceId || legacyConsent?.deviceId || "",
+    ipAddress: person?.lastIpAddress || legacyConsent?.ipAddress || "",
+    digitalSignature: legacyConsent?.digitalSignature || (kvkkAccepted ? person?.kvkkVersion || "v1" : ""),
+  }
+}
+
+const normalizeAuditLog = (log: any) => ({
+  id: log?.id || `audit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  type: log?.type || log?.action || "audit",
+  actor: log?.actor || log?.actorName || log?.actorId || "-",
+  target: log?.target || log?.targetPersonnelName || log?.targetPersonnelId || log?.fileName || "-",
+  detail: log?.detail || [log?.fileCategory, log?.fileName].filter(Boolean).join(" - ") || log?.source || "-",
+  ipAddress: log?.ipAddress || "-",
+  deviceId: log?.deviceId || "-",
+  createdAt: timestampValue(log?.createdAt || log?.timestamp),
+})
+
 const getStatusLabel = (status: string) => {
   if (status === "Approved") return "Onaylandı"
   if (status === "Rejected") return "Reddedildi"
@@ -175,6 +222,7 @@ const createAudit = (type: string, actor: string, target: string, detail: string
 
 export default function KvkkPage() {
   const { toast } = useToast()
+  const db = useFirestore()
   const [personnel, setPersonnel] = React.useState<any[]>([])
   const [branches, setBranches] = React.useState<any[]>([])
   const [departments, setDepartments] = React.useState<any[]>([])
@@ -217,6 +265,31 @@ export default function KvkkPage() {
     loadData()
   }, [loadData])
 
+  React.useEffect(() => {
+    if (!db) return
+    const unsubscribers = [
+      onSnapshot(collection(db, "personnel"), (snapshot) => {
+        const docs = snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).filter((person: any) => !person?.isDeleted)
+        setPersonnel(docs)
+        try {
+          localStorage.setItem(PERSONNEL_KEY, JSON.stringify(docs))
+        } catch {
+          // Firestore remains the visible source
+        }
+      }, (error) => {
+        console.warn("Firestore personnel listener failed for KVKK page; localStorage fallback active.", error)
+      }),
+      onSnapshot(collection(db, "auditLogs"), (snapshot) => {
+        const logs = snapshot.docs.map((item) => normalizeAuditLog({ ...item.data(), id: item.id }))
+          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+        setKvkkState((current: any) => ({ ...current, auditLogs: logs }))
+      }, (error) => {
+        console.warn("Firestore auditLogs listener failed for KVKK page.", error)
+      }),
+    ]
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe())
+  }, [db])
+
   const persistKvkk = React.useCallback((next: any) => {
     localStorage.setItem(KVKK_KEY, JSON.stringify(next))
     setKvkkState(next)
@@ -230,10 +303,10 @@ export default function KvkkPage() {
   const consentRows = React.useMemo(() => {
     return personnel.map((person) => {
       const personnelId = getPersonId(person)
-      const consent = (consentByPerson.get(personnelId) as any) || {}
+      const consent = consentFromPersonnel(person, (consentByPerson.get(personnelId) as any) || {})
       const branch = branchById.get(person?.branchId || "")
       const department = departmentById.get(person?.departmentId || "")
-      const status = consent.status || "Pending"
+      const status = consent.status
       return {
         person,
         personnelId,
@@ -266,11 +339,10 @@ export default function KvkkPage() {
   }, [kvkkState.documents])
 
   const stats = React.useMemo(() => {
-    const approved = consentRows.filter((row) => row.status === "Approved")
     return {
       total: personnel.length,
-      approved: approved.length,
-      pending: consentRows.filter((row) => row.status === "Pending").length,
+      approved: personnel.filter((person) => person?.kvkkAccepted === true).length,
+      pending: personnel.filter((person) => person?.kvkkAccepted !== true).length,
       gps: consentRows.filter((row) => row.consent?.gpsConsent).length,
       camera: consentRows.filter((row) => row.consent?.cameraConsent || row.consent?.faceConsent).length,
       device: consentRows.filter((row) => row.consent?.deviceTrackingConsent).length,
@@ -837,9 +909,11 @@ function AuditLogs({ logs }: { logs: any[] }) {
   const [userFilter, setUserFilter] = React.useState("")
   const [typeFilter, setTypeFilter] = React.useState(ALL)
   const [branchFilter, setBranchFilter] = React.useState("")
-  const types = Array.from(new Set(logs.map((log) => log.type).filter(Boolean)))
-  const filteredLogs = logs.filter((log) => {
-    const logDate = log.createdAt ? new Date(log.createdAt).toISOString().slice(0, 10) : ""
+  const normalizedLogs = React.useMemo(() => logs.map((log) => normalizeAuditLog(log)), [logs])
+  const types = Array.from(new Set(normalizedLogs.map((log) => log.type).filter(Boolean)))
+  const filteredLogs = normalizedLogs.filter((log) => {
+    const parsedDate = new Date(log.createdAt || 0)
+    const logDate = log.createdAt && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString().slice(0, 10) : ""
     const userMatch = !userFilter || `${log.actor} ${log.target}`.toLowerCase().includes(userFilter.toLowerCase())
     const dateMatch = !dateFilter || logDate === dateFilter
     const typeMatch = typeFilter === ALL || log.type === typeFilter
