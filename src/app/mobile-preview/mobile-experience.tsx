@@ -953,6 +953,28 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     toast({ title: "KVKK onayı alındı", description: "Aydınlatma metni kabul edildi." })
   }, [db, personId, selectedPerson, toast])
 
+  const handleDigitalArchiveAudit = React.useCallback(async (action: "file_view" | "file_download", file: any) => {
+    if (!selectedPerson || !personId || !file) return
+    try {
+      const ok = await writeSharedRecord(db, "auditLogs", {
+        id: `digital-archive-audit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        action,
+        actorId: personId,
+        actorName: personName(selectedPerson),
+        targetPersonnelId: personId,
+        targetPersonnelName: personName(selectedPerson),
+        fileName: file?.fileName || file?.title || file?.name || "Dosya",
+        fileCategory: file?.category || "Diğer",
+        fileUrl: file?.fileUrl || "",
+        createdAt: new Date().toISOString(),
+        source: "digitalArchive",
+      })
+      if (!ok) console.warn("digital archive audit log write failed", { action, file })
+    } catch (error) {
+      console.warn("digital archive audit log write failed", error)
+    }
+  }, [db, personId, selectedPerson])
+
   const updateSettings = (patch: any) => {
     if (patch?.screen === "QR" && patch?.qrStatus === "Başarılı" && selectedPerson && !patch?.attendanceHandled) {
       const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
@@ -1654,6 +1676,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       onLeaveCreate={createLeave}
       onEnableNotifications={handleEnableNotifications}
       onAcceptKvkk={handleAcceptKvkk}
+      onArchiveAudit={handleDigitalArchiveAudit}
     />
   )
 
@@ -1704,6 +1727,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             onLeaveCreate={createLeave}
             onEnableNotifications={handleEnableNotifications}
             onAcceptKvkk={handleAcceptKvkk}
+            onArchiveAudit={handleDigitalArchiveAudit}
           />
         )}
       </div>
@@ -1779,6 +1803,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
                 onBreak={handleBreak}
                 onLeaveCreate={createLeave}
                 onAcceptKvkk={handleAcceptKvkk}
+                onArchiveAudit={handleDigitalArchiveAudit}
               />
             )}
           </CardContent>
@@ -2482,7 +2507,7 @@ function NotificationScreen({ leaves, shifts, settings, notificationSettings, pa
   )
 }
 
-function ProfileScreen({ person, branch, department, position, device, kvkk, palette, leaves = [], shifts = [], setScreen, onEnableNotifications }: any) {
+function ProfileScreen({ person, branch, department, position, device, kvkk, palette, leaves = [], shifts = [], setScreen, onEnableNotifications, onArchiveAudit }: any) {
   const maskedTckn = person?.tckn ? `${String(person.tckn).slice(0, 2)}*******${String(person.tckn).slice(-2)}` : "Tanımlı değil"
   const archiveItems = Array.isArray(person?.digitalArchive) ? person.digitalArchive : []
   const leaveItems = Array.isArray(leaves) ? leaves : []
@@ -2569,8 +2594,8 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
             <div className="font-extrabold text-white">{item?.title || item?.name || item?.fileName || "Dosya"}</div>
             <div className="mt-1 text-xs font-semibold text-white/50">{item?.category || "Diğer"}</div>
             <div className="mt-3 flex gap-2">
-              {item?.fileUrl && <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15"><a href={item.fileUrl} target="_blank" rel="noopener noreferrer">Görüntüle</a></Button>}
-              {item?.fileUrl && <Button size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15" onClick={() => downloadArchiveFile(item.fileUrl, item?.fileName || item?.title || "dosya")}>İndir</Button>}
+              {item?.fileUrl && <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15"><a href={item.fileUrl} target="_blank" rel="noopener noreferrer" onClick={() => onArchiveAudit?.("file_view", item)}>Görüntüle</a></Button>}
+              {item?.fileUrl && <Button size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15" onClick={() => { onArchiveAudit?.("file_download", item); void downloadArchiveFile(item.fileUrl, item?.fileName || item?.title || "dosya") }}>İndir</Button>}
             </div>
           </div>
         )) : <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-center text-sm font-semibold text-white/55">Henüz dosya yok</div>}

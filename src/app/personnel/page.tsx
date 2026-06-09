@@ -143,6 +143,21 @@ function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
+async function writeDigitalArchiveAudit(db: any, payload: Record<string, any>) {
+  try {
+    const createdAt = new Date().toISOString()
+    const ok = await writeSharedRecord(db, "auditLogs", {
+      id: `digital-archive-audit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      source: "digitalArchive",
+      createdAt,
+      ...payload,
+    })
+    if (!ok) console.warn("digital archive audit log write failed", payload)
+  } catch (error) {
+    console.warn("digital archive audit log write failed", error)
+  }
+}
+
 async function syncAllPersonnelToFirestore(db: any, personnel: any[]) {
   console.log("personnel sync start", personnel.length)
   try {
@@ -507,6 +522,16 @@ export default function PersonnelPage() {
       }
       upsertEmployee(updated)
       setSelectedEmployee(updated)
+      void writeDigitalArchiveAudit(db, {
+        action: "file_upload",
+        actorId: "admin",
+        actorName: "Admin Panel",
+        targetPersonnelId: selectedEmployee.id || selectedEmployee.personnelId || "",
+        targetPersonnelName: selectedEmployee.fullName || [selectedEmployee.name, selectedEmployee.surname].filter(Boolean).join(" ") || "Personel",
+        fileName: archiveRecord.fileName,
+        fileCategory: archiveRecord.category,
+        fileUrl: archiveRecord.fileUrl,
+      })
       setDocumentForm({ name: "", category: "Diğer" })
       setDocumentFile(null)
       setSelectedArchiveCategory(archiveRecord.category)
@@ -520,12 +545,13 @@ export default function PersonnelPage() {
     } finally {
       setDocumentUploading(false)
     }
-  }, [documentFile, documentForm.category, documentForm.name, selectedEmployee, toast, upsertEmployee])
+  }, [db, documentFile, documentForm.category, documentForm.name, selectedEmployee, toast, upsertEmployee])
 
   const handleDeleteArchiveItem = React.useCallback((archiveId: string) => {
     if (!selectedEmployee) return
     if (!window.confirm("Bu arşiv dosyasını silmek istediğinize emin misiniz?")) return
     const currentArchive = Array.isArray(selectedEmployee.digitalArchive) ? selectedEmployee.digitalArchive : []
+    const deletedItem = normalizeArchiveRecord(currentArchive.find((item: any) => item?.id === archiveId))
     const updated = {
       ...selectedEmployee,
       digitalArchive: currentArchive.filter((item: any) => item?.id !== archiveId),
@@ -533,8 +559,41 @@ export default function PersonnelPage() {
     }
     upsertEmployee(updated)
     setSelectedEmployee(updated)
+    void writeDigitalArchiveAudit(db, {
+      action: "file_delete",
+      actorId: "admin",
+      actorName: "Admin Panel",
+      targetPersonnelId: selectedEmployee.id || selectedEmployee.personnelId || "",
+      targetPersonnelName: selectedEmployee.fullName || [selectedEmployee.name, selectedEmployee.surname].filter(Boolean).join(" ") || "Personel",
+      fileName: deletedItem.fileName,
+      fileCategory: deletedItem.category,
+      fileUrl: deletedItem.fileUrl,
+    })
     toast({ title: "Başarılı", description: "Dijital arşiv dosyası silindi." })
-  }, [selectedEmployee, toast, upsertEmployee])
+  }, [db, selectedEmployee, toast, upsertEmployee])
+
+  const logArchiveAccess = React.useCallback((action: "file_view" | "file_download", document: any) => {
+    if (!selectedEmployee || !document) return
+    void writeDigitalArchiveAudit(db, {
+      action,
+      actorId: "admin",
+      actorName: "Admin Panel",
+      targetPersonnelId: selectedEmployee.id || selectedEmployee.personnelId || "",
+      targetPersonnelName: selectedEmployee.fullName || [selectedEmployee.name, selectedEmployee.surname].filter(Boolean).join(" ") || "Personel",
+      fileName: document.fileName || document.title || "evrak",
+      fileCategory: document.category || "Diğer",
+      fileUrl: document.fileUrl || "",
+    })
+  }, [db, selectedEmployee])
+
+  const handleViewArchiveItem = React.useCallback((document: any) => {
+    logArchiveAccess("file_view", document)
+  }, [logArchiveAccess])
+
+  const handleDownloadArchiveItem = React.useCallback((document: any) => {
+    logArchiveAccess("file_download", document)
+    void downloadRemoteFile(document.fileUrl, document.fileName || document.title || "evrak")
+  }, [logArchiveAccess])
 
   const handleSaveEdit = React.useCallback(async () => {
     if (!selectedEmployee) return
@@ -1015,8 +1074,8 @@ export default function PersonnelPage() {
                                 </div>
                               </div>
                               <div className="mt-3 flex flex-wrap gap-2">
-                                <Button asChild variant="outline" size="sm" className="h-8 rounded-lg"><a href={document.fileUrl} target="_blank" rel="noopener noreferrer">Goruntule</a></Button>
-                                <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => downloadRemoteFile(document.fileUrl, document.fileName || document.title || "evrak")}>Indir</Button>
+                                <Button asChild variant="outline" size="sm" className="h-8 rounded-lg"><a href={document.fileUrl} target="_blank" rel="noopener noreferrer" onClick={() => handleViewArchiveItem(document)}>Goruntule</a></Button>
+                                <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => handleDownloadArchiveItem(document)}>Indir</Button>
                                 <Button variant="ghost" size="sm" className="h-8 rounded-lg text-accent hover:bg-red-50 hover:text-accent" onClick={() => handleDeleteArchiveItem(document.id)}>
                                   <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                                   Sil
