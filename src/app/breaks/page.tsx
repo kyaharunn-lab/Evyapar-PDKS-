@@ -709,7 +709,7 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
-                  <DetailItem label="Mola Türü" value={getBreakTypeLabel(selectedLog.breakType)} />
+                  <DetailItem label="Mola Türü" value={selectedLog.typeLabel || getBreakTypeLabel(selectedLog.type || selectedLog.breakType)} />
                   <DetailItem label="Başlangıç" value={formatTimeTR(selectedLog.startTime, { seconds: true })} />
                   <DetailItem label="Bitiş" value={selectedLog.endTime ? formatTimeTR(selectedLog.endTime, { seconds: true }) : "Devam Ediyor..."} />
                   <DetailItem label="Toplam Süre" value={isActiveBreakStatus(selectedLog.status) && !selectedLog.endTime && !selectedLog.breakEnd ? formatElapsedTime(selectedLog.breakStart || selectedLog.startTime) : `${selectedLog.durationMinutes || selectedLog.duration || 0} dk`} />

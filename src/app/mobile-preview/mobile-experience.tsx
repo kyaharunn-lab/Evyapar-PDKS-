@@ -494,7 +494,9 @@ function minutesToTimeText(minutes: number) {
 }
 
 function buildIsoForDateTime(dateKey: string, minutes: number) {
-  return new Date(`${dateKey}T${minutesToTimeText(minutes)}:00`).toISOString()
+  const date = new Date(`${dateKey}T00:00:00`)
+  date.setMinutes(minutes)
+  return date.toISOString()
 }
 
 function buildAutoBreakRecords(shifts: any[], person: any, branch: any, checkIn: Date) {
@@ -509,10 +511,14 @@ function buildAutoBreakRecords(shifts: any[], person: any, branch: any, checkIn:
   if (start === null || end === null) return []
 
   const span = end > start ? end - start : (end + 1440) - start
-  if (span < 180) return []
+  if (span < 210) return []
 
-  const mealStart = start + Math.max(60, Math.floor(span * 0.45))
-  const normalStart = start + Math.max(30, Math.floor(span * 0.18))
+  let normalStart = start + Math.max(30, Math.floor(span * 0.18))
+  let mealStart = Math.max(start + Math.floor(span * 0.5) - 30, normalStart + 105)
+  if (mealStart + 60 > start + span) {
+    mealStart = start + span - 60
+    normalStart = Math.min(normalStart, mealStart - 95)
+  }
   const branchNameText = branch ? branchName(branch) : person?.branchName || ""
   const personnelNameText = personName(person)
   const createdAt = new Date().toISOString()
@@ -1174,7 +1180,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         writeArray(ATTENDANCE_KEY, [record, ...readArray(ATTENDANCE_KEY)])
         writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
         writeArray(LIVE_PRESENCE_KEY, [record, ...readArray(LIVE_PRESENCE_KEY).filter((item: any) => !matchesPerson(item, personId))])
-          ensureAutoBreaksForEntry(now)
+          if (record.method === "QR") ensureAutoBreaksForEntry(now)
           notifyAttendanceSync()
         }
       }
@@ -1350,7 +1356,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
     if (record.status === "inside") {
       writeArray(LIVE_PRESENCE_KEY, [record, ...livePresence.filter((item: any) => !matchesPerson(item, personId))])
-      ensureAutoBreaksForEntry(now)
+      if (method === "QR") ensureAutoBreaksForEntry(now)
       console.log("[mobile-qr-attendance] livePresence updated", { action: "checkIn", personnelId: personId })
     } else {
       writeArray(LIVE_PRESENCE_KEY, livePresence.map((item: any) =>
