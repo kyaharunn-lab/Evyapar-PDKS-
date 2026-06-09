@@ -1,4 +1,4 @@
-
+﻿
 "use client"
 
 import * as React from "react"
@@ -559,3 +559,5 @@ function DetailItem({ label, value }: { label: string, value: string }) {
     </div>
   )
 }
+
+

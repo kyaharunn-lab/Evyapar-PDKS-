@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { Building2, KeyRound, LockKeyhole, MonitorSmartphone, ShieldCheck, UserCog } from "lucide-react"
@@ -129,3 +129,4 @@ function AccessMatrix({ title, description, mode }: { title: string; description
     </Card>
   )
 }
+

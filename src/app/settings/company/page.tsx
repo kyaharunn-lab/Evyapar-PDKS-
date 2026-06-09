@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import {
@@ -571,3 +571,4 @@ function InfoMini({ label, value }: { label: string; value: string }) {
 function FileTextIcon() {
   return <FileText className="mr-2 h-4 w-4" />
 }
+

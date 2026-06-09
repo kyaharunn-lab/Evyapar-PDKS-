@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import Link from "next/link"
@@ -936,3 +936,4 @@ function buildInsights(stats: any, charts: any, rows: any[]) {
   if (insights.length === 0) insights.push("AI analizleri için daha fazla operasyon verisi bekleniyor.")
   return insights.slice(0, 5)
 }
+

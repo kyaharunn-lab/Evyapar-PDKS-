@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { Bell, History, Send, Users } from "lucide-react"
@@ -369,3 +369,4 @@ export default function NotificationSettingsPage() {
     </div>
   )
 }
+

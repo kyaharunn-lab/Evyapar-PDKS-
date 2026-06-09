@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import Link from "next/link"
@@ -965,3 +965,4 @@ function SignalCard({ title, value, description, icon: Icon }: any) {
     </div>
   )
 }
+

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { ShieldCheck, Plus, Filter, Users, X, Info, MoreHorizontal, Edit2, Trash2 } from "lucide-react"
@@ -645,3 +645,4 @@ function KPICard({ title, value, icon: Icon, color, bg }: any) {
     </Card>
   )
 }
+

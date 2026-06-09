@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import {
@@ -822,3 +822,4 @@ function downloadBlob(content: string, filename: string, type: string) {
   link.click()
   URL.revokeObjectURL(url)
 }
+

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { MapPin, Plus, Radar, Save, ShieldCheck, Trash2 } from "lucide-react"
@@ -176,3 +176,4 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
     </div>
   )
 }
+

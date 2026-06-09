@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { Briefcase, Building2, Network, Users2 } from "lucide-react"
@@ -87,3 +87,4 @@ function Tab({ value, icon: Icon, label }: { value: string; icon: any; label: st
     </TabsTrigger>
   )
 }
+

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { Fingerprint, MapPin, QrCode, ShieldCheck, Smartphone } from "lucide-react"
@@ -95,3 +95,4 @@ function PolicyPanel() {
     </Card>
   )
 }
+

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { 
@@ -819,3 +819,4 @@ function KPICard({ title, value, icon: Icon, color, bg }: any) {
     </Card>
   )
 }
+

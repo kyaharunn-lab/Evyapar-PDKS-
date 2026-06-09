@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { usePathname, useRouter } from "next/navigation"
@@ -86,3 +86,4 @@ function AccessDenied() {
     </div>
   )
 }
+

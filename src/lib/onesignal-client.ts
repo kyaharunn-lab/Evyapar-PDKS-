@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 declare global {
   interface Window {
@@ -221,3 +221,4 @@ export async function syncOneSignalSubscription(personnelId: string, options: { 
     }
   })
 }
+

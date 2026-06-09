@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import {
@@ -749,3 +749,4 @@ function buildHourlyChart(logs: any[]) {
   })
   return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([label, value]) => ({ label, value }))
 }
+

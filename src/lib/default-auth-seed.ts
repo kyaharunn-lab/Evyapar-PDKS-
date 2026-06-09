@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 const PERSONNEL_STORAGE_KEY = "app_personnel"
 const ACCESS_STORAGE_KEY = "app_access_control"
@@ -165,3 +165,4 @@ export function ensureDefaultAuthSeed() {
     window.dispatchEvent(new Event("app-access-updated"))
   }
 }
+

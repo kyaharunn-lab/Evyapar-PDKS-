@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
 
@@ -89,3 +89,4 @@ export function logoutLocalSession() {
   window.dispatchEvent(new Event("app-auth-updated"))
   window.dispatchEvent(new Event("app-access-updated"))
 }
+

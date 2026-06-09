@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import {
@@ -570,3 +570,4 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
+

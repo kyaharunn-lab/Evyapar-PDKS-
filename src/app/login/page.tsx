@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { LogIn, ShieldCheck } from "lucide-react"
@@ -118,3 +118,4 @@ export default function LoginPage() {
     </div>
   )
 }
+

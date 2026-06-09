@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
 
@@ -130,3 +130,4 @@ export function readCurrentAccess() {
 
   return { panelAccess, mobileAccess, user: activePerson, record: accessRecord, role: activeRole, session }
 }
+

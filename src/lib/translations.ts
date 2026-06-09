@@ -1,4 +1,4 @@
-
+﻿
 export const translations = {
   common: {
     dashboard: "Ana Panel",
@@ -286,3 +286,5 @@ export const translations = {
 };
 
 export type Translations = typeof translations;
+
+

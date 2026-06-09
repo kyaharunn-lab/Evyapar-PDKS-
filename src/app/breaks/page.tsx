@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { collection, onSnapshot } from "firebase/firestore"
@@ -772,3 +772,4 @@ function DetailItem({ label, value }: { label: string, value: string }) {
     </div>
   )
 }
+

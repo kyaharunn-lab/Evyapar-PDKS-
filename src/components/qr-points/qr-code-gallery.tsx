@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { collection, onSnapshot } from "firebase/firestore"
@@ -351,3 +351,4 @@ export function QrCodeGallery() {
     </section>
   )
 }
+

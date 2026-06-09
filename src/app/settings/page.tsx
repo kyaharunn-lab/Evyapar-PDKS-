@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import Link from "next/link"
@@ -583,3 +583,4 @@ function InfoMini({ label, value }: { label: string; value: string }) {
 function GridIcon(props: any) {
   return <Settings2 {...props} />
 }
+

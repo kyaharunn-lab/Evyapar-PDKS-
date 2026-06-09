@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { 
@@ -760,7 +760,7 @@ function ListShiftCard({ shift, personnel, branches, onEdit }: { shift: any, per
             onClick={() => onEdit?.(shift)}
           >
             <Edit2 className="mr-1.5 h-3.5 w-3.5" />
-            DÃ¼zenle
+            Düzenle
           </Button>
           <div className="p-2 bg-slate-50 rounded-xl group-hover:bg-primary/5 transition-colors">
             <CalendarClock className="h-5 w-5 text-slate-400" />
@@ -815,3 +815,5 @@ function ListShiftCard({ shift, personnel, branches, onEdit }: { shift: any, per
     </Card>
   )
 }
+
+

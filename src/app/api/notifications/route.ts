@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+﻿import { NextResponse } from "next/server"
 import { getApp, getApps, initializeApp } from "firebase/app"
 import { collection, getDocs, getFirestore, query, where } from "firebase/firestore"
 
@@ -149,3 +149,4 @@ export async function POST(request: Request) {
     return jsonError(error instanceof Error ? error.message : "OneSignal ayarlari kontrol edilemedi.", 500)
   }
 }
+
