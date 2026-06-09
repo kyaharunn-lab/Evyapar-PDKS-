@@ -224,13 +224,13 @@ const consentFromPersonnel = (person: any, legacyConsent: any = {}) => {
 
 const normalizeAuditLog = (log: any) => ({
   id: log?.id || `audit-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-  type: log?.type || log?.action || "audit",
-  actor: log?.actor || log?.actorName || log?.actorId || "-",
-  target: log?.target || log?.targetPersonnelName || log?.targetPersonnelId || log?.fileName || "-",
-  detail: log?.detail || [log?.fileCategory, log?.fileName].filter(Boolean).join(" - ") || log?.source || "-",
-  ipAddress: log?.ipAddress || "-",
-  deviceId: log?.deviceId || "-",
-  createdAt: timestampValue(log?.createdAt || log?.timestamp),
+  type: log?.type || log?.action || log?.eventType || "audit",
+  actor: log?.actor || log?.actorName || log?.userName || log?.requestedByName || log?.actorId || log?.userId || "-",
+  target: log?.target || log?.targetPersonnelName || log?.personnelName || log?.employeeName || log?.staffName || log?.targetPersonnelId || log?.personnelId || log?.fileName || "-",
+  detail: log?.detail || log?.description || log?.message || [log?.fileCategory, log?.fileName].filter(Boolean).join(" - ") || log?.source || "-",
+  ipAddress: log?.ipAddress || log?.ip || log?.clientIp || log?.metadata?.ipAddress || "-",
+  deviceId: log?.deviceId || log?.deviceID || log?.metadata?.deviceId || "-",
+  createdAt: timestampValue(log?.createdAt || log?.timestamp || log?.updatedAt),
 })
 
 const getStatusLabel = (status: string) => {
@@ -939,8 +939,9 @@ function AuditLogs({ logs }: { logs: any[] }) {
   const [typeFilter, setTypeFilter] = React.useState(ALL)
   const [branchFilter, setBranchFilter] = React.useState("")
   const normalizedLogs = React.useMemo(() => logs.map((log) => normalizeAuditLog(log)), [logs])
-  const types = Array.from(new Set(normalizedLogs.map((log) => log.type).filter(Boolean)))
-  const filteredLogs = normalizedLogs.filter((log) => {
+  const sortedLogs = React.useMemo(() => [...normalizedLogs].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()), [normalizedLogs])
+  const types = Array.from(new Set(sortedLogs.map((log) => log.type).filter(Boolean)))
+  const filteredLogs = sortedLogs.filter((log) => {
     const parsedDate = new Date(log.createdAt || 0)
     const logDate = log.createdAt && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString().slice(0, 10) : ""
     const userMatch = !userFilter || `${log.actor} ${log.target}`.toLowerCase().includes(userFilter.toLowerCase())
@@ -973,7 +974,7 @@ function AuditLogs({ logs }: { logs: any[] }) {
       </CardHeader>
       <CardContent className="p-0">
         <Table>
-          <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">İşlem Tipi</TableHead><TableHead>Kullanıcı</TableHead><TableHead>Hedef</TableHead><TableHead>IP Adresi</TableHead><TableHead>Device ID</TableHead><TableHead>Tarih/Saat</TableHead><TableHead>Detay</TableHead></TableRow></TableHeader>
+          <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">İşlem Tipi</TableHead><TableHead>Kullanıcı</TableHead><TableHead>Hedef Personel</TableHead><TableHead>IP Adresi</TableHead><TableHead>Device ID</TableHead><TableHead>Tarih/Saat</TableHead><TableHead>Detay</TableHead></TableRow></TableHeader>
           <TableBody>
             {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="h-72 text-center text-muted-foreground">Henüz denetim logu bulunmuyor.</TableCell></TableRow> : filteredLogs.map((log) => <TableRow key={log.id}><TableCell className="pl-6 font-bold text-primary">{log.type}</TableCell><TableCell>{log.actor}</TableCell><TableCell>{log.target}</TableCell><TableCell className="font-mono text-xs">{log.ipAddress}</TableCell><TableCell className="font-mono text-xs">{log.deviceId}</TableCell><TableCell>{formatDateTimeTR(log.createdAt)}</TableCell><TableCell>{log.detail}</TableCell></TableRow>)}
           </TableBody>
