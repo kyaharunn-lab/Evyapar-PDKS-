@@ -32,7 +32,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth, useFirestore } from "@/firebase"
-import { collection, getDocs } from "firebase/firestore"
+import { collection, getDocs, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { ACCESS_STORAGE_KEYS, readCurrentAccess } from "@/lib/access-permissions"
 import { loginWithLocalPersonnel, logoutLocalSession } from "@/lib/auth-session"
@@ -930,6 +930,29 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     }
   }, [db, personId, selectedPerson, toast])
 
+  const handleAcceptKvkk = React.useCallback(async () => {
+    if (!selectedPerson || !personId) return
+    const nowIso = new Date().toISOString()
+    const localPerson = {
+      ...selectedPerson,
+      kvkkAccepted: true,
+      kvkkAcceptedAt: nowIso,
+      kvkkVersion: "v1",
+      updatedAt: nowIso,
+    }
+    upsertLocalArrayRecord("app_personnel", localPerson)
+    setData((current: any) => ({
+      ...current,
+      personnel: current.personnel.map((person: any) => getId(person) === personId ? localPerson : person),
+    }))
+    await writeSharedRecord(db, "personnel", {
+      ...localPerson,
+      kvkkAcceptedAt: serverTimestamp(),
+      kvkkVersion: "v1",
+    })
+    toast({ title: "KVKK onayı alındı", description: "Aydınlatma metni kabul edildi." })
+  }, [db, personId, selectedPerson, toast])
+
   const updateSettings = (patch: any) => {
     if (patch?.screen === "QR" && patch?.qrStatus === "Başarılı" && selectedPerson && !patch?.attendanceHandled) {
       const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
@@ -1630,6 +1653,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       onBreak={handleBreak}
       onLeaveCreate={createLeave}
       onEnableNotifications={handleEnableNotifications}
+      onAcceptKvkk={handleAcceptKvkk}
     />
   )
 
@@ -1679,6 +1703,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             onBreak={handleBreak}
             onLeaveCreate={createLeave}
             onEnableNotifications={handleEnableNotifications}
+            onAcceptKvkk={handleAcceptKvkk}
           />
         )}
       </div>
@@ -1753,6 +1778,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
                 onGps={handleGpsSimulation}
                 onBreak={handleBreak}
                 onLeaveCreate={createLeave}
+                onAcceptKvkk={handleAcceptKvkk}
               />
             )}
           </CardContent>
@@ -1929,6 +1955,9 @@ function MobileScreen(props: any) {
       props.setScreen("QR")
     }
   }, [props.isStandaloneApp, props.settings.screen, props.setScreen])
+  if (props.isStandaloneApp && props.person && props.person.kvkkAccepted !== true) {
+    return <KvkkOnboardingScreen palette={props.palette} person={props.person} onAccept={props.onAcceptKvkk} />
+  }
   const map: Record<string, React.ReactNode> = {
     Ana: <HomeScreen {...props} />,
     "Giriş": <CheckScreen {...props} />,
@@ -1941,6 +1970,38 @@ function MobileScreen(props: any) {
     Profil: <ProfileScreen {...props} />,
   }
   return <div className="min-h-full animate-in fade-in slide-in-from-right-2 duration-300">{map[props.settings.screen] || map.Ana}</div>
+}
+
+function KvkkOnboardingScreen({ palette, person, onAccept }: any) {
+  const [saving, setSaving] = React.useState(false)
+  const accept = async () => {
+    setSaving(true)
+    try {
+      await onAccept?.()
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <div className="flex min-h-[calc(100dvh-96px)] items-center justify-center py-6">
+      <MobileCard className="space-y-5">
+        <div>
+          <Badge className="mb-3 bg-white/15 text-white hover:bg-white/15">KVKK</Badge>
+          <h3 className="text-2xl font-extrabold text-white">Aydınlatma Metni</h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-white/60">{personName(person)}, mobil PDKS kullanımına devam etmek için aydınlatma metnini onaylamanız gerekir.</p>
+        </div>
+        <div className="space-y-3 rounded-3xl border border-white/10 bg-white/10 p-4 text-sm font-semibold leading-6 text-white/75">
+          <p>PDKS kapsamında ad-soyad, e-posta, şube, giriş/çıkış, mola, vardiya, izin ve yüklenen belgeler işlenir.</p>
+          <p>Veriler personel devam takibi, izin yönetimi ve şirket içi operasyon amacıyla kullanılır.</p>
+          <p>Yetkili kişiler dışında paylaşılmaz.</p>
+          <p>Personel KVKK kapsamındaki haklarını kullanabilir.</p>
+        </div>
+        <Button data-mobile-action="kvkk-accept" disabled={saving} onClick={accept} className={cn("h-12 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>
+          {saving ? "Kaydediliyor..." : "Aydınlatma metnini okudum"}
+        </Button>
+      </MobileCard>
+    </div>
+  )
 }
 
 function MobileHeader({ person, palette, title }: any) {
@@ -2425,6 +2486,7 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
   const maskedTckn = person?.tckn ? `${String(person.tckn).slice(0, 2)}*******${String(person.tckn).slice(-2)}` : "Tanımlı değil"
   const archiveItems = Array.isArray(person?.digitalArchive) ? person.digitalArchive : []
   const leaveItems = Array.isArray(leaves) ? leaves : []
+  const kvkkAcceptedAt = person?.kvkkAcceptedAt?.toDate?.()?.toISOString?.() || person?.kvkkAcceptedAt || ""
   const notificationsEnabled = Boolean(person?.oneSignalSubscribed)
   const oneSignalPermission = person?.oneSignalPermission || (typeof Notification !== "undefined" ? Notification.permission : "unknown")
   const oneSignalSubscriptionId = person?.oneSignalSubscriptionId || ""
@@ -2456,7 +2518,9 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
         <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "Tanımlı değil")} />
         <Info label="Role" value={valueText(person?.role || person?.roleId, "Rol yok")} />
         <Info label="Device ID" value={device?.deviceId || device?.id || "Tanımlı değil"} />
-        <Info label="KVKK" value={kvkk?.status || kvkk?.kvkkStatus || kvkk?.consentStatus || "Bekliyor"} />
+        <Info label="KVKK" value={person?.kvkkAccepted ? "Kabul edildi" : kvkk?.status || kvkk?.kvkkStatus || kvkk?.consentStatus || "Bekliyor"} />
+        <Info label="Kabul tarihi" value={person?.kvkkAccepted ? formatDateTR(kvkkAcceptedAt) : "-"} />
+        <Info label="KVKK versiyonu" value={person?.kvkkVersion || "-"} />
         <Info label="İşe giriş" value={formatDateTR(person?.startDate || person?.hireDate || person?.employmentStartDate)} />
       </MobileCard>
 
