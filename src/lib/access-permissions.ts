@@ -7,6 +7,37 @@ const PERSONNEL_STORAGE_KEY = "app_personnel"
 const AUTH_SESSION_KEY = "app_auth_session"
 const ROLES_STORAGE_KEY = "app_roles"
 
+export const DETAILED_PERMISSION_KEYS = [
+  "personnel.view",
+  "personnel.create",
+  "personnel.edit",
+  "personnel.delete",
+  "leave.view",
+  "leave.create",
+  "leave.approve",
+  "leave.reject",
+  "shift.view",
+  "shift.create",
+  "shift.edit",
+  "shift.delete",
+  "break.view",
+  "break.manage",
+  "report.view",
+  "report.export",
+  "notification.send",
+  "archive.view",
+  "archive.upload",
+  "archive.delete",
+  "archive.download",
+  "kvkk.view",
+  "kvkk.manage",
+  "audit.view",
+  "settings.view",
+  "roles.manage",
+] as const
+
+export type DetailedPermissionKey = (typeof DETAILED_PERMISSION_KEYS)[number]
+
 function readArray(key: string) {
   if (typeof window === "undefined") return []
   try {
@@ -85,9 +116,43 @@ function isHrManager(person: any) {
   })
 }
 
+export function isRootRole(record: any) {
+  const values = [
+    record?.id,
+    record?.roleId,
+    record?.code,
+    record?.roleCode,
+    record?.name,
+    record?.roleName,
+    record?.assignedRole,
+    record?.accessRole,
+    record?.permissionRole,
+  ]
+
+  return values.some((value) => {
+    const normalized = normalize(value)
+    return normalized === "root" || normalized === "admin" || normalized.includes("superadmin") || normalized.includes("ikyoneticisi")
+  })
+}
+
+export function getDetailedPermissions(role: any) {
+  const permissions = role?.permissions || role || {}
+  const rootAccess = isRootRole(role)
+  return DETAILED_PERMISSION_KEYS.reduce<Record<string, boolean>>((acc, key) => {
+    acc[key] = rootAccess ? true : Boolean(permissions?.[key])
+    return acc
+  }, {})
+}
+
+export function roleHasPermission(role: any, permission: DetailedPermissionKey | string) {
+  if (isRootRole(role)) return true
+  const permissions = role?.permissions || role || {}
+  return Boolean(permissions?.[permission])
+}
+
 export function readCurrentAccess() {
   if (typeof window === "undefined") {
-    return { panelAccess: true, mobileAccess: true, user: null, record: null, session: null }
+    return { panelAccess: true, mobileAccess: true, user: null, record: null, role: null, session: null, permissions: {}, isRoot: false }
   }
 
   ensureDefaultAuthSeed()
@@ -121,13 +186,23 @@ export function readCurrentAccess() {
   const activeRoleValues = activePerson ? personRoleValues(activePerson) : []
   const activeRole = roles.find((role: any) => roleValues(role).some((value) => activeRoleValues.includes(value))) || null
   const rolePermissions = activeRole?.permissions || activeRole || {}
+  const rootAccess = isRootRole(activeRole) || isRootRole(activePerson)
+  const detailedPermissions = rootAccess ? getDetailedPermissions({ roleName: "root" }) : getDetailedPermissions(activeRole)
 
   const panelAccess =
-    boolValue(accessRecord?.panelAccess, accessRecord?.adminAccess, rolePermissions?.panelAccess, rolePermissions?.adminAccess, activePerson?.hasAdminAccess, activePerson?.panelAccess) ?? true
+    rootAccess ||
+    (boolValue(accessRecord?.panelAccess, accessRecord?.adminAccess, rolePermissions?.hasPanelAccess, rolePermissions?.panelAccess, rolePermissions?.adminAccess, activePerson?.hasAdminAccess, activePerson?.panelAccess) ?? true)
 
   const mobileAccess =
-    boolValue(accessRecord?.mobileAccess, accessRecord?.mobilAccess, rolePermissions?.mobileAccess, rolePermissions?.mobilAccess, activePerson?.hasMobileAccess, activePerson?.mobileAccess, activePerson?.mobilAccess) ?? true
+    rootAccess ||
+    (boolValue(accessRecord?.mobileAccess, accessRecord?.mobilAccess, rolePermissions?.hasMobileAccess, rolePermissions?.mobileAccess, rolePermissions?.mobilAccess, activePerson?.hasMobileAccess, activePerson?.mobileAccess, activePerson?.mobilAccess) ?? true)
 
-  return { panelAccess, mobileAccess, user: activePerson, record: accessRecord, role: activeRole, session }
+  return { panelAccess, mobileAccess, user: activePerson, record: accessRecord, role: activeRole, session, permissions: detailedPermissions, isRoot: rootAccess }
+}
+
+export function hasCurrentPermission(permission: DetailedPermissionKey | string) {
+  const access = readCurrentAccess()
+  if (access.isRoot) return true
+  return Boolean(access.permissions?.[permission])
 }
 

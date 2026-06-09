@@ -37,11 +37,83 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase"
 import { writeSharedRecord } from "@/lib/shared-data-sync"
+import { DETAILED_PERMISSION_KEYS, isRootRole, roleHasPermission } from "@/lib/access-permissions"
 
 const PERSONNEL_STORAGE_KEY = "app_personnel"
 const ACCESS_STORAGE_KEYS = ["app_access_control", "app_access_controls", "app_access_management", "app_user_access", "accessControls"] as const
 const ROLE_MATCH_FIELDS = ["id", "name", "roleName", "code", "roleCode"] as const
 const ASSIGNED_ROLE_FIELDS = ["roleId", "role", "roleName", "assignedRole", "accessRole", "permissionRole"] as const
+const DETAILED_PERMISSION_GROUPS = [
+  {
+    title: "Personel",
+    items: [
+      ["personnel.view", "Görüntüleme"],
+      ["personnel.create", "Oluşturma"],
+      ["personnel.edit", "Düzenleme"],
+      ["personnel.delete", "Silme"],
+    ],
+  },
+  {
+    title: "İzin",
+    items: [
+      ["leave.view", "Görüntüleme"],
+      ["leave.create", "Talep oluşturma"],
+      ["leave.approve", "Onaylama"],
+      ["leave.reject", "Reddetme"],
+    ],
+  },
+  {
+    title: "Vardiya",
+    items: [
+      ["shift.view", "Görüntüleme"],
+      ["shift.create", "Oluşturma"],
+      ["shift.edit", "Düzenleme"],
+      ["shift.delete", "Silme"],
+    ],
+  },
+  {
+    title: "Mola",
+    items: [
+      ["break.view", "Görüntüleme"],
+      ["break.manage", "Yönetme"],
+    ],
+  },
+  {
+    title: "Rapor",
+    items: [
+      ["report.view", "Görüntüleme"],
+      ["report.export", "Dışa aktarma"],
+    ],
+  },
+  {
+    title: "Bildirim",
+    items: [["notification.send", "Bildirim gönderme"]],
+  },
+  {
+    title: "Dijital Arşiv",
+    items: [
+      ["archive.view", "Görüntüleme"],
+      ["archive.upload", "Yükleme"],
+      ["archive.delete", "Silme"],
+      ["archive.download", "İndirme"],
+    ],
+  },
+  {
+    title: "KVKK",
+    items: [
+      ["kvkk.view", "Görüntüleme"],
+      ["kvkk.manage", "Yönetme"],
+      ["audit.view", "Denetim logları"],
+    ],
+  },
+  {
+    title: "Sistem",
+    items: [
+      ["settings.view", "Ayarları görüntüleme"],
+      ["roles.manage", "Rol yönetimi"],
+    ],
+  },
+] as const
 
 function readLocalArray(key: string) {
   if (typeof window === "undefined") return []
@@ -91,6 +163,11 @@ function getPersonnelKey(record: any, fallback: string) {
   return String(record?.personnelId || record?.employeeId || record?.userId || record?.id || fallback)
 }
 
+function detailedPermissionSummary(role: any) {
+  const activeCount = DETAILED_PERMISSION_KEYS.filter((key) => roleHasPermission(role, key)).length
+  return `${activeCount}/${DETAILED_PERMISSION_KEYS.length} açık`
+}
+
 export default function RolesPage() {
   const { toast } = useToast()
   const db = useFirestore()
@@ -112,8 +189,10 @@ export default function RolesPage() {
   const [roleLeaveAccess, setRoleLeaveAccess] = React.useState(false)
   const [roleCanCreateLeaveRequest, setRoleCanCreateLeaveRequest] = React.useState(false)
   const [roleBranchAccess, setRoleBranchAccess] = React.useState("")
+  const [roleDetailedPermissions, setRoleDetailedPermissions] = React.useState<Record<string, boolean>>({})
 
   const ROLES_STORAGE_KEY = "app_roles"
+  const isRootFormRole = isRootRole({ roleName, roleCode })
 
   const resetForm = React.useCallback(() => {
     setRoleName("")
@@ -125,23 +204,38 @@ export default function RolesPage() {
     setRoleLeaveAccess(false)
     setRoleCanCreateLeaveRequest(false)
     setRoleBranchAccess("")
+    setRoleDetailedPermissions({})
     setEditingRoleId(null)
+  }, [])
+
+  const setDetailedPermission = React.useCallback((key: string, checked: boolean) => {
+    setRoleDetailedPermissions((prev) => ({ ...prev, [key]: checked }))
   }, [])
 
   const buildRolePermissions = React.useCallback(() => {
     const managerRole = /müdür|mudur/i.test(roleName)
+    const rootRole = isRootRole({ roleName, roleCode })
+    const detailedPermissions = DETAILED_PERMISSION_KEYS.reduce<Record<string, boolean>>((acc, key) => {
+      acc[key] = rootRole ? true : Boolean(roleDetailedPermissions[key])
+      return acc
+    }, {})
+    const canCreateLeaveRequest = rootRole || roleCanCreateLeaveRequest || managerRole || Boolean(detailedPermissions["leave.create"])
+    detailedPermissions["leave.create"] = canCreateLeaveRequest
     return {
-      panelAccess: rolePanelAccess || managerRole,
-      mobileAccess: roleMobileAccess || managerRole,
+      ...detailedPermissions,
+      panelAccess: rootRole || rolePanelAccess || managerRole,
+      hasPanelAccess: rootRole || rolePanelAccess || managerRole,
+      mobileAccess: rootRole || roleMobileAccess || managerRole,
+      hasMobileAccess: rootRole || roleMobileAccess || managerRole,
       pageAccess: [
-        ...((roleOrganizationAccess || managerRole) ? ["organization"] : []),
-        ...((roleLeaveAccess || managerRole) ? ["leave_requests", "requests"] : []),
+        ...((rootRole || roleOrganizationAccess || managerRole) ? ["organization"] : []),
+        ...((rootRole || roleLeaveAccess || managerRole) ? ["leave_requests", "requests"] : []),
       ],
-      canCreateLeaveRequest: roleCanCreateLeaveRequest || managerRole,
-      leaveCreate: roleCanCreateLeaveRequest || managerRole,
+      canCreateLeaveRequest,
+      leaveCreate: canCreateLeaveRequest,
       branchAccess: roleBranchAccess.split(",").map((item) => item.trim()).filter(Boolean),
     }
-  }, [roleBranchAccess, roleCanCreateLeaveRequest, roleLeaveAccess, roleMobileAccess, roleName, roleOrganizationAccess, rolePanelAccess])
+  }, [roleBranchAccess, roleCanCreateLeaveRequest, roleCode, roleDetailedPermissions, roleLeaveAccess, roleMobileAccess, roleName, roleOrganizationAccess, rolePanelAccess])
 
   React.useEffect(() => {
     const loadRoleData = () => {
@@ -242,7 +336,11 @@ export default function RolesPage() {
       description: roleDescription,
       permissions,
       panelAccess: permissions.panelAccess,
+      hasPanelAccess: permissions.hasPanelAccess,
       mobileAccess: permissions.mobileAccess,
+      hasMobileAccess: permissions.hasMobileAccess,
+      branchAccess: permissions.branchAccess,
+      canCreateLeaveRequest: permissions.canCreateLeaveRequest,
       level: 1,
       status: "Active",
       updatedAt: now,
@@ -288,12 +386,20 @@ export default function RolesPage() {
     setRoleDescription(role?.description || "")
     const permissions = role?.permissions || {}
     const pageAccess = Array.isArray(permissions.pageAccess) ? permissions.pageAccess : []
-    setRolePanelAccess(Boolean(permissions.panelAccess ?? role?.panelAccess))
-    setRoleMobileAccess(permissions.mobileAccess ?? role?.mobileAccess ?? true)
-    setRoleOrganizationAccess(pageAccess.includes("organization"))
-    setRoleLeaveAccess(pageAccess.includes("leave_requests") || pageAccess.includes("requests"))
-    setRoleCanCreateLeaveRequest(Boolean(permissions.canCreateLeaveRequest || permissions.leaveCreate))
-    setRoleBranchAccess(Array.isArray(permissions.branchAccess) ? permissions.branchAccess.join(", ") : "")
+    const rootRole = isRootRole(role)
+    setRolePanelAccess(rootRole || Boolean(permissions.hasPanelAccess ?? permissions.panelAccess ?? role?.hasPanelAccess ?? role?.panelAccess))
+    setRoleMobileAccess(rootRole || Boolean(permissions.hasMobileAccess ?? permissions.mobileAccess ?? role?.hasMobileAccess ?? role?.mobileAccess ?? true))
+    setRoleOrganizationAccess(rootRole || pageAccess.includes("organization"))
+    setRoleLeaveAccess(rootRole || pageAccess.includes("leave_requests") || pageAccess.includes("requests"))
+    setRoleCanCreateLeaveRequest(rootRole || Boolean(permissions.canCreateLeaveRequest || permissions.leaveCreate || permissions["leave.create"] || role?.canCreateLeaveRequest))
+    const branchAccess = Array.isArray(permissions.branchAccess) ? permissions.branchAccess : Array.isArray(role?.branchAccess) ? role.branchAccess : []
+    setRoleBranchAccess(branchAccess.join(", "))
+    setRoleDetailedPermissions(
+      DETAILED_PERMISSION_KEYS.reduce<Record<string, boolean>>((acc, key) => {
+        acc[key] = rootRole ? true : Boolean(permissions[key])
+        return acc
+      }, {})
+    )
     setIsAddOpen(true)
   }
 
@@ -553,6 +659,36 @@ export default function RolesPage() {
                     />
                   </div>
                 </div>
+
+                <div className="space-y-5 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <div>
+                    <h4 className="text-sm font-extrabold text-primary">Detaylı Yetkiler</h4>
+                    <p className="mt-1 text-[11px] font-medium text-slate-500">
+                      Seçilmeyen yetkiler kapalı kabul edilir. Admin/root rollerinde tüm yetkiler otomatik açıktır.
+                    </p>
+                  </div>
+
+                  {DETAILED_PERMISSION_GROUPS.map((group) => (
+                    <div key={group.title} className="space-y-2">
+                      <div className="text-[11px] font-extrabold uppercase tracking-widest text-slate-400">{group.title}</div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {group.items.map(([key, label]) => (
+                          <div key={key} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5">
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-slate-700">{label}</div>
+                              <div className="truncate font-mono text-[10px] text-slate-400">{key}</div>
+                            </div>
+                            <Switch
+                              checked={isRootFormRole || Boolean(roleDetailedPermissions[key])}
+                              disabled={isRootFormRole}
+                              onCheckedChange={(checked) => setDetailedPermission(key, checked)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </ScrollArea>
 
@@ -599,6 +735,7 @@ export default function RolesPage() {
                     <InfoRow label="Panel Erişimi" value={(selectedRole.permissions?.panelAccess ?? selectedRole.panelAccess) ? "Açık" : "Kapalı"} />
                     <InfoRow label="Mobil Erişim" value={(selectedRole.permissions?.mobileAccess ?? selectedRole.mobileAccess) ? "Açık" : "Kapalı"} />
                     <InfoRow label="İzin Talebi Oluşturabilir" value={(selectedRole.permissions?.canCreateLeaveRequest || selectedRole.permissions?.leaveCreate) ? "Açık" : "Kapalı"} />
+                    <InfoRow label="Detaylı Yetki" value={detailedPermissionSummary(selectedRole)} />
                     <InfoRow label="Seviye" value={(selectedRole.level || 1).toString()} />
                     <InfoRow label="Durum" value={selectedRole.status === "Active" ? "Aktif" : "Pasif"} />
                   </>
