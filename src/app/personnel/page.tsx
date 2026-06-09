@@ -58,6 +58,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AddPersonnelForm } from "@/components/personnel/add-personnel-form"
 import { useToast } from "@/hooks/use-toast"
 import { useFirestore } from "@/firebase"
+import { readCurrentAccess } from "@/lib/access-permissions"
 import { ensureDefaultAuthSeed } from "@/lib/default-auth-seed"
 import { createFirebasePersonnelAuthUser } from "@/lib/firebase-auth-personnel"
 import { deleteSharedRecord, writeSharedRecord } from "@/lib/shared-data-sync"
@@ -78,6 +79,28 @@ const PERSONNEL_DOCUMENT_TYPES = ["image/jpeg", "image/png", "application/pdf"]
 const PERSONNEL_PHOTO_MAX_BYTES = 5 * 1024 * 1024
 const PERSONNEL_DOCUMENT_MAX_BYTES = 5 * 1024 * 1024
 const DIGITAL_ARCHIVE_CATEGORIES = ["Kimlik", "İşe Giriş Belgesi", "İzin Belgesi", "Sağlık Raporu", "Sözleşme", "KVKK", "Eğitim/Sertifika", "Diğer"]
+
+function normalizeAccessText(value: any) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/[^a-z0-9]+/g, "")
+}
+
+function archivePersonId(person: any) {
+  return String(person?.id || person?.personnelId || person?.personId || person?.employeeId || person?.userId || "")
+}
+
+function archivePersonName(person: any) {
+  return (person?.fullName || person?.personnelName || [person?.name, person?.surname].filter(Boolean).join(" ") || "Personel").toString()
+}
+
+function isHealthReportArchive(document: any) {
+  return normalizeAccessText(document?.category).includes("saglikraporu")
+}
 
 async function uploadPersonnelPhoto(file: File) {
   const uploadData = new FormData()
@@ -191,6 +214,7 @@ export default function PersonnelPage() {
   const [localDepartments, setLocalDepartments] = React.useState<any[]>([])
   const [localPositions, setLocalPositions] = React.useState<any[]>([])
   const [localRoles, setLocalRoles] = React.useState<any[]>([])
+  const [accessState, setAccessState] = React.useState<any>(() => readCurrentAccess())
 
   const loadEmployees = React.useCallback(() => {
     try {
@@ -267,6 +291,18 @@ export default function PersonnelPage() {
     setLocalRoles(readFromLocalStorage(["app_roles", "evyapar_pdks_roles_local_v1"]))
   }, [])
 
+  React.useEffect(() => {
+    const refreshAccess = () => setAccessState(readCurrentAccess())
+    window.addEventListener("app-auth-updated", refreshAccess)
+    window.addEventListener("app-access-updated", refreshAccess)
+    window.addEventListener("storage", refreshAccess)
+    return () => {
+      window.removeEventListener("app-auth-updated", refreshAccess)
+      window.removeEventListener("app-access-updated", refreshAccess)
+      window.removeEventListener("storage", refreshAccess)
+    }
+  }, [])
+
   const upsertEmployee = React.useCallback((updated: any) => {
     void writeSharedRecord(db, "personnel", updated).then((ok) => {
       console.info("[Firestore personnel write]", {
@@ -333,6 +369,55 @@ export default function PersonnelPage() {
     }
   }, [localRoles])
 
+  const archiveActor = accessState?.user || null
+  const archiveActorRole = accessState?.role || null
+  const archiveActorText = normalizeAccessText([
+    archiveActor?.roleName,
+    archiveActor?.role,
+    archiveActor?.assignedRole,
+    archiveActor?.position,
+    archiveActor?.positionName,
+    archiveActor?.title,
+    archiveActorRole?.roleName,
+    archiveActorRole?.name,
+    archiveActorRole?.title,
+  ].filter(Boolean).join(" "))
+  const archiveActorIsAdminHr = Boolean(
+    archiveActor?.isAdmin ||
+    archiveActor?.isHr ||
+    archiveActorText.includes("admin") ||
+    archiveActorText.includes("ik") ||
+    archiveActorText.includes("insankaynaklari")
+  )
+  const archiveActorIsManager = Boolean(
+    archiveActor?.isManager ||
+    archiveActorText.includes("mudur") ||
+    archiveActorText.includes("manager") ||
+    archiveActorText.includes("yonetici")
+  )
+
+  const canAccessArchivePersonnel = React.useCallback((target: any) => {
+    if (!target) return false
+    if (archiveActorIsAdminHr) return true
+    const actorId = archivePersonId(archiveActor)
+    const targetId = archivePersonId(target)
+    if (actorId && targetId && actorId === targetId) return true
+    if (archiveActorIsManager) {
+      const actorBranch = String(archiveActor?.branchId || archiveActor?.branch || "")
+      const targetBranch = String(target?.branchId || target?.branch || "")
+      return Boolean(actorBranch && targetBranch && actorBranch === targetBranch)
+    }
+    return false
+  }, [archiveActor, archiveActorIsAdminHr, archiveActorIsManager])
+
+  const canAccessArchiveFile = React.useCallback((target: any, document: any) => {
+    if (!canAccessArchivePersonnel(target)) return false
+    if (!isHealthReportArchive(document)) return true
+    const actorId = archivePersonId(archiveActor)
+    const targetId = archivePersonId(target)
+    return archiveActorIsAdminHr || Boolean(actorId && targetId && actorId === targetId)
+  }, [archiveActor, archiveActorIsAdminHr, canAccessArchivePersonnel])
+
   const filteredEmployees = React.useMemo(() => {
     if (!employees) return [];
     const query = searchTerm.trim().toLowerCase();
@@ -366,9 +451,9 @@ export default function PersonnelPage() {
         const key = item.id || item.publicId || item.fileUrl
         if (!key || seen.has(key)) return false
         seen.add(key)
-        return true
+        return canAccessArchiveFile(selectedEmployee, item)
       })
-  }, [selectedEmployee])
+  }, [canAccessArchiveFile, selectedEmployee])
 
   const archiveFolders = React.useMemo(() => {
     return DIGITAL_ARCHIVE_CATEGORIES.map((category) => ({
@@ -381,6 +466,8 @@ export default function PersonnelPage() {
     if (!selectedArchiveCategory) return selectedArchiveItems
     return selectedArchiveItems.filter((item: any) => (item?.category || "Diğer") === selectedArchiveCategory)
   }, [selectedArchiveItems, selectedArchiveCategory])
+
+  const canAccessSelectedArchive = selectedEmployee ? canAccessArchivePersonnel(selectedEmployee) : false
 
   const [editForm, setEditForm] = React.useState<any>({
     name: "",
@@ -479,6 +566,18 @@ export default function PersonnelPage() {
 
   const handleUploadDocument = React.useCallback(async () => {
     if (!selectedEmployee) return
+    if (!canAccessArchivePersonnel(selectedEmployee)) {
+      toast({ variant: "destructive", title: "Yetkisiz erişim", description: "Bu personelin dijital arşivine erişim yetkiniz yok." })
+      return
+    }
+    if (normalizeAccessText(documentForm.category).includes("saglikraporu")) {
+      const actorId = archivePersonId(archiveActor)
+      const targetId = archivePersonId(selectedEmployee)
+      if (!archiveActorIsAdminHr && actorId !== targetId) {
+        toast({ variant: "destructive", title: "Yetkisiz erişim", description: "Sağlık raporu yalnızca Admin/İK veya personelin kendisi tarafından görülebilir." })
+        return
+      }
+    }
     if (!documentForm.name.trim()) {
       toast({ variant: "destructive", title: "Evrak adı gerekli", description: "Lütfen evrak adını girin." })
       return
@@ -545,13 +644,22 @@ export default function PersonnelPage() {
     } finally {
       setDocumentUploading(false)
     }
-  }, [db, documentFile, documentForm.category, documentForm.name, selectedEmployee, toast, upsertEmployee])
+  }, [archiveActor, archiveActorIsAdminHr, canAccessArchivePersonnel, db, documentFile, documentForm.category, documentForm.name, selectedEmployee, toast, upsertEmployee])
 
   const handleDeleteArchiveItem = React.useCallback((archiveId: string) => {
     if (!selectedEmployee) return
     if (!window.confirm("Bu arşiv dosyasını silmek istediğinize emin misiniz?")) return
     const currentArchive = Array.isArray(selectedEmployee.digitalArchive) ? selectedEmployee.digitalArchive : []
-    const deletedItem = normalizeArchiveRecord(currentArchive.find((item: any) => item?.id === archiveId))
+    const rawDeletedItem = currentArchive.find((item: any) => item?.id === archiveId)
+    if (!rawDeletedItem) {
+      toast({ variant: "destructive", title: "Dosya bulunamadı", description: "Silinecek arşiv kaydı bulunamadı." })
+      return
+    }
+    const deletedItem = normalizeArchiveRecord(rawDeletedItem)
+    if (!canAccessArchiveFile(selectedEmployee, deletedItem)) {
+      toast({ variant: "destructive", title: "Yetkisiz erişim", description: "Bu dosya üzerinde işlem yapma yetkiniz yok." })
+      return
+    }
     const updated = {
       ...selectedEmployee,
       digitalArchive: currentArchive.filter((item: any) => item?.id !== archiveId),
@@ -570,10 +678,14 @@ export default function PersonnelPage() {
       fileUrl: deletedItem.fileUrl,
     })
     toast({ title: "Başarılı", description: "Dijital arşiv dosyası silindi." })
-  }, [db, selectedEmployee, toast, upsertEmployee])
+  }, [canAccessArchiveFile, db, selectedEmployee, toast, upsertEmployee])
 
   const logArchiveAccess = React.useCallback((action: "file_view" | "file_download", document: any) => {
     if (!selectedEmployee || !document) return
+    if (!canAccessArchiveFile(selectedEmployee, document)) {
+      toast({ variant: "destructive", title: "Yetkisiz erişim", description: "Bu dosyayı görüntüleme veya indirme yetkiniz yok." })
+      return
+    }
     void writeDigitalArchiveAudit(db, {
       action,
       actorId: "admin",
@@ -584,16 +696,25 @@ export default function PersonnelPage() {
       fileCategory: document.category || "Diğer",
       fileUrl: document.fileUrl || "",
     })
-  }, [db, selectedEmployee])
+  }, [canAccessArchiveFile, db, selectedEmployee, toast])
 
   const handleViewArchiveItem = React.useCallback((document: any) => {
+    if (!selectedEmployee || !canAccessArchiveFile(selectedEmployee, document)) {
+      toast({ variant: "destructive", title: "Yetkisiz erişim", description: "Bu dosyayı görüntüleme yetkiniz yok." })
+      return false
+    }
     logArchiveAccess("file_view", document)
-  }, [logArchiveAccess])
+    return true
+  }, [canAccessArchiveFile, logArchiveAccess, selectedEmployee, toast])
 
   const handleDownloadArchiveItem = React.useCallback((document: any) => {
+    if (!selectedEmployee || !canAccessArchiveFile(selectedEmployee, document)) {
+      toast({ variant: "destructive", title: "Yetkisiz erişim", description: "Bu dosyayı indirme yetkiniz yok." })
+      return
+    }
     logArchiveAccess("file_download", document)
     void downloadRemoteFile(document.fileUrl, document.fileName || document.title || "evrak")
-  }, [logArchiveAccess])
+  }, [canAccessArchiveFile, logArchiveAccess, selectedEmployee, toast])
 
   const handleSaveEdit = React.useCallback(async () => {
     if (!selectedEmployee) return
@@ -1017,6 +1138,10 @@ export default function PersonnelPage() {
                       <CardTitle className="text-sm font-black uppercase tracking-widest text-slate-500">Dijital Arsiv</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4 p-4">
+                      {!canAccessSelectedArchive ? (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-700">Bu personelin dijital arşivini görüntüleme yetkiniz yok.</div>
+                      ) : (
+                      <>
                       <div className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <div className="space-y-1.5">
@@ -1074,12 +1199,16 @@ export default function PersonnelPage() {
                                 </div>
                               </div>
                               <div className="mt-3 flex flex-wrap gap-2">
-                                <Button asChild variant="outline" size="sm" className="h-8 rounded-lg"><a href={document.fileUrl} target="_blank" rel="noopener noreferrer" onClick={() => handleViewArchiveItem(document)}>Goruntule</a></Button>
-                                <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => handleDownloadArchiveItem(document)}>Indir</Button>
-                                <Button variant="ghost" size="sm" className="h-8 rounded-lg text-accent hover:bg-red-50 hover:text-accent" onClick={() => handleDeleteArchiveItem(document.id)}>
-                                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                                  Sil
-                                </Button>
+                                {canAccessArchiveFile(selectedEmployee, document) && (
+                                  <>
+                                    <Button asChild variant="outline" size="sm" className="h-8 rounded-lg"><a href={document.fileUrl} target="_blank" rel="noopener noreferrer" onClick={(event) => { if (!handleViewArchiveItem(document)) event.preventDefault() }}>Goruntule</a></Button>
+                                    <Button variant="outline" size="sm" className="h-8 rounded-lg" onClick={() => handleDownloadArchiveItem(document)}>Indir</Button>
+                                    <Button variant="ghost" size="sm" className="h-8 rounded-lg text-accent hover:bg-red-50 hover:text-accent" onClick={() => handleDeleteArchiveItem(document.id)}>
+                                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                      Sil
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -1105,6 +1234,8 @@ export default function PersonnelPage() {
                             </button>
                           ))}
                         </div>
+                      )}
+                      </>
                       )}
                     </CardContent>
                   </Card>
