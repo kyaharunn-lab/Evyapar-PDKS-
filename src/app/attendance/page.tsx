@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import * as React from "react"
+import { collection, onSnapshot } from "firebase/firestore"
 import { 
   Calendar, 
   Search, 
@@ -31,10 +32,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { translations } from "@/lib/translations"
 import { formatDateTR, formatTimeTR } from "@/lib/date-time"
+import { useFirestore } from "@/firebase"
 
 const t = translations.common;
 const ATTENDANCE_RECORDS_KEY = "app_attendance_records";
 const SHIFTS_KEY = "app_shifts";
+const BREAKS_KEY = "app_break_records";
 
 function readArray(key: string) {
   if (typeof window === "undefined") return [];
@@ -60,17 +63,79 @@ function displayStatus(status: any) {
   return "Gecikme";
 }
 
-function attendanceRow(log: any, shifts: any[] = [], now = new Date()) {
+function minutesLabel(minutes: number | null) {
+  if (minutes === null) return "-";
+  const safe = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(safe / 60);
+  const mins = safe % 60;
+  if (hours > 0 && mins > 0) return `${hours} sa ${mins} dk`;
+  if (hours > 0) return `${hours} sa`;
+  return `${mins} dk`;
+}
+
+function parseRecordDate(value: any) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
+function breakPersonnelKey(item: any) {
+  return String(item?.personnelId ?? item?.personelId ?? item?.personId ?? "");
+}
+
+function breakDate(item: any) {
+  return parseRecordDate(item?.date || item?.breakStart || item?.startTime || item?.createdAt);
+}
+
+function breakDurationMinutes(item: any) {
+  const saved = Number(item?.durationMinutes || item?.duration || 0);
+  if (saved > 0) return saved;
+  const start = new Date(item?.breakStart || item?.startTime || "").getTime();
+  const end = new Date(item?.breakEnd || item?.endTime || "").getTime();
+  if (Number.isNaN(start) || Number.isNaN(end)) return 0;
+  return Math.max(0, Math.round((end - start) / 60000));
+}
+
+function totalBreakMinutesForRecord(log: any, breaks: any[]) {
+  const personId = personnelKey(log);
+  const date = recordDate(log);
+  if (!personId || !date) return 0;
+  return breaks
+    .filter((item: any) => breakPersonnelKey(item) === personId && breakDate(item) === date)
+    .reduce((total: number, item: any) => total + breakDurationMinutes(item), 0);
+}
+
+function totalInsideMinutes(log: any, now = new Date()) {
+  const startValue = log.entryTime || log.checkInTime;
+  const endValue = log.exitTime || log.checkOutTime;
+  if (!startValue) return null;
+  const start = new Date(startValue).getTime();
+  if (Number.isNaN(start)) return null;
+  const isClosed = Boolean(endValue) || String(log?.status || "").toLowerCase() === "outside" || log?.status === "Çıkış yaptı";
+  if (!isClosed) return null;
+  const end = new Date(endValue).getTime();
+  if (Number.isNaN(end)) return null;
+  return Math.max(0, Math.round((end - start) / 60000));
+}
+
+function attendanceRow(log: any, shifts: any[] = [], breaks: any[] = [], now = new Date()) {
   const status = attendanceStatus(log, shifts, now);
   const overtimeMinutes = attendanceOvertimeMinutes(log, shifts, now);
+  const totalMinutes = totalInsideMinutes(log, now);
+  const breakMinutes = totalBreakMinutesForRecord(log, breaks);
+  const netMinutes = totalMinutes === null ? null : Math.max(0, totalMinutes - breakMinutes);
   return {
     personel: log.personnelName || log["personelAdı"] || log["personelAdı"] || log.personnelId || log.personelId || "-",
-    tarih: formatDateTR(log.date || log.tarih),
+    tarih: formatDateTR(recordDate(log)),
     giris: displayTime(log.entryTime || log.checkInTime || log.saat),
     cikis: displayTime(log.exitTime || log.checkOutTime),
     yontem: log.method || log.verificationMethod || log["doğrulamaYöntemi"] || log.dogrulamaYontemi || "QR",
     durum: status,
     fazlaMesai: overtimeMinutes > 0 ? `${overtimeMinutes} dk` : "-",
+    toplamSure: minutesLabel(totalMinutes),
+    mola: minutesLabel(breakMinutes),
+    netCalisma: minutesLabel(netMinutes),
     konum: log.branchName || log.location || "-",
   };
 }
@@ -185,8 +250,10 @@ function filterDuplicateInside(records: any[]) {
 }
 
 export default function AttendanceLogsPage() {
+  const db = useFirestore();
   const [logs, setLogs] = React.useState<any[]>([]);
   const [shifts, setShifts] = React.useState<any[]>([]);
+  const [breaks, setBreaks] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [dateFilter, setDateFilter] = React.useState("");
@@ -195,6 +262,7 @@ export default function AttendanceLogsPage() {
   const loadLogs = React.useCallback(() => {
     setLogs(filterDuplicateInside(readArray(ATTENDANCE_RECORDS_KEY)));
     setShifts(readArray(SHIFTS_KEY));
+    setBreaks([...readArray(BREAKS_KEY), ...readArray("app_breaks")]);
     setLoading(false);
   }, []);
 
@@ -204,12 +272,29 @@ export default function AttendanceLogsPage() {
     window.addEventListener("storage", refresh);
     window.addEventListener("focus", refresh);
     window.addEventListener("app-attendance-records-updated", refresh);
+    window.addEventListener("app-break-records-updated", refresh);
     return () => {
       window.removeEventListener("storage", refresh);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("app-attendance-records-updated", refresh);
+      window.removeEventListener("app-break-records-updated", refresh);
     };
   }, [loadLogs]);
+
+  React.useEffect(() => {
+    if (!db) return;
+    return onSnapshot(collection(db, "breaks"), (snapshot) => {
+      const docs = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }));
+      setBreaks(docs);
+      try {
+        localStorage.setItem(BREAKS_KEY, JSON.stringify(docs));
+      } catch {
+        // Firestore remains the visible source for break totals
+      }
+    }, (error) => {
+      console.warn("Firestore breaks listener failed for attendance totals; localStorage fallback active.", error);
+    });
+  }, [db]);
 
   const branchOptions = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -224,7 +309,7 @@ export default function AttendanceLogsPage() {
   const filteredLogs = React.useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     return logs.filter((log: any) => {
-      const row = attendanceRow(log, shifts);
+      const row = attendanceRow(log, shifts, breaks);
       const matchesSearch = !query || [
         row.personel,
         row.yontem,
@@ -238,22 +323,22 @@ export default function AttendanceLogsPage() {
       const matchesBranch = branchFilter === "all" || branchId === branchFilter;
       return matchesSearch && matchesDate && matchesBranch;
     });
-  }, [branchFilter, dateFilter, logs, searchTerm, shifts]);
+  }, [branchFilter, dateFilter, logs, searchTerm, shifts, breaks]);
 
   const hasAttendanceFilter = Boolean(searchTerm || dateFilter || branchFilter !== "all");
 
   const handleExcelExport = React.useCallback(() => {
-    const headers = ["Personel", "Tarih", "Giriş", "Çıkış", "Yöntem", "Durum", "Fazla Mesai", "Konum"];
+    const headers = ["Personel", "Tarih", "Giriş", "Çıkış", "Yöntem", "Durum", "Fazla Mesai", "Toplam Süre", "Mola", "Net Çalışma", "Konum"];
     const rows = filteredLogs.map((log) => {
-      const row = attendanceRow(log, shifts);
-      return [row.personel, row.tarih, row.giris, row.cikis, row.yontem, row.durum, row.fazlaMesai, row.konum].map(csvCell).join(",");
+      const row = attendanceRow(log, shifts, breaks);
+      return [row.personel, row.tarih, row.giris, row.cikis, row.yontem, row.durum, row.fazlaMesai, row.toplamSure, row.mola, row.netCalisma, row.konum].map(csvCell).join(",");
     });
     const content = [headers.map(csvCell).join(","), ...rows].join("\n");
     downloadTextFile(`attendance-${new Date().toISOString().slice(0, 10)}.csv`, content, "text/csv;charset=utf-8");
-  }, [filteredLogs, shifts]);
+  }, [breaks, filteredLogs, shifts]);
 
   const handlePdfReport = React.useCallback(() => {
-    const rows = filteredLogs.map((log) => attendanceRow(log, shifts));
+    const rows = filteredLogs.map((log) => attendanceRow(log, shifts, breaks));
     const reportWindow = window.open("", "_blank", "width=1100,height=800");
     if (!reportWindow) {
       window.print();
@@ -280,10 +365,10 @@ export default function AttendanceLogsPage() {
           <p>Kayıt sayısı: ${rows.length} | Tarih: ${new Date().toLocaleDateString("tr-TR")}</p>
           <table>
             <thead>
-              <tr><th>Personel</th><th>Tarih</th><th>Giriş</th><th>Çıkış</th><th>Yöntem</th><th>Durum</th><th>Fazla Mesai</th><th>Konum</th></tr>
+              <tr><th>Personel</th><th>Tarih</th><th>Giriş</th><th>Çıkış</th><th>Yöntem</th><th>Durum</th><th>Fazla Mesai</th><th>Toplam Süre</th><th>Mola</th><th>Net Çalışma</th><th>Konum</th></tr>
             </thead>
             <tbody>
-              ${rows.map((row) => `<tr><td>${htmlCell(row.personel)}</td><td>${htmlCell(row.tarih)}</td><td>${htmlCell(row.giris)}</td><td>${htmlCell(row.cikis)}</td><td>${htmlCell(row.yontem)}</td><td>${htmlCell(row.durum)}</td><td>${htmlCell(row.fazlaMesai)}</td><td>${htmlCell(row.konum)}</td></tr>`).join("")}
+              ${rows.map((row) => `<tr><td>${htmlCell(row.personel)}</td><td>${htmlCell(row.tarih)}</td><td>${htmlCell(row.giris)}</td><td>${htmlCell(row.cikis)}</td><td>${htmlCell(row.yontem)}</td><td>${htmlCell(row.durum)}</td><td>${htmlCell(row.fazlaMesai)}</td><td>${htmlCell(row.toplamSure)}</td><td>${htmlCell(row.mola)}</td><td>${htmlCell(row.netCalisma)}</td><td>${htmlCell(row.konum)}</td></tr>`).join("")}
             </tbody>
           </table>
         </body>
@@ -292,7 +377,7 @@ export default function AttendanceLogsPage() {
     reportWindow.document.close();
     reportWindow.focus();
     reportWindow.print();
-  }, [filteredLogs, shifts]);
+  }, [breaks, filteredLogs, shifts]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -390,6 +475,9 @@ export default function AttendanceLogsPage() {
                   <TableHead>Yöntem</TableHead>
                   <TableHead>Durum</TableHead>
                   <TableHead>Fazla Mesai</TableHead>
+                  <TableHead>Toplam Süre</TableHead>
+                  <TableHead>Mola</TableHead>
+                  <TableHead>Net Çalışma</TableHead>
                   <TableHead>Konum</TableHead>
                 </TableRow>
               </TableHeader>
@@ -397,6 +485,7 @@ export default function AttendanceLogsPage() {
                 {filteredLogs.map((log: any) => {
                   const statusLabel = attendanceStatus(log, shifts);
                   const overtimeMinutes = attendanceOvertimeMinutes(log, shifts);
+                  const row = attendanceRow(log, shifts, breaks);
                   const isOvertimeStatus = statusLabel === "Fazla Mesai";
                   const isLateStatus = statusLabel.startsWith("Geç");
                   const statusClass = isOvertimeStatus ? "text-amber-600" : isLateStatus ? "text-accent" : "text-green-600";
@@ -408,7 +497,7 @@ export default function AttendanceLogsPage() {
                         <span className="font-semibold">{log.personnelName || log["personelAdı"] || log["personelAdı"] || log.personnelId || log.personelId || "-"}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{formatDateTR(log.date || log.tarih)}</TableCell>
+                    <TableCell className="text-sm">{formatDateTR(recordDate(log))}</TableCell>
                     <TableCell>
                       <div className="flex items-center text-sm">
                         <Clock className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
@@ -442,6 +531,15 @@ export default function AttendanceLogsPage() {
                       <Badge variant="outline" className={overtimeMinutes > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-500"}>
                         {overtimeMinutes > 0 ? `${overtimeMinutes} dk` : "-"}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-semibold text-primary">{row.toplamSure}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">{row.mola}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm font-bold text-green-700">{row.netCalisma}</span>
                     </TableCell>
                     <TableCell>
                       <div className="text-xs flex items-center gap-1.5 text-muted-foreground">
