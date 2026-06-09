@@ -511,7 +511,7 @@ function buildAutoBreakRecords(shifts: any[], person: any, branch: any, checkIn:
   if (start === null || end === null) return []
 
   const span = end > start ? end - start : (end + 1440) - start
-  if (span < 210) return []
+  if (span < 480) return []
 
   let normalStart = start + Math.max(30, Math.floor(span * 0.18))
   let mealStart = Math.max(start + Math.floor(span * 0.5) - 30, normalStart + 105)

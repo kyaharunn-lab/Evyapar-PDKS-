@@ -124,7 +124,9 @@ function attendanceRow(log: any, shifts: any[] = [], breaks: any[] = [], now = n
   const overtimeMinutes = attendanceOvertimeMinutes(log, shifts, now);
   const totalMinutes = totalInsideMinutes(log, now);
   const breakMinutes = totalBreakMinutesForRecord(log, breaks);
-  const netMinutes = totalMinutes === null ? null : Math.max(0, totalMinutes - breakMinutes);
+  const breakExceedsTotal = totalMinutes !== null && breakMinutes > totalMinutes;
+  const appliedBreakMinutes = breakExceedsTotal ? 0 : breakMinutes;
+  const netMinutes = totalMinutes === null ? null : Math.max(0, totalMinutes - appliedBreakMinutes);
   return {
     personel: log.personnelName || log["personelAdı"] || log["personelAdı"] || log.personnelId || log.personelId || "-",
     tarih: formatDateTR(recordDate(log)),
@@ -134,8 +136,9 @@ function attendanceRow(log: any, shifts: any[] = [], breaks: any[] = [], now = n
     durum: status,
     fazlaMesai: overtimeMinutes > 0 ? `${overtimeMinutes} dk` : "-",
     toplamSure: minutesLabel(totalMinutes),
-    mola: minutesLabel(breakMinutes),
+    mola: breakExceedsTotal ? `${minutesLabel(breakMinutes)} (uyarı)` : minutesLabel(breakMinutes),
     netCalisma: minutesLabel(netMinutes),
+    molaUyarisi: breakExceedsTotal ? "Mola toplam süreden büyük; net hesaba uygulanmadı." : "",
     konum: log.branchName || log.location || "-",
   };
 }
@@ -536,7 +539,10 @@ export default function AttendanceLogsPage() {
                       <span className="text-sm font-semibold text-primary">{row.toplamSure}</span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">{row.mola}</Badge>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant="outline" className={row.molaUyarisi ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600"}>{row.mola}</Badge>
+                        {row.molaUyarisi && <span className="text-[10px] font-semibold text-amber-600">{row.molaUyarisi}</span>}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <span className="text-sm font-bold text-green-700">{row.netCalisma}</span>
