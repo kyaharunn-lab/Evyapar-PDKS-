@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import * as React from "react"
+import { collection, onSnapshot } from "firebase/firestore"
 import { 
   Activity, 
   Search, 
@@ -55,12 +56,14 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
 import { formatTimeTR } from "@/lib/date-time"
+import { useFirestore } from "@/firebase"
 
 const t = translations.common;
 const l = translations.live;
 const LIVE_PRESENCE_KEY = "app_live_presence";
 const ATTENDANCE_RECORDS_KEY = "app_attendance_records";
 const SHIFTS_KEY = "app_shifts";
+const BREAKS_KEY = "app_break_records";
 
 function readArray(key: string) {
   if (typeof window === "undefined") return [];
@@ -141,16 +144,45 @@ function exitOvertimeInfo(shifts: any[], record: any, exitedAt = new Date()) {
   };
 }
 
-function latestInsideByPersonDay(records: any[]) {
+function isActivePresence(record: any) {
+  const status = String(record?.status || "").toLowerCase();
+  return status === "inside" || status === "on_break" || status === "break" || status === "active";
+}
+
+function latestActivePresenceByPersonDay(records: any[]) {
   const latest = new Map<string, any>();
   records
-    .filter((item: any) => String(item?.status || "").toLowerCase() === "inside")
+    .filter((item: any) => isActivePresence(item))
     .forEach((item: any) => {
       const key = `${itemId(item)}-${recordDate(item)}`;
       const current = latest.get(key);
       if (!current || recordTime(item) >= recordTime(current)) latest.set(key, item);
     });
   return Array.from(latest.values());
+}
+
+function isActiveBreak(record: any) {
+  const status = String(record?.status || "").toLowerCase();
+  return (status === "active" || status === "on_break") && !record?.endTime && !record?.breakEnd;
+}
+
+function shiftForRecord(shifts: any[], record: any) {
+  return shifts.find((item) => shiftMatchesRecord(item, record));
+}
+
+function shiftStatusForRecord(shifts: any[], record: any, now = new Date()) {
+  const shift = shiftForRecord(shifts, record);
+  if (!shift) return { label: "Vardiya dışı", offShift: true };
+  const start = timeToMinutes(shift?.shift?.startTime || shift?.startTime || shift?.entryTime);
+  const end = timeToMinutes(shift?.shift?.endTime || shift?.endTime || shift?.exitTime);
+  if (start === null || end === null) return { label: shift?.name || "Planlı vardiya", offShift: false };
+  const current = now.getHours() * 60 + now.getMinutes();
+  const inShift = current >= start && current <= end;
+  return {
+    label: inShift ? "Vardiya içinde" : "Vardiya dışı",
+    offShift: !inShift,
+    name: shift?.name || shift?.shiftName || "",
+  };
 }
 
 function personFullName(person: any, fallback = "Personel") {
@@ -163,6 +195,7 @@ function initials(name: string) {
 
 export default function LiveAttendancePage() {
   const { toast } = useToast()
+  const db = useFirestore()
   
   const [searchTerm, setSearchTerm] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("all")
@@ -177,6 +210,7 @@ export default function LiveAttendancePage() {
   const [personnel, setPersonnel] = React.useState<any[]>([])
   const [branches, setBranches] = React.useState<any[]>([])
   const [shifts, setShifts] = React.useState<any[]>([])
+  const [breaks, setBreaks] = React.useState<any[]>([])
   const [loadingLogs, setLoadingLogs] = React.useState(true)
 
   // Update "now" every minute to refresh durations
@@ -186,10 +220,11 @@ export default function LiveAttendancePage() {
   }, [])
 
   const loadLocalData = React.useCallback(() => {
-    setRawLogs(latestInsideByPersonDay(readArray(LIVE_PRESENCE_KEY)))
+    setRawLogs(latestActivePresenceByPersonDay(readArray(LIVE_PRESENCE_KEY)))
     setPersonnel(readArray("app_personnel").filter((person: any) => !person?.isDeleted))
     setBranches(readArray("app_branches"))
     setShifts(readArray(SHIFTS_KEY))
+    setBreaks(readArray(BREAKS_KEY))
     setLoadingLogs(false)
     setLastRefresh(new Date())
   }, [])
@@ -207,6 +242,50 @@ export default function LiveAttendancePage() {
     }
   }, [loadLocalData])
 
+  React.useEffect(() => {
+    if (!db) return
+    const mirror = (key: string, rows: any[]) => {
+      try {
+        localStorage.setItem(key, JSON.stringify(rows))
+      } catch {
+        // Firestore remains the visible source
+      }
+    }
+    const unsubscribers = [
+      onSnapshot(collection(db, "livePresence"), (snapshot) => {
+        const rows = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))
+        setRawLogs(latestActivePresenceByPersonDay(rows))
+        mirror(LIVE_PRESENCE_KEY, rows)
+        setLoadingLogs(false)
+        setLastRefresh(new Date())
+      }, (error) => {
+        console.warn("Firestore livePresence listener failed; localStorage fallback active.", error)
+        setLoadingLogs(false)
+      }),
+      onSnapshot(collection(db, "personnel"), (snapshot) => {
+        const rows = snapshot.docs.map((item) => ({ ...item.data(), id: item.id })).filter((person: any) => !person?.isDeleted)
+        setPersonnel(rows)
+        mirror("app_personnel", rows)
+      }),
+      onSnapshot(collection(db, "branches"), (snapshot) => {
+        const rows = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))
+        setBranches(rows)
+        mirror("app_branches", rows)
+      }),
+      onSnapshot(collection(db, "shifts"), (snapshot) => {
+        const rows = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))
+        setShifts(rows)
+        mirror(SHIFTS_KEY, rows)
+      }),
+      onSnapshot(collection(db, "breaks"), (snapshot) => {
+        const rows = snapshot.docs.map((item) => ({ ...item.data(), id: item.id }))
+        setBreaks(rows)
+        mirror(BREAKS_KEY, rows)
+      }),
+    ]
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe())
+  }, [db])
+
   // Merge log data with personnel data
   const liveLogs = React.useMemo(() => {
     if (!rawLogs || !personnel) return [];
@@ -216,28 +295,35 @@ export default function LiveAttendancePage() {
       const branchId = log.branchId || person?.branchId || "";
       const branch = branches?.find(b => (b.id || b.branchCode || "").toString() === branchId.toString());
       const displayName = log.personnelName || log["personelAdı"] || log["personelAdı"] || personFullName(person);
+      const activeBreak = breaks.find((item: any) => itemId(item) === personnelId && isActiveBreak(item));
+      const shiftStatus = shiftStatusForRecord(shifts, { ...log, branchId }, now);
       return {
         ...log,
         personnelId,
         entryTime: log.entryTime || log.checkInTime,
         person: person || { fullName: displayName, name: displayName, surname: "" },
-        branchName: log.branchName || log["şube"] || log["şube"] || branch?.branchName || branch?.name || person?.branchId || "-"
+        displayName,
+        branchName: log.branchName || log["şube"] || log["şube"] || branch?.branchName || branch?.name || person?.branchName || person?.branchId || "-",
+        isOnBreak: Boolean(activeBreak) || String(log.status || "").toLowerCase() === "on_break",
+        activeBreak,
+        shiftStatus,
       };
     }).filter(log => {
       const query = searchTerm.trim().toLowerCase();
       const matchesSearch = !query ||
+        log.displayName?.toLowerCase().includes(query) ||
         log.personnelName?.toLowerCase().includes(query) ||
         log.person?.name?.toLowerCase().includes(query) ||
         log.person?.fullName?.toLowerCase().includes(query) ||
         log.person?.surname?.toLowerCase().includes(query) ||
         log.person?.registryNo?.toLowerCase().includes(query) ||
         log.person?.departmentId?.toLowerCase().includes(query);
-      const status = String(log.isLate ? "late" : log.status || "").toLowerCase();
+      const status = String(log.isLate ? "late" : log.isOnBreak ? "on_break" : log.status || "").toLowerCase();
       const matchesStatus = statusFilter === "all" || status === statusFilter;
       const matchesBranch = branchFilter === "all" || String(log.branchId || log.branchName || "") === branchFilter;
       return matchesSearch && matchesStatus && matchesBranch;
     });
-  }, [branchFilter, rawLogs, personnel, branches, searchTerm, statusFilter]);
+  }, [branchFilter, rawLogs, personnel, branches, breaks, shifts, now, searchTerm, statusFilter]);
 
   const branchOptions = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -253,10 +339,10 @@ export default function LiveAttendancePage() {
   // KPI Calculations
   const stats = React.useMemo(() => {
     const total = liveLogs.length;
-    const late = liveLogs.filter(log => log.status === "Late").length;
-    const breakCount = liveLogs.filter(log => log.status === "Break").length;
+    const late = liveLogs.filter(log => log.isLate).length;
+    const breakCount = liveLogs.filter(log => log.isOnBreak).length;
     const fieldCount = liveLogs.filter(log => log.isRemote).length;
-    const offShift = liveLogs.filter(log => log.status === "OffShift").length;
+    const offShift = liveLogs.filter(log => log.shiftStatus?.offShift).length;
     
     return { total, late, breakCount, fieldCount, offShift };
   }, [liveLogs]);
@@ -271,6 +357,7 @@ export default function LiveAttendancePage() {
   };
 
   const liveStatus = (log: any) => {
+    if (log.isOnBreak) return "Break";
     if (liveOvertimeMinutes(log, shifts, now) > 0) return "Overtime";
     return log.isLate ? "Late" : log.status;
   };
@@ -363,13 +450,11 @@ export default function LiveAttendancePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-        <KPICard title={l.kpis.inOffice} value={stats.total} icon={Clock} color="text-green-600" bg="bg-green-50" />
-        <KPICard title={l.kpis.onBreak} value={stats.breakCount} icon={RefreshCcw} color="text-yellow-600" bg="bg-yellow-50" />
-        <KPICard title={l.kpis.late} value={stats.late} icon={AlertCircle} color="text-accent" bg="bg-red-50" />
-        <KPICard title={l.kpis.offShift} value={stats.offShift} icon={Activity} color="text-slate-500" bg="bg-slate-50" />
-        <KPICard title={l.kpis.onField} value={stats.fieldCount} icon={MapPin} color="text-blue-600" bg="bg-blue-50" />
-        <KPICard title={l.kpis.total} value={stats.total} icon={Activity} color="text-primary" bg="bg-primary/5" />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard title="İçerideki Personel" value={stats.total} icon={Clock} color="text-green-600" bg="bg-green-50" />
+        <KPICard title="Molada Olanlar" value={stats.breakCount} icon={RefreshCcw} color="text-yellow-600" bg="bg-yellow-50" />
+        <KPICard title="Geç Kalanlar" value={stats.late} icon={AlertCircle} color="text-accent" bg="bg-red-50" />
+        <KPICard title="Vardiya Dışı Girişler" value={stats.offShift} icon={Activity} color="text-slate-500" bg="bg-slate-50" />
       </div>
 
       <Card className="premium-card overflow-hidden">
@@ -456,12 +541,12 @@ export default function LiveAttendancePage() {
             <Table>
               <TableHeader className="enterprise-table-header">
                 <TableRow>
-                  <TableHead className="pl-6">{t.personnel}</TableHead>
-                  <TableHead>Şube / Departman</TableHead>
+                  <TableHead className="pl-6">Ad Soyad</TableHead>
+                  <TableHead>Şube</TableHead>
                   <TableHead>{l.entryTime}</TableHead>
-                  <TableHead>{l.duration}</TableHead>
-                  <TableHead>{t.status}</TableHead>
-                  <TableHead>{l.location}</TableHead>
+                  <TableHead>İçeride Kalma Süresi</TableHead>
+                  <TableHead>Mola Durumu</TableHead>
+                  <TableHead>Vardiya Durumu</TableHead>
                   <TableHead className="text-right pr-6">{t.actions}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -473,11 +558,11 @@ export default function LiveAttendancePage() {
                         <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
                           <AvatarImage src={log.person?.avatarUrl} />
                           <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">
-                            {log.person?.name?.charAt(0)}{log.person?.surname?.charAt(0)}
+                            {initials(log.displayName)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <span className="font-bold text-primary">{log.person?.name} {log.person?.surname}</span>
+                          <span className="font-bold text-primary">{log.displayName}</span>
                           <span className="text-[10px] font-mono text-slate-400">{log.person?.registryNo || log.personnelId}</span>
                         </div>
                       </div>
@@ -485,7 +570,6 @@ export default function LiveAttendancePage() {
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="text-sm font-semibold text-slate-700">{log.branchName}</span>
-                        <span className="text-xs text-slate-500">{log.person?.departmentId || "-"}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -498,13 +582,11 @@ export default function LiveAttendancePage() {
                       <span className="text-sm font-bold text-primary">{formatDuration(log.entryTime)}</span>
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={liveStatus(log)} isRemote={log.isRemote} />
+                      {log.isOnBreak ? <Badge className="bg-yellow-50 text-yellow-700">Molada</Badge> : <Badge className="bg-green-50 text-green-700">Molada değil</Badge>}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center text-xs text-slate-500">
-                        <MapPin className="mr-1.5 h-3 w-3" />
-                        <span className="truncate max-w-[120px]">{log.location || "Konum Yok"}</span>
-                      </div>
+                      <Badge className={log.shiftStatus?.offShift ? "bg-slate-100 text-slate-700" : "bg-blue-50 text-blue-700"}>{log.shiftStatus?.label || "-"}</Badge>
+                      {log.shiftStatus?.name && <div className="mt-1 text-[10px] font-semibold text-slate-400">{log.shiftStatus.name}</div>}
                     </TableCell>
                     <TableCell className="text-right pr-6">
                       <DropdownMenu>
@@ -552,11 +634,11 @@ export default function LiveAttendancePage() {
                   <Avatar className="h-20 w-20 border-4 border-white shadow-lg">
                     <AvatarImage src={selectedLog.person?.avatarUrl} />
                     <AvatarFallback className="text-2xl font-bold bg-primary text-white">
-                      {selectedLog.person?.name?.charAt(0)}
+                      {initials(selectedLog.displayName || personFullName(selectedLog.person))}
                     </AvatarFallback>
                   </Avatar>
                   <div className="space-y-1">
-                    <h4 className="text-xl font-bold text-primary">{selectedLog.person?.name} {selectedLog.person?.surname}</h4>
+                    <h4 className="text-xl font-bold text-primary">{selectedLog.displayName || personFullName(selectedLog.person)}</h4>
                     <p className="text-sm font-medium text-slate-500">{selectedLog.person?.position}</p>
                     <StatusBadge status={liveStatus(selectedLog)} isRemote={selectedLog.isRemote} />
                   </div>
