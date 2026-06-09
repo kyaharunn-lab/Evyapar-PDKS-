@@ -486,6 +486,78 @@ function calculateOvertimeInfo(shifts: any[], personId: string, branchId: string
   }
 }
 
+function minutesToTimeText(minutes: number) {
+  const normalized = ((minutes % 1440) + 1440) % 1440
+  const hour = Math.floor(normalized / 60)
+  const minute = normalized % 60
+  return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`
+}
+
+function buildIsoForDateTime(dateKey: string, minutes: number) {
+  return new Date(`${dateKey}T${minutesToTimeText(minutes)}:00`).toISOString()
+}
+
+function buildAutoBreakRecords(shifts: any[], person: any, branch: any, checkIn: Date) {
+  const personId = getId(person)
+  const branchId = getId(branch) || person?.branchId || ""
+  const dateKey = checkIn.toISOString().slice(0, 10)
+  const shift = findTodayMobileShift(shifts, personId, branchId)
+  if (!shift) return []
+
+  const start = timeToMinutes(shift?.shift?.startTime || shift?.startTime || shift?.entryTime)
+  const end = timeToMinutes(shift?.shift?.endTime || shift?.endTime || shift?.exitTime)
+  if (start === null || end === null) return []
+
+  const span = end > start ? end - start : (end + 1440) - start
+  if (span < 180) return []
+
+  const mealStart = start + Math.max(60, Math.floor(span * 0.45))
+  const normalStart = start + Math.max(30, Math.floor(span * 0.18))
+  const branchNameText = branch ? branchName(branch) : person?.branchName || ""
+  const personnelNameText = personName(person)
+  const createdAt = new Date().toISOString()
+  const base = {
+    personnelId: personId,
+    personId,
+    personelId: personId,
+    personnelName: personnelNameText,
+    personName: personnelNameText,
+    branchId,
+    branchName: branchNameText,
+    date: dateKey,
+    status: "completed",
+    source: "auto",
+    createdAt,
+  }
+
+  return [
+    {
+      ...base,
+      id: `auto-break-${personId}-${dateKey}-meal`,
+      startTime: buildIsoForDateTime(dateKey, mealStart),
+      endTime: buildIsoForDateTime(dateKey, mealStart + 60),
+      breakStart: buildIsoForDateTime(dateKey, mealStart),
+      breakEnd: buildIsoForDateTime(dateKey, mealStart + 60),
+      durationMinutes: 60,
+      breakType: "meal",
+      type: "meal",
+      typeLabel: "Yemek Molası",
+    },
+    {
+      ...base,
+      id: `auto-break-${personId}-${dateKey}-break`,
+      startTime: buildIsoForDateTime(dateKey, normalStart),
+      endTime: buildIsoForDateTime(dateKey, normalStart + 90),
+      breakStart: buildIsoForDateTime(dateKey, normalStart),
+      breakEnd: buildIsoForDateTime(dateKey, normalStart + 90),
+      durationMinutes: 90,
+      breakType: "break",
+      type: "break",
+      typeLabel: "Normal Mola",
+    },
+  ]
+}
+
 function attendancePersonId(record: any) {
   return String(record?.personnelId ?? record?.personelId ?? record?.personId ?? "")
 }
@@ -972,6 +1044,29 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     })
   }, [db, personId, selectedPerson])
 
+  const ensureAutoBreaksForEntry = React.useCallback((entryAt: Date) => {
+    if (!selectedPerson || !personId) return
+    const dateKey = entryAt.toISOString().slice(0, 10)
+    const currentBreaks = readArray("app_break_records")
+    const alreadyCreated = currentBreaks.some((item: any) =>
+      matchesPerson(item, personId) &&
+      String(item?.date || item?.breakStart || item?.startTime || "").slice(0, 10) === dateKey &&
+      item?.source === "auto"
+    )
+    if (alreadyCreated) return
+
+    const plannedBreaks = buildAutoBreakRecords(data.shifts, selectedPerson, selectedBranch, entryAt)
+    if (plannedBreaks.length === 0) return
+
+    writeArray("app_break_records", [...plannedBreaks, ...currentBreaks])
+    plannedBreaks.forEach((record) => {
+      void writeSharedRecord(db, "breaks", record).catch((error) => {
+        console.warn("[auto-breaks] Firestore sync failed", error)
+      })
+    })
+    window.dispatchEvent(new Event("app-break-records-updated"))
+  }, [data.shifts, db, personId, selectedBranch, selectedPerson])
+
   const handleDigitalArchiveAudit = React.useCallback(async (action: "file_view" | "file_download", file: any) => {
     if (!selectedPerson || !personId || !file) return
     try {
@@ -1079,6 +1174,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         writeArray(ATTENDANCE_KEY, [record, ...readArray(ATTENDANCE_KEY)])
         writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
         writeArray(LIVE_PRESENCE_KEY, [record, ...readArray(LIVE_PRESENCE_KEY).filter((item: any) => !matchesPerson(item, personId))])
+          ensureAutoBreaksForEntry(now)
           notifyAttendanceSync()
         }
       }
@@ -1254,6 +1350,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
     if (record.status === "inside") {
       writeArray(LIVE_PRESENCE_KEY, [record, ...livePresence.filter((item: any) => !matchesPerson(item, personId))])
+      ensureAutoBreaksForEntry(now)
       console.log("[mobile-qr-attendance] livePresence updated", { action: "checkIn", personnelId: personId })
     } else {
       writeArray(LIVE_PRESENCE_KEY, livePresence.map((item: any) =>
@@ -2487,19 +2584,11 @@ function BreakScreen({ breaks, settings, palette, onBreak, isPersonInside }: any
     <div>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">Mola</h3><Clock3 className="h-5 w-5 text-white/60" /></div>
       <MobileCard className="mb-4 space-y-3">
-        <Info label="Mevcut durum" value={active ? "Molada" : "Molada değil"} />
+        <Info label="Mola planı" value="Otomatik planlanır" />
+        <Info label="Bugünkü mola hakkı" value="2 sa 30 dk" />
         <Info label="Bugünkü toplam mola" value={`${totalTodayMinutes} dk`} />
-        <Info label="Aktif mola başlangıcı" value={active ? formatTimeTR(active.breakStart || active.startTime) : "-"} />
-        {!isPersonInside && <p className="rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">Mola başlatmak için önce giriş yapmalısınız.</p>}
+        {!isPersonInside && <p className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/55">Planlı mola kayıtları QR giriş sonrası otomatik oluşturulur.</p>}
       </MobileCard>
-      <div className="mb-4 grid grid-cols-2 gap-3">
-        {!active && (
-          <Button data-mobile-action="break-start" disabled={!isPersonInside} onClick={onBreak} className={cn("h-12 rounded-2xl text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-45", palette.button)}>Mola Başlat</Button>
-        )}
-        {active && (
-          <Button data-mobile-action="break-end" onClick={onBreak} className={cn("col-span-2 h-12 rounded-2xl text-sm font-extrabold text-white", palette.button)}>Molayı Bitir</Button>
-        )}
-      </div>
       <div className="mb-3 text-xs font-black uppercase tracking-widest text-white/45">Bugünkü mola geçmişi</div>
       <ListItems items={items} empty="Bugün mola kaydı bulunamadı." />
     </div>

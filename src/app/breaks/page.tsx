@@ -255,6 +255,9 @@ export default function BreakLogsPage() {
       Tea: "Çay",
       Smoke: "Sigara",
       Rest: "Dinlenme",
+      meal: "Yemek Molası",
+      break: "Normal Mola",
+      "Standart Mola": "Standart Mola",
       Tech: b.types.tech,
       Personal: b.types.personal
     };
@@ -486,7 +489,7 @@ const getDurationMinutes = (startTime: string, endTime: string) => {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="font-bold border-slate-200">
-                        {getBreakTypeLabel(log.breakType)}
+                        {log.typeLabel || getBreakTypeLabel(log.type || log.breakType)}
                       </Badge>
                     </TableCell>
                     <TableCell>
