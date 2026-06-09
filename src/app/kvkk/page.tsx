@@ -165,23 +165,54 @@ const timestampValue = (value: any) => {
   return value
 }
 
+const firstValue = (...values: any[]) => values.find((value) => value !== undefined && value !== null && value !== "") || ""
+
+const hasGpsPermission = (person: any, legacyConsent: any = {}) => boolField(
+  person?.locationPermissionGranted,
+  person?.gpsPermissionGranted,
+  person?.gpsConsent,
+  person?.locationConsent,
+  person?.locationPermission,
+  person?.permissions?.locationPermissionGranted,
+  person?.permissions?.gpsPermissionGranted,
+  person?.mobilePermissions?.location,
+  person?.mobilePermissions?.gps,
+  legacyConsent?.gpsConsent
+)
+
+const gpsPermissionAcceptedAt = (person: any, legacyConsent: any = {}) => timestampValue(firstValue(
+  person?.locationPermissionGrantedAt,
+  person?.gpsPermissionGrantedAt,
+  person?.locationConsentAt,
+  person?.gpsConsentAt,
+  person?.lastGpsPermissionAt,
+  person?.lastLocationPermissionAt,
+  legacyConsent?.gpsConsentAt,
+  legacyConsent?.signedAt
+))
+
+const gpsLastVerifiedAt = (person: any, legacyConsent: any = {}) => timestampValue(firstValue(
+  person?.lastGpsVerifiedAt,
+  person?.lastLocationVerifiedAt,
+  person?.lastGpsCheckAt,
+  person?.lastLocationCheckAt,
+  person?.lastGpsSuccessAt,
+  person?.lastLocationSuccessAt,
+  legacyConsent?.lastGpsVerifiedAt,
+  legacyConsent?.updatedAt
+))
+
 const consentFromPersonnel = (person: any, legacyConsent: any = {}) => {
   const kvkkAccepted = person?.kvkkAccepted === true
-  const locationPermissionGranted = boolField(
-    person?.locationPermissionGranted,
-    person?.gpsPermissionGranted,
-    person?.gpsConsent,
-    person?.locationConsent,
-    person?.locationPermission,
-    person?.permissions?.locationPermissionGranted,
-    legacyConsent?.gpsConsent
-  )
+  const locationPermissionGranted = hasGpsPermission(person, legacyConsent)
   return {
     ...legacyConsent,
     status: kvkkAccepted ? "Approved" : "Pending",
     signedAt: kvkkAccepted ? timestampValue(person?.kvkkAcceptedAt || legacyConsent?.signedAt) : "",
     updatedAt: timestampValue(person?.kvkkAcceptedAt || person?.updatedAt || legacyConsent?.updatedAt),
     gpsConsent: locationPermissionGranted,
+    gpsConsentAt: gpsPermissionAcceptedAt(person, legacyConsent),
+    lastGpsVerifiedAt: gpsLastVerifiedAt(person, legacyConsent),
     cameraConsent: boolField(person?.cameraConsent, person?.cameraPermissionGranted, legacyConsent?.cameraConsent),
     faceConsent: boolField(person?.faceConsent, person?.facePermissionGranted, legacyConsent?.faceConsent),
     deviceTrackingConsent: boolField(person?.deviceTrackingConsent, person?.devicePermissionGranted, legacyConsent?.deviceTrackingConsent),
