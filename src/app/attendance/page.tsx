@@ -119,26 +119,60 @@ function totalInsideMinutes(log: any, now = new Date()) {
   return Math.max(0, Math.round((end - start) / 60000));
 }
 
+function attendanceTiming(log: any) {
+  const startValue = log.entryTime || log.checkInTime;
+  const endValue = log.exitTime || log.checkOutTime;
+  const start = startValue ? new Date(startValue).getTime() : NaN;
+  const end = endValue ? new Date(endValue).getTime() : NaN;
+  const hasStart = !Number.isNaN(start);
+  const hasEnd = !Number.isNaN(end);
+  const isClosed = Boolean(endValue) || String(log?.status || "").toLowerCase() === "outside" || log?.status === "Çıkış yaptı";
+  const invalid = hasStart && hasEnd && end < start;
+  const missingExit = hasStart && !hasEnd && !isClosed;
+  const nightShift = hasStart && hasEnd && end > start && new Date(end).toISOString().slice(0, 10) !== new Date(start).toISOString().slice(0, 10);
+  return { hasStart, hasEnd, invalid, missingExit, nightShift };
+}
+
+function applicableBreakMinutes(totalMinutes: number | null) {
+  if (totalMinutes === null) return null;
+  if (totalMinutes < 240) return 0;
+  if (totalMinutes < 360) return 30;
+  if (totalMinutes < 480) return 60;
+  return 150;
+}
+
+function recordBadge(log: any) {
+  const timing = attendanceTiming(log);
+  if (timing.invalid) return { label: "Hatalı Kayıt", className: "border-red-200 bg-red-50 text-red-700" };
+  if (timing.missingExit) return { label: "Eksik Çıkış", className: "border-amber-200 bg-amber-50 text-amber-700" };
+  if (timing.nightShift) return { label: "Gece Vardiyası", className: "border-indigo-200 bg-indigo-50 text-indigo-700" };
+  return { label: "Normal", className: "border-green-200 bg-green-50 text-green-700" };
+}
+
 function attendanceRow(log: any, shifts: any[] = [], breaks: any[] = [], now = new Date()) {
   const status = attendanceStatus(log, shifts, now);
   const overtimeMinutes = attendanceOvertimeMinutes(log, shifts, now);
-  const totalMinutes = totalInsideMinutes(log, now);
-  const breakMinutes = totalBreakMinutesForRecord(log, breaks);
-  const breakExceedsTotal = totalMinutes !== null && breakMinutes > totalMinutes;
-  const appliedBreakMinutes = breakExceedsTotal ? 0 : breakMinutes;
-  const netMinutes = totalMinutes === null ? null : Math.max(0, totalMinutes - appliedBreakMinutes);
+  const timing = attendanceTiming(log);
+  const rawTotalMinutes = totalInsideMinutes(log, now);
+  const totalMinutes = timing.invalid ? null : rawTotalMinutes;
+  const recordedBreakMinutes = totalBreakMinutesForRecord(log, breaks);
+  const appliedBreakMinutes = totalMinutes === null ? null : applicableBreakMinutes(totalMinutes);
+  const netMinutes = totalMinutes === null || appliedBreakMinutes === null ? null : Math.max(0, totalMinutes - appliedBreakMinutes);
+  const badge = recordBadge(log);
   return {
     personel: log.personnelName || log["personelAdı"] || log["personelAdı"] || log.personnelId || log.personelId || "-",
     tarih: formatDateTR(recordDate(log)),
     giris: displayTime(log.entryTime || log.checkInTime || log.saat),
     cikis: displayTime(log.exitTime || log.checkOutTime),
     yontem: log.method || log.verificationMethod || log["doğrulamaYöntemi"] || log.dogrulamaYontemi || "QR",
-    durum: status,
+    durum: timing.invalid ? "Hatalı Kayıt" : timing.missingExit ? "Eksik Çıkış" : status,
+    kayitDurumu: badge.label,
+    kayitDurumuClass: badge.className,
     fazlaMesai: overtimeMinutes > 0 ? `${overtimeMinutes} dk` : "-",
     toplamSure: minutesLabel(totalMinutes),
-    mola: breakExceedsTotal ? `${minutesLabel(breakMinutes)} (uyarı)` : minutesLabel(breakMinutes),
+    mola: minutesLabel(appliedBreakMinutes),
+    kayitliMola: minutesLabel(recordedBreakMinutes),
     netCalisma: minutesLabel(netMinutes),
-    molaUyarisi: breakExceedsTotal ? "Mola toplam süreden büyük; net hesaba uygulanmadı." : "",
     konum: log.branchName || log.location || "-",
   };
 }
@@ -331,10 +365,10 @@ export default function AttendanceLogsPage() {
   const hasAttendanceFilter = Boolean(searchTerm || dateFilter || branchFilter !== "all");
 
   const handleExcelExport = React.useCallback(() => {
-    const headers = ["Personel", "Tarih", "Giriş", "Çıkış", "Yöntem", "Durum", "Fazla Mesai", "Toplam Süre", "Mola", "Net Çalışma", "Konum"];
+    const headers = ["Personel", "Tarih", "Giriş", "Çıkış", "Yöntem", "Durum", "Kayıt Durumu", "Fazla Mesai", "Toplam Süre", "Mola", "Net Çalışma", "Konum"];
     const rows = filteredLogs.map((log) => {
       const row = attendanceRow(log, shifts, breaks);
-      return [row.personel, row.tarih, row.giris, row.cikis, row.yontem, row.durum, row.fazlaMesai, row.toplamSure, row.mola, row.netCalisma, row.konum].map(csvCell).join(",");
+      return [row.personel, row.tarih, row.giris, row.cikis, row.yontem, row.durum, row.kayitDurumu, row.fazlaMesai, row.toplamSure, row.mola, row.netCalisma, row.konum].map(csvCell).join(",");
     });
     const content = [headers.map(csvCell).join(","), ...rows].join("\n");
     downloadTextFile(`attendance-${new Date().toISOString().slice(0, 10)}.csv`, content, "text/csv;charset=utf-8");
@@ -368,10 +402,10 @@ export default function AttendanceLogsPage() {
           <p>Kayıt sayısı: ${rows.length} | Tarih: ${new Date().toLocaleDateString("tr-TR")}</p>
           <table>
             <thead>
-              <tr><th>Personel</th><th>Tarih</th><th>Giriş</th><th>Çıkış</th><th>Yöntem</th><th>Durum</th><th>Fazla Mesai</th><th>Toplam Süre</th><th>Mola</th><th>Net Çalışma</th><th>Konum</th></tr>
+              <tr><th>Personel</th><th>Tarih</th><th>Giriş</th><th>Çıkış</th><th>Yöntem</th><th>Durum</th><th>Kayıt Durumu</th><th>Fazla Mesai</th><th>Toplam Süre</th><th>Mola</th><th>Net Çalışma</th><th>Konum</th></tr>
             </thead>
             <tbody>
-              ${rows.map((row) => `<tr><td>${htmlCell(row.personel)}</td><td>${htmlCell(row.tarih)}</td><td>${htmlCell(row.giris)}</td><td>${htmlCell(row.cikis)}</td><td>${htmlCell(row.yontem)}</td><td>${htmlCell(row.durum)}</td><td>${htmlCell(row.fazlaMesai)}</td><td>${htmlCell(row.toplamSure)}</td><td>${htmlCell(row.mola)}</td><td>${htmlCell(row.netCalisma)}</td><td>${htmlCell(row.konum)}</td></tr>`).join("")}
+              ${rows.map((row) => `<tr><td>${htmlCell(row.personel)}</td><td>${htmlCell(row.tarih)}</td><td>${htmlCell(row.giris)}</td><td>${htmlCell(row.cikis)}</td><td>${htmlCell(row.yontem)}</td><td>${htmlCell(row.durum)}</td><td>${htmlCell(row.kayitDurumu)}</td><td>${htmlCell(row.fazlaMesai)}</td><td>${htmlCell(row.toplamSure)}</td><td>${htmlCell(row.mola)}</td><td>${htmlCell(row.netCalisma)}</td><td>${htmlCell(row.konum)}</td></tr>`).join("")}
             </tbody>
           </table>
         </body>
@@ -477,6 +511,7 @@ export default function AttendanceLogsPage() {
                   <TableHead>Çıkış</TableHead>
                   <TableHead>Yöntem</TableHead>
                   <TableHead>Durum</TableHead>
+                  <TableHead>Kayıt Durumu</TableHead>
                   <TableHead>Fazla Mesai</TableHead>
                   <TableHead>Toplam Süre</TableHead>
                   <TableHead>Mola</TableHead>
@@ -486,9 +521,9 @@ export default function AttendanceLogsPage() {
               </TableHeader>
               <TableBody>
                 {filteredLogs.map((log: any) => {
-                  const statusLabel = attendanceStatus(log, shifts);
-                  const overtimeMinutes = attendanceOvertimeMinutes(log, shifts);
                   const row = attendanceRow(log, shifts, breaks);
+                  const statusLabel = row.durum;
+                  const overtimeMinutes = attendanceOvertimeMinutes(log, shifts);
                   const isOvertimeStatus = statusLabel === "Fazla Mesai";
                   const isLateStatus = statusLabel.startsWith("Geç");
                   const statusClass = isOvertimeStatus ? "text-amber-600" : isLateStatus ? "text-accent" : "text-green-600";
@@ -536,13 +571,13 @@ export default function AttendanceLogsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      <Badge variant="outline" className={row.kayitDurumuClass}>{row.kayitDurumu}</Badge>
+                    </TableCell>
+                    <TableCell>
                       <span className="text-sm font-semibold text-primary">{row.toplamSure}</span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <Badge variant="outline" className={row.molaUyarisi ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600"}>{row.mola}</Badge>
-                        {row.molaUyarisi && <span className="text-[10px] font-semibold text-amber-600">{row.molaUyarisi}</span>}
-                      </div>
+                      <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">{row.mola}</Badge>
                     </TableCell>
                     <TableCell>
                       <span className="text-sm font-bold text-green-700">{row.netCalisma}</span>
