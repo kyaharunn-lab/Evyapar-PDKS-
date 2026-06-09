@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import {
@@ -53,10 +53,10 @@ const MAX_GPS_DISTANCE_METERS = 150
 const LEAVE_ATTACHMENT_ACCEPT = ["image/jpeg", "image/png", "application/pdf"]
 const LEAVE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
 
-const screens = ["Ana", "Giriş", "QR", "GPS", "Vardiya", "İzin", "Mola", "Bildirim", "Profil"]
-const themes = ["Koyu Premium", "Açık Kurumsal", "Evyapar Kırmızı", "Mavi/Mor Premium"]
+const screens = ["Ana", "GiriÅŸ", "QR", "GPS", "Vardiya", "Ä°zin", "Mola", "Bildirim", "Profil"]
+const themes = ["Koyu Premium", "AÃ§Ä±k Kurumsal", "Evyapar KÄ±rmÄ±zÄ±", "Mavi/Mor Premium"]
 const devices = ["iPhone", "Android", "Tablet"]
-const states = ["Mesai dışında", "Mesai başladı", "Geç kaldı", "İçeride", "Molada", "Çıkış yaptı", "GPS dışında", "QR bekleniyor"]
+const states = ["Mesai dÄ±ÅŸÄ±nda", "Mesai baÅŸladÄ±", "GeÃ§ kaldÄ±", "Ä°Ã§eride", "Molada", "Ã‡Ä±kÄ±ÅŸ yaptÄ±", "GPS dÄ±ÅŸÄ±nda", "QR bekleniyor"]
 
 function readArray(key: string) {
   if (typeof window === "undefined") return []
@@ -152,12 +152,12 @@ function isQrExitOnly(point: any) {
 function normalizeActionText(value: any) {
   return String(value || "")
     .toLocaleLowerCase("tr-TR")
-    .replace(/ı/g, "i")
-    .replace(/ş/g, "s")
-    .replace(/ç/g, "c")
-    .replace(/ğ/g, "g")
-    .replace(/ü/g, "u")
-    .replace(/ö/g, "o")
+    .replace(/Ä±/g, "i")
+    .replace(/ÅŸ/g, "s")
+    .replace(/Ã§/g, "c")
+    .replace(/ÄŸ/g, "g")
+    .replace(/Ã¼/g, "u")
+    .replace(/Ã¶/g, "o")
 }
 
 function isCheckInAction(value: any) {
@@ -243,7 +243,7 @@ function enrichAttendanceLateData(record: any, shifts: any[]) {
     ...record,
     isLate: lateMinutes > 0,
     lateMinutes,
-    lateText: lateMinutes > 0 ? `${lateMinutes} dk geç` : "",
+    lateText: lateMinutes > 0 ? `${lateMinutes} dk geÃ§` : "",
     lateToleranceMinutes: LATE_TOLERANCE_MINUTES,
     shiftId: shift?.id || record?.shiftId,
     shiftName: shift?.name || shift?.shiftName || record?.shiftName,
@@ -255,7 +255,7 @@ function personName(person: any) {
 }
 
 function branchName(branch: any) {
-  return (branch?.branchName || branch?.name || branch?.title || branch?.branchCode || "Şube").toString()
+  return (branch?.branchName || branch?.name || branch?.title || branch?.branchCode || "Åube").toString()
 }
 
 function departmentName(department: any) {
@@ -276,7 +276,7 @@ function normalizeRoleToken(value: any) {
     .toLocaleLowerCase("tr-TR")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ı/g, "i")
+    .replace(/Ä±/g, "i")
     .replace(/[^a-z0-9]+/g, "")
 }
 
@@ -307,7 +307,7 @@ function findRoleForPerson(person: any, roles: any[]) {
 
 function normalizeStatus(value: any) {
   const raw = valueText(value, "Bekliyor").toLowerCase()
-  if (raw.includes("approved") || raw.includes("onay")) return "Onaylandı"
+  if (raw.includes("approved") || raw.includes("onay")) return "OnaylandÄ±"
   if (raw.includes("reject") || raw.includes("red")) return "Reddedildi"
   return "Bekliyor"
 }
@@ -329,7 +329,7 @@ function canCreateMobileLeaveRequest(person: any, role: any = null) {
     person?.positionName,
     person?.title,
   ].filter(Boolean).join(" ").toLocaleLowerCase("tr-TR")
-  return ["müdür", "mudur", "manager", "admin", "yönetici", "yonetici"].some((keyword) => searchable.includes(keyword))
+  return ["mÃ¼dÃ¼r", "mudur", "manager", "admin", "yÃ¶netici", "yonetici"].some((keyword) => searchable.includes(keyword))
 }
 function isActive(value: any) {
   if (typeof value === "boolean") return value
@@ -365,24 +365,24 @@ function distanceMeters(a: { latitude: number; longitude: number }, b: { latitud
 
 function verifyGpsDistance(branch: any, person: any, settings: any) {
   const branchCoordinates = getCoordinates(branch)
-  if (!branchCoordinates) return { ok: true, status: "Şube konumu tanımlı değil", distance: null }
+  if (!branchCoordinates) return { ok: true, status: "Åube konumu tanÄ±mlÄ± deÄŸil", distance: null }
 
   const currentCoordinates = getCoordinates(settings) || getCoordinates(person)
-  if (!currentCoordinates) return { ok: true, status: "Kullanıcı konumu tanımlı değil", distance: null }
+  if (!currentCoordinates) return { ok: true, status: "KullanÄ±cÄ± konumu tanÄ±mlÄ± deÄŸil", distance: null }
   const distance = distanceMeters(currentCoordinates, branchCoordinates)
   const ok = distance <= MAX_GPS_DISTANCE_METERS
-  return { ok, status: ok ? "GPS başarılı" : "GPS başarısız", distance }
+  return { ok, status: ok ? "GPS baÅŸarÄ±lÄ±" : "GPS baÅŸarÄ±sÄ±z", distance }
 }
 
 function normalizeScreen(screen: any) {
   const raw = valueText(screen, "Ana")
   const map: Record<string, string> = {
     "Ana Sayfa": "Ana",
-    "Giriş / Çıkış": "Giriş",
+    "GiriÅŸ / Ã‡Ä±kÄ±ÅŸ": "GiriÅŸ",
     "QR Okutma": "QR",
     "GPS Konum": "GPS",
-    "Vardiyalarım": "Vardiya",
-    "İzin Taleplerim": "İzin",
+    "VardiyalarÄ±m": "Vardiya",
+    "Ä°zin Taleplerim": "Ä°zin",
     "Bildirimler": "Bildirim",
     "Profilim": "Profil",
   }
@@ -416,7 +416,7 @@ function shiftDateKey(shift: any) {
 }
 
 function shiftBranchLabel(shift: any, fallbackBranch: any) {
-  return valueText(shift?.branchName || shift?.branchLabel || shift?.branch || (fallbackBranch ? branchName(fallbackBranch) : ""), "Tanımlı değil")
+  return valueText(shift?.branchName || shift?.branchLabel || shift?.branch || (fallbackBranch ? branchName(fallbackBranch) : ""), "TanÄ±mlÄ± deÄŸil")
 }
 
 function findTodayMobileShift(shifts: any[], personId: string, branchId: string) {
@@ -430,7 +430,7 @@ function findTodayMobileShift(shifts: any[], personId: string, branchId: string)
 
 function getShiftEntryWarning(shifts: any[], personId: string, branchId: string, now = new Date()) {
   const shift = findTodayMobileShift(shifts, personId, branchId)
-  if (!shift) return "Bugün için atanmış vardiyanız bulunmuyor."
+  if (!shift) return "BugÃ¼n iÃ§in atanmÄ±ÅŸ vardiyanÄ±z bulunmuyor."
 
   const start = timeToMinutes(shift?.startTime || shift?.entryTime || shift?.shift?.startTime)
   const end = timeToMinutes(shift?.endTime || shift?.exitTime || shift?.shift?.endTime)
@@ -441,7 +441,7 @@ function getShiftEntryWarning(shifts: any[], personId: string, branchId: string,
     ? current < start || current > end
     : current < start && current > end
 
-  return outsideShiftHours ? "Vardiya saatleri dışında giriş yaptınız." : null
+  return outsideShiftHours ? "Vardiya saatleri dÄ±ÅŸÄ±nda giriÅŸ yaptÄ±nÄ±z." : null
 }
 
 function timeToMinutes(value: any) {
@@ -482,7 +482,7 @@ function calculateOvertimeInfo(shifts: any[], personId: string, branchId: string
   return {
     isOvertime: overtimeMinutes > 0,
     overtimeMinutes,
-    ...(overtimeMinutes > 0 ? { overtimeStatus: "uyarı" } : {}),
+    ...(overtimeMinutes > 0 ? { overtimeStatus: "uyarÄ±" } : {}),
   }
 }
 
@@ -511,7 +511,7 @@ function isOpenAttendance(record: any, personId: string) {
 function isActiveLivePresence(record: any, personId: string) {
   if (!matchesPerson(record, personId)) return false
   const status = String(record?.status || "").toLowerCase()
-  const isClosed = Boolean(record?.checkOutTime || record?.exitTime) || status === "outside" || status.includes("çıkış")
+  const isClosed = Boolean(record?.checkOutTime || record?.exitTime) || status === "outside" || status.includes("Ã§Ä±kÄ±ÅŸ")
   if (isClosed) return false
   return !status || status === "inside" || status === "on_break" || status === "molada"
 }
@@ -586,7 +586,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     theme: "Mavi/Mor Premium",
     screen: "Ana",
     device: "iPhone",
-    state: "Mesai dışında",
+    state: "Mesai dÄ±ÅŸÄ±nda",
     qrStatus: "QR bekleniyor",
     gpsStatus: "Bekleniyor",
     isInside: false,
@@ -814,7 +814,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     latestAttendance?.checkOutTime ||
     latestAttendance?.exitTime ||
     String(latestAttendance?.status || "").toLowerCase().includes("outside") ||
-    String(latestAttendance?.status || "").includes("Çıkış")
+    String(latestAttendance?.status || "").includes("Ã‡Ä±kÄ±ÅŸ")
   ))
   const latestAttendanceIsEntry = Boolean(latestAttendance && !latestAttendanceIsExit && String(latestAttendance?.status || "").toLowerCase() === "inside")
   const homeStatusSource = liveRecord
@@ -828,16 +828,16 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     ? "Molada"
     : liveRecord
       ? shiftEntryWarning
-        ? "İçeride (Vardiya Dışı)"
-        : "İçeride"
+        ? "Ä°Ã§eride (Vardiya DÄ±ÅŸÄ±)"
+        : "Ä°Ã§eride"
       : currentStatus === "inside"
-        ? "İçeride"
+        ? "Ä°Ã§eride"
       : currentStatus === "outside"
-        ? "Dışarıda"
+        ? "DÄ±ÅŸarÄ±da"
       : latestAttendanceIsEntry
-        ? "İçeride"
+        ? "Ä°Ã§eride"
       : latestAttendanceIsExit
-        ? "Dışarıda"
+        ? "DÄ±ÅŸarÄ±da"
         : settings.state
   console.log("[mobile-home-status]", {
     livePresenceFound: Boolean(liveRecord),
@@ -848,7 +848,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
 
   const handleEnableNotifications = React.useCallback(async () => {
     if (!selectedPerson || !personId) {
-      toast({ variant: "destructive", title: "Bildirimler açılamadı", description: "Personel oturumu bulunamadı." })
+      toast({ variant: "destructive", title: "Bildirimler aÃ§Ä±lamadÄ±", description: "Personel oturumu bulunamadÄ±." })
       return
     }
 
@@ -872,7 +872,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         toast({
           variant: "destructive",
           title: "Bildirim izni verilmedi",
-          description: "Tarayıcı bildirim izni kapalı. Bildirim almak için izin vermeniz gerekir.",
+          description: "TarayÄ±cÄ± bildirim izni kapalÄ±. Bildirim almak iÃ§in izin vermeniz gerekir.",
         })
         return
       }
@@ -884,7 +884,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         oneSignalSubscribed: Boolean(result.subscribed),
         oneSignalPermission: result.permission ? "granted" : "denied",
         oneSignalSdkReady: Boolean(result.sdkReady),
-        oneSignalSubscriptionError: result.subscribed ? "" : "Bildirim aboneliği oluşmadı.",
+        oneSignalSubscriptionError: result.subscribed ? "" : "Bildirim aboneliÄŸi oluÅŸmadÄ±.",
         lastNotificationSync: new Date().toISOString(),
       }
       const updatedPerson = { ...selectedPerson, ...patch }
@@ -903,8 +903,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         firestoreOk,
       })
       toast({
-        title: result.subscribed ? "Bildirimler aktif" : "Abonelik tamamlanamadı",
-        description: result.subscribed ? "Mobil bildirim izniniz kaydedildi." : "Bildirim aboneliği oluşmadı.",
+        title: result.subscribed ? "Bildirimler aktif" : "Abonelik tamamlanamadÄ±",
+        description: result.subscribed ? "Mobil bildirim izniniz kaydedildi." : "Bildirim aboneliÄŸi oluÅŸmadÄ±.",
       })
     } catch (error) {
       console.warn("[OneSignal mobile] manual permission sync failed", error)
@@ -924,8 +924,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       await writeSharedRecord(db, "personnel", errorPerson)
       toast({
         variant: "destructive",
-        title: "Bildirimler açılamadı",
-        description: error instanceof Error ? error.message : "OneSignal bağlantısı kurulamadı.",
+        title: "Bildirimler aÃ§Ä±lamadÄ±",
+        description: error instanceof Error ? error.message : "OneSignal baÄŸlantÄ±sÄ± kurulamadÄ±.",
       })
     }
   }, [db, personId, selectedPerson, toast])
@@ -950,8 +950,27 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       kvkkAcceptedAt: serverTimestamp(),
       kvkkVersion: "v1",
     })
-    toast({ title: "KVKK onayı alındı", description: "Aydınlatma metni kabul edildi." })
+    toast({ title: "KVKK onayÄ± alÄ±ndÄ±", description: "AydÄ±nlatma metni kabul edildi." })
   }, [db, personId, selectedPerson, toast])
+
+  const markLocationPermissionVerified = React.useCallback((verifiedAt: string) => {
+    if (!selectedPerson || !personId) return
+    const updatedPerson = {
+      ...selectedPerson,
+      locationPermissionGranted: true,
+      locationPermissionGrantedAt: selectedPerson.locationPermissionGrantedAt || verifiedAt,
+      lastLocationVerifiedAt: verifiedAt,
+      updatedAt: verifiedAt,
+    }
+    upsertLocalArrayRecord("app_personnel", updatedPerson)
+    setData((current: any) => ({
+      ...current,
+      personnel: current.personnel.map((person: any) => getId(person) === personId ? updatedPerson : person),
+    }))
+    void writeSharedRecord(db, "personnel", updatedPerson).catch((error) => {
+      console.warn("[mobile-gps-permission] personnel sync failed", error)
+    })
+  }, [db, personId, selectedPerson])
 
   const handleDigitalArchiveAudit = React.useCallback(async (action: "file_view" | "file_download", file: any) => {
     if (!selectedPerson || !personId || !file) return
@@ -964,7 +983,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         targetPersonnelId: personId,
         targetPersonnelName: personName(selectedPerson),
         fileName: file?.fileName || file?.title || file?.name || "Dosya",
-        fileCategory: file?.category || "Diğer",
+        fileCategory: file?.category || "DiÄŸer",
         fileUrl: file?.fileUrl || "",
         createdAt: new Date().toISOString(),
         source: "digitalArchive",
@@ -976,7 +995,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
   }, [db, personId, selectedPerson])
 
   const updateSettings = (patch: any) => {
-    if (patch?.screen === "QR" && patch?.qrStatus === "Başarılı" && selectedPerson && !patch?.attendanceHandled) {
+    if (patch?.screen === "QR" && patch?.qrStatus === "BaÅŸarÄ±lÄ±" && selectedPerson && !patch?.attendanceHandled) {
       const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
       if (activePoint) {
         const now = new Date()
@@ -991,7 +1010,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
           recordDate(item) === today &&
           isInside(item) &&
           !item?.exitTime &&
-          !item?.["çıkışSaati"] &&
+          !item?.["Ã§Ä±kÄ±ÅŸSaati"] &&
           !item?.["cikisSaati"]
         const isActiveAttendanceRecord = (item: any) =>
           samePersonnel(item) &&
@@ -1004,7 +1023,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         const currentMinute = nowIso.slice(0, 16)
         const sameMinuteQr = [...attendanceRecords, ...readArray(ATTENDANCE_KEY)].some((item: any) => {
           const actionMinute = String(item?.checkInTime || item?.checkOutTime || item?.entryTime || item?.exitTime || item?.createdAt || item?.updatedAt || "").slice(0, 16)
-          const method = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doğrulamaYöntemi"] || "").toLowerCase()
+          const method = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doÄŸrulamaYÃ¶ntemi"] || "").toLowerCase()
           return samePersonnel(item) && actionMinute === currentMinute && method.includes("qr")
         })
         if (liveRecord || sameMinuteQr) return
@@ -1012,8 +1031,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         const lateInfo = calculateLateInfo(data.shifts, personId, branchId, now)
         const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
         if (!gpsCheck.ok) {
-          updateSettings({ screen: "QR", qrStatus: "Başarısız", gpsStatus: gpsCheck.status, state: "GPS dışında" })
-          toast({ variant: "destructive", title: "Şube konumu dışında", description: `GPS başarısız. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
+          updateSettings({ screen: "QR", qrStatus: "BaÅŸarÄ±sÄ±z", gpsStatus: gpsCheck.status, state: "GPS dÄ±ÅŸÄ±nda" })
+          toast({ variant: "destructive", title: "Åube konumu dÄ±ÅŸÄ±nda", description: `GPS baÅŸarÄ±sÄ±z. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
           return
         }
 
@@ -1022,8 +1041,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             checkOutTime: nowIso,
             exitTime: nowIso,
             status: "outside",
-            statusLabel: "Çıkış yaptı",
-            durum: "Çıkış yaptı",
+            statusLabel: "Ã‡Ä±kÄ±ÅŸ yaptÄ±",
+            durum: "Ã‡Ä±kÄ±ÅŸ yaptÄ±",
             updatedAt: nowIso,
           }
           writeArray(ATTENDANCE_RECORDS_KEY, attendanceRecords.map((item: any) => isActiveAttendanceRecord(item) ? { ...item, ...closePatch } : item))
@@ -1044,18 +1063,18 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
           status: "inside",
           ...(lateInfo || {}),
                     gpsStatus: gpsCheck.status,
-          deviceStatus: personDevice ? "Tanımlı" : "Tanımsız",
+          deviceStatus: personDevice ? "TanÄ±mlÄ±" : "TanÄ±msÄ±z",
           personelId: personId,
           personelAdi: personName(selectedPerson),
           branchLabel: selectedBranch ? branchName(selectedBranch) : "",
           tarih: nowIso.slice(0, 10),
           saat: now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
-          islemTipi: "Giriş",
+          islemTipi: "GiriÅŸ",
           dogrulamaYontemi: "QR",
           entryTime: nowIso,
           verificationMethod: "QR",
           deviceId: personDevice?.deviceId || personDevice?.id || "",
-          qrStatus: "Başarılı",
+          qrStatus: "BaÅŸarÄ±lÄ±",
         }
         writeArray(ATTENDANCE_KEY, [record, ...readArray(ATTENDANCE_KEY)])
         writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
@@ -1087,21 +1106,21 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
 
   const saveSettings = () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, updatedAt: new Date().toISOString() }))
-    toast({ title: "Mobil önizleme ayarları kaydedildi", description: "Seçimler app_mobile_preview_settings içinde saklandı." })
+    toast({ title: "Mobil Ã¶nizleme ayarlarÄ± kaydedildi", description: "SeÃ§imler app_mobile_preview_settings iÃ§inde saklandÄ±." })
   }
 
   const exportJson = () => {
     saveFile("mobile-preview.json", JSON.stringify({ settings, selectedPerson, selectedBranch, personShifts, personLeaves, personDevice, personKvkk, branchQrPoints }, null, 2))
   }
 
-  const handleAttendance = (type: "Giriş" | "Çıkış") => {
+  const handleAttendance = (type: "GiriÅŸ" | "Ã‡Ä±kÄ±ÅŸ") => {
     if (!selectedPerson) return
     const now = new Date()
     const nowIso = now.toISOString()
     const time = now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
     const isEntry = isCheckInAction(type) && !isCheckOutAction(type)
-    const qrStatus = settings.qrStatus === "Başarılı" || branchQrPoints.some((point: any) => isActive(point?.status)) ? "Başarılı" : "QR bekleniyor"
-    const gpsStatus = settings.state === "GPS dışında" ? "GPS dışında" : hasBranchLocation(selectedBranch) ? "Doğrulandı" : "Şube konumu tanımlı değil"
+    const qrStatus = settings.qrStatus === "BaÅŸarÄ±lÄ±" || branchQrPoints.some((point: any) => isActive(point?.status)) ? "BaÅŸarÄ±lÄ±" : "QR bekleniyor"
+    const gpsStatus = settings.state === "GPS dÄ±ÅŸÄ±nda" ? "GPS dÄ±ÅŸÄ±nda" : hasBranchLocation(selectedBranch) ? "DoÄŸrulandÄ±" : "Åube konumu tanÄ±mlÄ± deÄŸil"
     const method = qrStatus === "QR bekleniyor" ? (gpsStatus.includes("GPS") || gpsStatus.includes("konumu") ? "Mobil" : "GPS") : "QR"
     const livePresence = readArray(LIVE_PRESENCE_KEY)
     const attendanceRecords = readArray(ATTENDANCE_RECORDS_KEY)
@@ -1112,7 +1131,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       .filter((item: any) => matchesPerson(item, personId))
       .sort((a: any, b: any) => attendanceTime(b) - attendanceTime(a))[0]
     const lastAttendanceAction = lastAttendance
-      ? lastAttendance?.checkOutTime || lastAttendance?.exitTime || isCheckOutAction(lastAttendance?.status) || isCheckOutAction(lastAttendance?.["işlemTipi"] || lastAttendance?.islemTipi)
+      ? lastAttendance?.checkOutTime || lastAttendance?.exitTime || isCheckOutAction(lastAttendance?.status) || isCheckOutAction(lastAttendance?.["iÅŸlemTipi"] || lastAttendance?.islemTipi)
         ? "checkOut"
         : "checkIn"
       : "none"
@@ -1123,38 +1142,41 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       selectedAction: isEntry ? "checkIn" : "checkOut",
     })
     if (isEntry && isCurrentlyInside) {
-      toast({ title: "Personel zaten içeride." })
+      toast({ title: "Personel zaten iÃ§eride." })
       return
     }
     if (!isEntry && !isCurrentlyInside) {
-      toast({ title: "Personel zaten dışarıda." })
+      toast({ title: "Personel zaten dÄ±ÅŸarÄ±da." })
       return
     }
     if (isEntry && method === "QR") {
       const currentMinute = nowIso.slice(0, 16)
       const sameMinuteQr = [...readArray(ATTENDANCE_RECORDS_KEY), ...readArray(ATTENDANCE_KEY)].some((item: any) => {
         const actionMinute = String(item?.checkInTime || item?.checkOutTime || item?.entryTime || item?.exitTime || item?.createdAt || item?.updatedAt || "").slice(0, 16)
-        const recordMethod = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doğrulamaYöntemi"] || "").toLowerCase()
+        const recordMethod = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doÄŸrulamaYÃ¶ntemi"] || "").toLowerCase()
         return matchesPerson(item, personId) && actionMinute === currentMinute && recordMethod.includes("qr")
       })
       if (sameMinuteQr) {
-        toast({ variant: "destructive", title: "Duplicate QR engellendi", description: "Aynı dakika içinde QR işlemi zaten yapıldı." })
+        toast({ variant: "destructive", title: "Duplicate QR engellendi", description: "AynÄ± dakika iÃ§inde QR iÅŸlemi zaten yapÄ±ldÄ±." })
         return
       }
     }
     const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
     if (isEntry && method === "QR" && !gpsCheck.ok) {
-      updateSettings({ screen: "QR", qrStatus: "Başarısız", gpsStatus: gpsCheck.status, state: "GPS dışında" })
-      toast({ variant: "destructive", title: "Şube konumu dışında", description: `GPS başarısız. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
+      updateSettings({ screen: "QR", qrStatus: "BaÅŸarÄ±sÄ±z", gpsStatus: gpsCheck.status, state: "GPS dÄ±ÅŸÄ±nda" })
+      toast({ variant: "destructive", title: "Åube konumu dÄ±ÅŸÄ±nda", description: `GPS baÅŸarÄ±sÄ±z. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
       return
     }
     const effectiveGpsStatus = isEntry && method === "QR" ? gpsCheck.status : gpsStatus
+    if (gpsCheck.ok) {
+      markLocationPermissionVerified(nowIso)
+    }
     const lateInfo = isEntry ? calculateLateInfo(data.shifts, personId, branchId, now) : null
     const overtimeInfo = !isEntry ? calculateOvertimeInfo(data.shifts, personId, branchId, now) : { isOvertime: false, overtimeMinutes: 0 }
     if (!isEntry) {
       const closePatch = {
         ...overtimeInfo,
-        status: "Çıkış yaptı",
+        status: "Ã‡Ä±kÄ±ÅŸ yaptÄ±",
         checkOutTime: nowIso,
         exitTime: nowIso,
         updatedAt: nowIso,
@@ -1185,8 +1207,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       notifyAttendanceSync()
       console.log("[mobile-qr-state]", { qrAction: "checkOut", updatedCurrentStatus: "outside", livePresenceFound: false, personnelId: personId })
       updateSettings({
-        state: "Dışarıda",
-        screen: "Giriş",
+        state: "DÄ±ÅŸarÄ±da",
+        screen: "GiriÅŸ",
         gpsStatus: effectiveGpsStatus,
         qrStatus,
         isInside: false,
@@ -1196,7 +1218,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         lastQrVerifiedAt: method === "QR" ? nowIso : settings.lastQrVerifiedAt,
         lastGpsVerifiedAt: gpsCheck.ok ? nowIso : settings.lastGpsVerifiedAt,
       })
-      addAudit("Mobil çıkış simülasyonu yapıldı", `${personName(selectedPerson)} için çıkış kaydı kapatıldı.`)
+      addAudit("Mobil Ã§Ä±kÄ±ÅŸ simÃ¼lasyonu yapÄ±ldÄ±", `${personName(selectedPerson)} iÃ§in Ã§Ä±kÄ±ÅŸ kaydÄ± kapatÄ±ldÄ±.`)
       return
     }
     const record = {
@@ -1213,14 +1235,14 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       status: isEntry ? "inside" : "outside",
       ...(lateInfo || {}),
       ...overtimeInfo,
-      deviceStatus: personDevice ? "Tanımlı" : "Tanımsız",
+      deviceStatus: personDevice ? "TanÄ±mlÄ±" : "TanÄ±msÄ±z",
       personelId: personId,
-      "personelAdı": personName(selectedPerson),
-      "şube": selectedBranch ? branchName(selectedBranch) : "",
+      "personelAdÄ±": personName(selectedPerson),
+      "ÅŸube": selectedBranch ? branchName(selectedBranch) : "",
       tarih: now.toISOString().slice(0, 10),
       saat: now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
-      "işlemTipi": type,
-      "doğrulamaYöntemi": qrStatus === "Başarılı" ? "QR" : effectiveGpsStatus === "Doğrulandı" || effectiveGpsStatus === "GPS başarılı" ? "GPS" : "Mobil",
+      "iÅŸlemTipi": type,
+      "doÄŸrulamaYÃ¶ntemi": qrStatus === "BaÅŸarÄ±lÄ±" ? "QR" : effectiveGpsStatus === "DoÄŸrulandÄ±" || effectiveGpsStatus === "GPS baÅŸarÄ±lÄ±" ? "GPS" : "Mobil",
       entryTime: isEntry ? nowIso : undefined,
       exitTime: isEntry ? undefined : nowIso,
       verificationMethod: method,
@@ -1241,8 +1263,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     notifyAttendanceSync()
     console.log("[mobile-qr-state]", { qrAction: "checkIn", updatedCurrentStatus: "inside", livePresenceFound: true, personnelId: personId })
     updateSettings({
-      state: "İçeride",
-      screen: "Giriş",
+      state: "Ä°Ã§eride",
+      screen: "GiriÅŸ",
       gpsStatus: effectiveGpsStatus,
       qrStatus,
       isInside: true,
@@ -1252,21 +1274,21 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       activeAttendanceId: record.id,
       activePresenceId: record.id,
     })
-    addAudit(`Mobil ${type.toLowerCase()} simülasyonu yapıldı`, `${personName(selectedPerson)} için ${type.toLowerCase()} kaydı oluşturuldu.`)
+    addAudit(`Mobil ${type.toLowerCase()} simÃ¼lasyonu yapÄ±ldÄ±`, `${personName(selectedPerson)} iÃ§in ${type.toLowerCase()} kaydÄ± oluÅŸturuldu.`)
   }
 
   const handleQrSimulation = (scannedPoint?: any) => {
     const activeBranchPoint = branchQrPoints.find((point: any) => isActiveQrPoint(point) && qrPointMatchesBranch(point, selectedBranch))
     if (!activeBranchPoint) {
       vibrate([80, 40, 80])
-      toast({ variant: "destructive", title: "QR doğrulanamadı", description: scannedPoint ? "Yanlış şube QR kodu." : "Bu şubeye ait aktif QR noktası yok." })
+      toast({ variant: "destructive", title: "QR doÄŸrulanamadÄ±", description: scannedPoint ? "YanlÄ±ÅŸ ÅŸube QR kodu." : "Bu ÅŸubeye ait aktif QR noktasÄ± yok." })
       return
     }
     const scannedCode = (scannedPoint?.qrCode || scannedPoint?.code || scannedPoint?.id || "").toString()
     const activeCode = (activeBranchPoint?.qrCode || activeBranchPoint?.code || activeBranchPoint?.id || "").toString()
     if (scannedPoint && scannedCode && activeCode && !qrValueMatchesPoint(scannedCode, activeBranchPoint)) {
       vibrate([80, 40, 80])
-      toast({ variant: "destructive", title: "QR doğrulanamadı", description: "Yanlış şube QR kodu." })
+      toast({ variant: "destructive", title: "QR doÄŸrulanamadÄ±", description: "YanlÄ±ÅŸ ÅŸube QR kodu." })
       return
     }
     const liveRecords = readArray(LIVE_PRESENCE_KEY)
@@ -1278,7 +1300,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       .filter((item: any) => matchesPerson(item, personId))
       .sort((a: any, b: any) => attendanceTime(b) - attendanceTime(a))[0]
     const lastAttendanceAction = lastAttendance
-      ? lastAttendance?.checkOutTime || lastAttendance?.exitTime || isCheckOutAction(lastAttendance?.status) || isCheckOutAction(lastAttendance?.["işlemTipi"] || lastAttendance?.islemTipi)
+      ? lastAttendance?.checkOutTime || lastAttendance?.exitTime || isCheckOutAction(lastAttendance?.status) || isCheckOutAction(lastAttendance?.["iÅŸlemTipi"] || lastAttendance?.islemTipi)
         ? "checkOut"
         : "checkIn"
       : "none"
@@ -1292,16 +1314,16 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     const showEntrySuccess = () => {
       vibrate(90)
       toast({
-        title: "Giriş oluşturuldu",
-        description: `${personName(selectedPerson)} • ${selectedBranch ? branchName(selectedBranch) : "Şube"} • Giriş saati: ${new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`,
+        title: "GiriÅŸ oluÅŸturuldu",
+        description: `${personName(selectedPerson)} â€¢ ${selectedBranch ? branchName(selectedBranch) : "Åube"} â€¢ GiriÅŸ saati: ${new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`,
         duration: 3000,
       })
     }
     const showExitSuccess = () => {
       vibrate([70, 35, 70])
       toast({
-        title: "Çıkış oluşturuldu",
-        description: `${personName(selectedPerson)} • ${selectedBranch ? branchName(selectedBranch) : "Şube"} • Çalışma süresi: ${formatWorkDuration(openAttendance)}`,
+        title: "Ã‡Ä±kÄ±ÅŸ oluÅŸturuldu",
+        description: `${personName(selectedPerson)} â€¢ ${selectedBranch ? branchName(selectedBranch) : "Åube"} â€¢ Ã‡alÄ±ÅŸma sÃ¼resi: ${formatWorkDuration(openAttendance)}`,
         duration: 3000,
       })
     }
@@ -1310,7 +1332,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       if (!warning) return
       toast({
         variant: "destructive",
-        title: "Vardiya Uyarısı",
+        title: "Vardiya UyarÄ±sÄ±",
         description: warning,
         duration: 3500,
       })
@@ -1318,31 +1340,31 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     if (isQrEntryOnly(activeBranchPoint)) {
       if (inside) {
         vibrate([80, 40, 80])
-        toast({ variant: "destructive", title: "QR işlemi durduruldu", description: "Personel zaten içeride." })
+        toast({ variant: "destructive", title: "QR iÅŸlemi durduruldu", description: "Personel zaten iÃ§eride." })
         return
       }
       showEntrySuccess()
-      handleAttendance("Giriş")
+      handleAttendance("GiriÅŸ")
       showShiftEntryWarning()
       return
     }
     if (isQrExitOnly(activeBranchPoint)) {
       if (!inside) {
         vibrate([80, 40, 80])
-        toast({ variant: "destructive", title: "QR işlemi durduruldu", description: "Personel zaten dışarıda." })
+        toast({ variant: "destructive", title: "QR iÅŸlemi durduruldu", description: "Personel zaten dÄ±ÅŸarÄ±da." })
         return
       }
       showExitSuccess()
-      handleAttendance("Çıkış")
+      handleAttendance("Ã‡Ä±kÄ±ÅŸ")
       return
     }
     if (inside) {
       showExitSuccess()
-      handleAttendance("Çıkış")
+      handleAttendance("Ã‡Ä±kÄ±ÅŸ")
       return
     }
     showEntrySuccess()
-    handleAttendance("Giriş")
+    handleAttendance("GiriÅŸ")
     showShiftEntryWarning()
     return
     const activePoint = branchQrPoints.find((point: any) => isActive(point?.status))
@@ -1353,15 +1375,15 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       const currentMinute = new Date().toISOString().slice(0, 16)
       const sameMinuteQr = [...readArray(ATTENDANCE_RECORDS_KEY), ...readArray(ATTENDANCE_KEY)].some((item: any) => {
         const actionMinute = String(item?.checkInTime || item?.checkOutTime || item?.entryTime || item?.exitTime || item?.createdAt || item?.updatedAt || "").slice(0, 16)
-        const method = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doğrulamaYöntemi"] || "").toLowerCase()
+        const method = String(item?.method || item?.verificationMethod || item?.dogrulamaYontemi || item?.["doÄŸrulamaYÃ¶ntemi"] || "").toLowerCase()
         return matchesPerson(item, personId) && actionMinute === currentMinute && method.includes("qr")
       })
       if (liveRecord?.status === "inside") {
-        toast({ title: "Personel zaten içeride." })
+        toast({ title: "Personel zaten iÃ§eride." })
         return
       }
       if (sameMinuteQr) {
-        toast({ variant: "destructive", title: "Duplicate QR engellendi", description: "Aynı dakika içinde QR işlemi zaten yapıldı." })
+        toast({ variant: "destructive", title: "Duplicate QR engellendi", description: "AynÄ± dakika iÃ§inde QR iÅŸlemi zaten yapÄ±ldÄ±." })
         return
       }
       const now = new Date()
@@ -1369,9 +1391,9 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       const lateInfo = calculateLateInfo(data.shifts, personId, branchId, now)
       const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
       if (!gpsCheck.ok) {
-        updateSettings({ screen: "QR", qrStatus: "Başarısız", gpsStatus: gpsCheck.status, state: "GPS dışında", attendanceHandled: true })
-        addAudit("QR doğrulama simülasyonu yapıldı", "Şube konumu dışında olduğu için QR girişi engellendi.", "QR")
-        toast({ variant: "destructive", title: "Şube konumu dışında", description: `GPS başarısız. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
+        updateSettings({ screen: "QR", qrStatus: "BaÅŸarÄ±sÄ±z", gpsStatus: gpsCheck.status, state: "GPS dÄ±ÅŸÄ±nda", attendanceHandled: true })
+        addAudit("QR doÄŸrulama simÃ¼lasyonu yapÄ±ldÄ±", "Åube konumu dÄ±ÅŸÄ±nda olduÄŸu iÃ§in QR giriÅŸi engellendi.", "QR")
+        toast({ variant: "destructive", title: "Åube konumu dÄ±ÅŸÄ±nda", description: `GPS baÅŸarÄ±sÄ±z. Maksimum mesafe ${MAX_GPS_DISTANCE_METERS} m.` })
         return
       }
       const record = {
@@ -1388,36 +1410,42 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
         status: "inside",
         ...(lateInfo || {}),
         gpsStatus: gpsCheck.status,
-        deviceStatus: personDevice ? "Tanımlı" : "Tanımsız",
+        deviceStatus: personDevice ? "TanÄ±mlÄ±" : "TanÄ±msÄ±z",
         personelId: personId,
         personelAdi: personName(selectedPerson),
         branchLabel: selectedBranch ? branchName(selectedBranch) : "",
         tarih: nowIso.slice(0, 10),
         saat: now.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }),
-        islemTipi: "Giriş",
+        islemTipi: "GiriÅŸ",
         dogrulamaYontemi: "QR",
         entryTime: nowIso,
         verificationMethod: "QR",
         deviceId: personDevice?.deviceId || personDevice?.id || "",
-        qrStatus: "Başarılı",
+        qrStatus: "BaÅŸarÄ±lÄ±",
       }
       writeArray(ATTENDANCE_KEY, [record, ...readArray(ATTENDANCE_KEY)])
       writeArray(ATTENDANCE_RECORDS_KEY, [record, ...readArray(ATTENDANCE_RECORDS_KEY)])
       writeArray(LIVE_PRESENCE_KEY, [record, ...livePresence.filter((item: any) => !matchesPerson(item, personId))])
       notifyAttendanceSync()
     }
-    updateSettings({ screen: "QR", qrStatus: success ? "Başarılı" : "Başarısız", state: success ? "Mesai başladı" : "QR bekleniyor", gpsStatus: success ? "GPS başarılı" : settings.gpsStatus, attendanceHandled: success })
-    addAudit("QR doğrulama simülasyonu yapıldı", success ? `${branchName(selectedBranch)} QR noktası doğrulandı.` : "Seçili şubede aktif QR noktası bulunamadı.", "QR")
-    toast({ variant: success ? "default" : "destructive", title: success ? "QR doğrulandı" : "QR doğrulanamadı", description: success ? activePoint?.pointName || activePoint?.name : "Bu şubeye ait aktif QR noktası bulunamadı." })
+    if (success) {
+      markLocationPermissionVerified(new Date().toISOString())
+    }
+    updateSettings({ screen: "QR", qrStatus: success ? "BaÅŸarÄ±lÄ±" : "BaÅŸarÄ±sÄ±z", state: success ? "Mesai baÅŸladÄ±" : "QR bekleniyor", gpsStatus: success ? "GPS baÅŸarÄ±lÄ±" : settings.gpsStatus, attendanceHandled: success })
+    addAudit("QR doÄŸrulama simÃ¼lasyonu yapÄ±ldÄ±", success ? `${branchName(selectedBranch)} QR noktasÄ± doÄŸrulandÄ±.` : "SeÃ§ili ÅŸubede aktif QR noktasÄ± bulunamadÄ±.", "QR")
+    toast({ variant: success ? "default" : "destructive", title: success ? "QR doÄŸrulandÄ±" : "QR doÄŸrulanamadÄ±", description: success ? activePoint?.pointName || activePoint?.name : "Bu ÅŸubeye ait aktif QR noktasÄ± bulunamadÄ±." })
   }
 
   const handleGpsSimulation = () => {
     const gpsCheck = verifyGpsDistance(selectedBranch, selectedPerson, settings)
     const success = gpsCheck.ok && hasBranchLocation(selectedBranch)
-    const gpsStatus = success ? "GPS başarılı" : gpsCheck.status
-    updateSettings({ screen: "GPS", gpsStatus, state: success ? "Mesai başladı" : "GPS dışında" })
-    addAudit("GPS doğrulama simülasyonu yapıldı", `${branchName(selectedBranch)} için sonuç: ${gpsStatus}.`, "GPS")
-    toast({ variant: success ? "default" : "destructive", title: success ? "GPS başarılı" : "GPS başarısız", description: success ? "Personel şube konumu içinde." : "Şube konumu dışında" })
+    const gpsStatus = success ? "GPS baÅŸarÄ±lÄ±" : gpsCheck.status
+    if (success) {
+      markLocationPermissionVerified(new Date().toISOString())
+    }
+    updateSettings({ screen: "GPS", gpsStatus, state: success ? "Mesai baÅŸladÄ±" : "GPS dÄ±ÅŸÄ±nda" })
+    addAudit("GPS doÄŸrulama simÃ¼lasyonu yapÄ±ldÄ±", `${branchName(selectedBranch)} iÃ§in sonuÃ§: ${gpsStatus}.`, "GPS")
+    toast({ variant: success ? "default" : "destructive", title: success ? "GPS baÅŸarÄ±lÄ±" : "GPS baÅŸarÄ±sÄ±z", description: success ? "Personel ÅŸube konumu iÃ§inde." : "Åube konumu dÄ±ÅŸÄ±nda" })
   }
 
   const handleBreak = async () => {
@@ -1440,15 +1468,15 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       await writeSharedRecord(db, "breaks", updatedBreak)
       notifyAttendanceSync()
       window.dispatchEvent(new Event("app-break-records-updated"))
-      updateSettings({ state: "İçeride", currentStatus: "inside", isInside: true, screen: "Mola" })
-      addAudit("Mobil mola bitirildi", `${personName(selectedPerson)} mola kaydını bitirdi.`, "Mobil")
-      toast({ title: "Molayı Bitir", description: `${durationMinutes} dk mola tamamlandı.` })
+      updateSettings({ state: "Ä°Ã§eride", currentStatus: "inside", isInside: true, screen: "Mola" })
+      addAudit("Mobil mola bitirildi", `${personName(selectedPerson)} mola kaydÄ±nÄ± bitirdi.`, "Mobil")
+      toast({ title: "MolayÄ± Bitir", description: `${durationMinutes} dk mola tamamlandÄ±.` })
       load()
       return
     }
     const isInsideForBreak = Boolean(liveRecord) && String(liveRecord?.status || "").toLowerCase() !== "on_break"
     if (!isInsideForBreak) {
-      toast({ variant: "destructive", title: "Mola başlatılamadı", description: "Mola başlatmak için önce giriş yapmalısınız." })
+      toast({ variant: "destructive", title: "Mola baÅŸlatÄ±lamadÄ±", description: "Mola baÅŸlatmak iÃ§in Ã¶nce giriÅŸ yapmalÄ±sÄ±nÄ±z." })
       return
     }
     const now = new Date()
@@ -1478,8 +1506,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     notifyAttendanceSync()
     window.dispatchEvent(new Event("app-break-records-updated"))
     updateSettings({ state: "Molada", currentStatus: "on_break", isInside: true, screen: "Mola" })
-    addAudit("Mobil mola başlatıldı", `${personName(selectedPerson)} için mola kaydı oluşturuldu.`)
-    toast({ title: "Mola Başlatıldı", description: "Aktif mola kaydı oluşturuldu." })
+    addAudit("Mobil mola baÅŸlatÄ±ldÄ±", `${personName(selectedPerson)} iÃ§in mola kaydÄ± oluÅŸturuldu.`)
+    toast({ title: "Mola BaÅŸlatÄ±ldÄ±", description: "Aktif mola kaydÄ± oluÅŸturuldu." })
     load()
   }
 
@@ -1489,19 +1517,19 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       return false
     }
     if (!canCreateLeaveRequests) {
-      toast({ variant: "destructive", title: "Yetki yok", description: "İzin talebi oluşturma yetkiniz yok." })
+      toast({ variant: "destructive", title: "Yetki yok", description: "Ä°zin talebi oluÅŸturma yetkiniz yok." })
       return false
     }
     const targetPersonnelId = String(form.selectedPersonnelId || "").trim()
     const targetPerson = data.personnel.find((person: any) => getId(person) === targetPersonnelId)
     if (!targetPerson) {
-      toast({ variant: "destructive", title: "Personel seçin", description: "İzin talebi için personel seçimi zorunludur." })
+      toast({ variant: "destructive", title: "Personel seÃ§in", description: "Ä°zin talebi iÃ§in personel seÃ§imi zorunludur." })
       return false
     }
     const targetPersonId = getId(targetPerson)
     const targetBranchId = String(targetPerson?.branchId || "")
     if (targetPersonId !== personId && targetBranchId !== String(selectedPerson?.branchId || branchId || "")) {
-      toast({ variant: "destructive", title: "Yetki yok", description: "Sadece kendi şubenizdeki personel için talep oluşturabilirsiniz." })
+      toast({ variant: "destructive", title: "Yetki yok", description: "Sadece kendi ÅŸubenizdeki personel iÃ§in talep oluÅŸturabilirsiniz." })
       return false
     }
     const attachmentFile = form.attachmentFile as File | null | undefined
@@ -1545,7 +1573,7 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
           resourceType: result.resourceType,
           format: result.format,
           size: result.bytes || attachmentFile.size,
-          category: "İzin Belgesi",
+          category: "Ä°zin Belgesi",
           source: "leaveRequest",
           relatedLeaveRequestId: leaveRequestId,
           uploadedAt: new Date().toISOString(),
@@ -1584,8 +1612,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       requestedByName: personName(selectedPerson),
       requestedByEmail: selectedPerson?.email || "",
       requestedByRole: "manager",
-      "personelAdı": personName(selectedPerson),
-      ["personelAdı"]: personName(targetPerson),
+      "personelAdÄ±": personName(selectedPerson),
+      ["personelAdÄ±"]: personName(targetPerson),
       type: form.type,
       leaveType: form.type,
       startDate: form.startDate,
@@ -1613,8 +1641,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       upsertLocalArrayRecord("app_personnel", updatedPerson)
       await writeSharedRecord(db, "personnel", updatedPerson)
     }
-    addAudit("Mobil izin talebi oluşturuldu", `${personName(selectedPerson)} için ${form.type} talebi oluşturuldu.`, "İzin")
-    updateSettings({ screen: "İzin" })
+    addAudit("Mobil izin talebi oluÅŸturuldu", `${personName(selectedPerson)} iÃ§in ${form.type} talebi oluÅŸturuldu.`, "Ä°zin")
+    updateSettings({ screen: "Ä°zin" })
     load()
     toast({
       title: firestoreOk ? "Izin talebi kaydedildi" : "Izin talebi yerel kaydedildi",
@@ -1633,10 +1661,10 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
       return ""
     }
     const result = loginWithLocalPersonnel(email, password)
-    if (!result.ok) return result.error || "Giriş yapılamadı."
+    if (!result.ok) return result.error || "GiriÅŸ yapÄ±lamadÄ±."
     setAccessState(readCurrentAccess())
     load()
-    toast({ title: "Giriş başarılı", description: "Mobil uygulama açıldı." })
+    toast({ title: "GiriÅŸ baÅŸarÄ±lÄ±", description: "Mobil uygulama aÃ§Ä±ldÄ±." })
     return ""
   }, [auth, db, load, toast])
 
@@ -1644,8 +1672,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
     <div className="grid min-h-[520px] w-full place-items-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 text-center">
       <div>
         <UserRound className="mx-auto mb-4 h-14 w-14 text-primary/35" />
-        <h3 className="text-xl font-extrabold text-primary">HenÃ¼z personel bulunamadÄ±.</h3>
-        <p className="mt-2 text-sm font-medium text-muted-foreground">Personel oluÅŸturulduÄŸunda mobil Ã¶nizleme localStorage Ã¼zerinden gÃ¼ncellenecek.</p>
+        <h3 className="text-xl font-extrabold text-primary">HenÃƒÂ¼z personel bulunamadÃ„Â±.</h3>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">Personel oluÃ…Å¸turulduÃ„Å¸unda mobil ÃƒÂ¶nizleme localStorage ÃƒÂ¼zerinden gÃƒÂ¼ncellenecek.</p>
       </div>
     </div>
   ) : (
@@ -1695,8 +1723,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
           <div className="grid min-h-dvh w-full place-items-center bg-slate-50 p-6 text-center">
             <div>
               <UserRound className="mx-auto mb-4 h-14 w-14 text-primary/35" />
-              <h3 className="text-xl font-extrabold text-primary">HenÃ¼z personel bulunamadÄ±.</h3>
-              <p className="mt-2 text-sm font-medium text-muted-foreground">Mobil ekran iÃ§in personel kaydÄ± bekleniyor.</p>
+              <h3 className="text-xl font-extrabold text-primary">HenÃƒÂ¼z personel bulunamadÃ„Â±.</h3>
+              <p className="mt-2 text-sm font-medium text-muted-foreground">Mobil ekran iÃƒÂ§in personel kaydÃ„Â± bekleniyor.</p>
             </div>
           </div>
         ) : (
@@ -1750,15 +1778,15 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
             <Badge className="mb-4 rounded-full border-white/20 bg-white/10 px-3 py-1 text-white hover:bg-white/10">
               <Smartphone className="mr-2 h-3.5 w-3.5" /> Mobile Companion Preview
             </Badge>
-            <h1 className="text-3xl font-extrabold tracking-tight">Mobil Uygulama Önizleme</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">Mobil Uygulama Ã–nizleme</h1>
             <p className="mt-2 max-w-3xl text-sm font-medium text-slate-300">
-              Admin panel localStorage verileriyle çalışan, QR/GPS/vardiya/izin akışlarını simüle eden mobil PDKS önizlemesi.
+              Admin panel localStorage verileriyle Ã§alÄ±ÅŸan, QR/GPS/vardiya/izin akÄ±ÅŸlarÄ±nÄ± simÃ¼le eden mobil PDKS Ã¶nizlemesi.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="h-11 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/15" onClick={load}><RefreshCw className="mr-2 h-4 w-4" />Önizlemeyi Yenile</Button>
-            <Button variant="outline" className="h-11 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/15" onClick={() => window.print()}><Camera className="mr-2 h-4 w-4" />Mobil ekran görüntüsü al</Button>
-            <Button className="h-11 rounded-2xl bg-white text-primary hover:bg-slate-100" onClick={saveSettings}><Save className="mr-2 h-4 w-4" />Mobil ayarları kaydet</Button>
+            <Button variant="outline" className="h-11 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/15" onClick={load}><RefreshCw className="mr-2 h-4 w-4" />Ã–nizlemeyi Yenile</Button>
+            <Button variant="outline" className="h-11 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/15" onClick={() => window.print()}><Camera className="mr-2 h-4 w-4" />Mobil ekran gÃ¶rÃ¼ntÃ¼sÃ¼ al</Button>
+            <Button className="h-11 rounded-2xl bg-white text-primary hover:bg-slate-100" onClick={saveSettings}><Save className="mr-2 h-4 w-4" />Mobil ayarlarÄ± kaydet</Button>
             <Button variant="outline" className="h-11 rounded-2xl border-white/20 bg-white/10 text-white hover:bg-white/15" onClick={exportJson}><Download className="mr-2 h-4 w-4" />JSON indir</Button>
           </div>
         </div>
@@ -1772,8 +1800,8 @@ export function MobileExperience({ variant = "preview" }: { variant?: "preview" 
               <div className="grid min-h-[520px] w-full place-items-center rounded-[28px] border border-dashed border-slate-300 bg-slate-50/70 text-center">
                 <div>
                   <UserRound className="mx-auto mb-4 h-14 w-14 text-primary/35" />
-                  <h3 className="text-xl font-extrabold text-primary">Henüz personel bulunamadı.</h3>
-                  <p className="mt-2 text-sm font-medium text-muted-foreground">Personel oluşturulduğunda mobil önizleme localStorage üzerinden güncellenecek.</p>
+                  <h3 className="text-xl font-extrabold text-primary">HenÃ¼z personel bulunamadÄ±.</h3>
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">Personel oluÅŸturulduÄŸunda mobil Ã¶nizleme localStorage Ã¼zerinden gÃ¼ncellenecek.</p>
                 </div>
               </div>
             ) : (
@@ -1824,9 +1852,9 @@ function MobileAccessDenied() {
           <Badge className="mb-4 rounded-full bg-amber-50 px-3 py-1 text-amber-700 hover:bg-amber-50">
             Mobil Yetki
           </Badge>
-          <h2 className="text-2xl font-extrabold tracking-tight text-primary">Bu kullanıcının mobil erişim izni yok.</h2>
+          <h2 className="text-2xl font-extrabold tracking-tight text-primary">Bu kullanÄ±cÄ±nÄ±n mobil eriÅŸim izni yok.</h2>
           <p className="mx-auto mt-3 max-w-md text-sm font-medium leading-6 text-muted-foreground">
-            Mobil önizleme, aktif kullanıcı için mobileAccess izni açıldığında tekrar kullanılabilir.
+            Mobil Ã¶nizleme, aktif kullanÄ±cÄ± iÃ§in mobileAccess izni aÃ§Ä±ldÄ±ÄŸÄ±nda tekrar kullanÄ±labilir.
           </p>
         </CardContent>
       </Card>
@@ -1854,7 +1882,7 @@ function MobileLoginScreen({ onLogin }: { onLogin: (email: string, password: str
             <img src="/assets/evyapar-logo-beyaz.png" alt="Evyapar" className="h-auto w-full object-contain" />
           </div>
           <h1 className="text-2xl font-black tracking-tight">Evyapar Mobil</h1>
-          <p className="mt-2 text-sm font-semibold text-white/55">Personel hesabınızla giriş yapın.</p>
+          <p className="mt-2 text-sm font-semibold text-white/55">Personel hesabÄ±nÄ±zla giriÅŸ yapÄ±n.</p>
         </div>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -1862,11 +1890,11 @@ function MobileLoginScreen({ onLogin }: { onLogin: (email: string, password: str
             <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="h-12 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/35" placeholder="personel@evyapar.com" required />
           </div>
           <div className="space-y-2">
-            <Label className="text-[11px] font-black uppercase tracking-widest text-white/55">Şifre</Label>
-            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/35" placeholder="Şifreniz" required />
+            <Label className="text-[11px] font-black uppercase tracking-widest text-white/55">Åifre</Label>
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/35" placeholder="Åifreniz" required />
           </div>
           {error && <div className="rounded-2xl border border-rose-300/20 bg-rose-500/15 px-4 py-3 text-sm font-bold text-rose-100">{error}</div>}
-          <Button type="submit" className="h-12 w-full rounded-2xl bg-white font-black text-slate-950 hover:bg-white/90">Giriş Yap</Button>
+          <Button type="submit" className="h-12 w-full rounded-2xl bg-white font-black text-slate-950 hover:bg-white/90">GiriÅŸ Yap</Button>
         </div>
       </form>
     </div>
@@ -1877,29 +1905,29 @@ function ControlPanel({ data, settings, setField }: any) {
   return (
     <Card className="xl:sticky xl:top-28 h-fit overflow-hidden rounded-[28px] border-white/70 bg-white/85 shadow-2xl shadow-slate-200/70 backdrop-blur-xl">
       <CardHeader className="border-b bg-slate-50/50">
-        <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-500"><Smartphone className="h-4 w-4 text-accent" />Önizleme Kontrol Paneli</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-500"><Smartphone className="h-4 w-4 text-accent" />Ã–nizleme Kontrol Paneli</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5 p-5">
-        <SelectField label="Personel seçimi" value={settings.personnelId} onChange={(value: string) => setField("personnelId", value)}>
+        <SelectField label="Personel seÃ§imi" value={settings.personnelId} onChange={(value: string) => setField("personnelId", value)}>
           {data.personnel.length ? data.personnel.map((person: any) => <SelectItem key={getId(person)} value={getId(person)}>{personName(person)}</SelectItem>) : <SelectItem value={NONE}>Personel yok</SelectItem>}
         </SelectField>
-        <SelectField label="Şube seçimi" value={settings.branchId} onChange={(value: string) => setField("branchId", value)}>
-          {data.branches.length ? data.branches.map((branch: any) => <SelectItem key={getId(branch)} value={getId(branch)}>{branchName(branch)}</SelectItem>) : <SelectItem value={NONE}>Şube yok</SelectItem>}
+        <SelectField label="Åube seÃ§imi" value={settings.branchId} onChange={(value: string) => setField("branchId", value)}>
+          {data.branches.length ? data.branches.map((branch: any) => <SelectItem key={getId(branch)} value={getId(branch)}>{branchName(branch)}</SelectItem>) : <SelectItem value={NONE}>Åube yok</SelectItem>}
         </SelectField>
-        <SelectField label="Tema seçimi" value={settings.theme} onChange={(value: string) => setField("theme", value)}>
+        <SelectField label="Tema seÃ§imi" value={settings.theme} onChange={(value: string) => setField("theme", value)}>
           {themes.map((theme) => <SelectItem key={theme} value={theme}>{theme}</SelectItem>)}
         </SelectField>
-        <SelectField label="Durum simülasyonu" value={settings.state} onChange={(value: string) => setField("state", value)}>
+        <SelectField label="Durum simÃ¼lasyonu" value={settings.state} onChange={(value: string) => setField("state", value)}>
           {states.map((state) => <SelectItem key={state} value={state}>{state}</SelectItem>)}
         </SelectField>
-        <SelectField label="Ekran seçimi" value={settings.screen} onChange={(value: string) => setField("screen", value)}>
+        <SelectField label="Ekran seÃ§imi" value={settings.screen} onChange={(value: string) => setField("screen", value)}>
           {screens.map((screen) => <SelectItem key={screen} value={screen}>{screen}</SelectItem>)}
         </SelectField>
         <SelectField label="Cihaz tipi" value={settings.device} onChange={(value: string) => setField("device", value)}>
           {devices.map((device) => <SelectItem key={device} value={device}>{device}</SelectItem>)}
         </SelectField>
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-4 text-sm font-semibold text-indigo-900">
-          Veriler Firestore kullanılmadan yalnızca admin panelin localStorage kayıtlarından okunur. Kayıt yoksa mobil ekranlar boş durum gösterir.
+          Veriler Firestore kullanÄ±lmadan yalnÄ±zca admin panelin localStorage kayÄ±tlarÄ±ndan okunur. KayÄ±t yoksa mobil ekranlar boÅŸ durum gÃ¶sterir.
         </div>
       </CardContent>
     </Card>
@@ -1945,7 +1973,7 @@ function MobileAppShell(props: any) {
   const palette = getTheme(settings.theme)
 
   const setMobileScreen = React.useCallback((screen: string) => {
-    props.setScreen(screen === "Giriş" || screen === "GPS" ? "QR" : screen)
+    props.setScreen(screen === "GiriÅŸ" || screen === "GPS" ? "QR" : screen)
   }, [props.setScreen])
 
   return (
@@ -1976,7 +2004,7 @@ function MobileStatusBar({ isAndroid }: { isAndroid: boolean }) {
 
 function MobileScreen(props: any) {
   React.useEffect(() => {
-    if (props.isStandaloneApp && (props.settings.screen === "Giriş" || props.settings.screen === "GPS")) {
+    if (props.isStandaloneApp && (props.settings.screen === "GiriÅŸ" || props.settings.screen === "GPS")) {
       props.setScreen("QR")
     }
   }, [props.isStandaloneApp, props.settings.screen, props.setScreen])
@@ -1985,11 +2013,11 @@ function MobileScreen(props: any) {
   }
   const map: Record<string, React.ReactNode> = {
     Ana: <HomeScreen {...props} />,
-    "Giriş": <CheckScreen {...props} />,
+    "GiriÅŸ": <CheckScreen {...props} />,
     QR: <QrScreen {...props} />,
     GPS: <GpsScreen {...props} />,
     Vardiya: <ShiftScreen {...props} />,
-    "İzin": <LeaveScreen {...props} />,
+    "Ä°zin": <LeaveScreen {...props} />,
     Mola: <BreakScreen {...props} />,
     Bildirim: <NotificationScreen {...props} />,
     Profil: <ProfileScreen {...props} />,
@@ -2012,17 +2040,17 @@ function KvkkOnboardingScreen({ palette, person, onAccept }: any) {
       <MobileCard className="space-y-5">
         <div>
           <Badge className="mb-3 bg-white/15 text-white hover:bg-white/15">KVKK</Badge>
-          <h3 className="text-2xl font-extrabold text-white">Aydınlatma Metni</h3>
-          <p className="mt-2 text-sm font-semibold leading-6 text-white/60">{personName(person)}, mobil PDKS kullanımına devam etmek için aydınlatma metnini onaylamanız gerekir.</p>
+          <h3 className="text-2xl font-extrabold text-white">AydÄ±nlatma Metni</h3>
+          <p className="mt-2 text-sm font-semibold leading-6 text-white/60">{personName(person)}, mobil PDKS kullanÄ±mÄ±na devam etmek iÃ§in aydÄ±nlatma metnini onaylamanÄ±z gerekir.</p>
         </div>
         <div className="space-y-3 rounded-3xl border border-white/10 bg-white/10 p-4 text-sm font-semibold leading-6 text-white/75">
-          <p>PDKS kapsamında ad-soyad, e-posta, şube, giriş/çıkış, mola, vardiya, izin ve yüklenen belgeler işlenir.</p>
-          <p>Veriler personel devam takibi, izin yönetimi ve şirket içi operasyon amacıyla kullanılır.</p>
-          <p>Yetkili kişiler dışında paylaşılmaz.</p>
-          <p>Personel KVKK kapsamındaki haklarını kullanabilir.</p>
+          <p>PDKS kapsamÄ±nda ad-soyad, e-posta, ÅŸube, giriÅŸ/Ã§Ä±kÄ±ÅŸ, mola, vardiya, izin ve yÃ¼klenen belgeler iÅŸlenir.</p>
+          <p>Veriler personel devam takibi, izin yÃ¶netimi ve ÅŸirket iÃ§i operasyon amacÄ±yla kullanÄ±lÄ±r.</p>
+          <p>Yetkili kiÅŸiler dÄ±ÅŸÄ±nda paylaÅŸÄ±lmaz.</p>
+          <p>Personel KVKK kapsamÄ±ndaki haklarÄ±nÄ± kullanabilir.</p>
         </div>
         <Button data-mobile-action="kvkk-accept" disabled={saving} onClick={accept} className={cn("h-12 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>
-          {saving ? "Kaydediliyor..." : "Aydınlatma metnini okudum"}
+          {saving ? "Kaydediliyor..." : "AydÄ±nlatma metnini okudum"}
         </Button>
       </MobileCard>
     </div>
@@ -2046,7 +2074,7 @@ function MobileHeader({ person, palette, title }: any) {
 
 function HomeScreen({ person, branch, department, position, shifts, settings, palette, setScreen, onBreak, isStandaloneApp, canCreateLeaveRequests, presenceState }: any) {
   const hour = new Date().getHours()
-  const greeting = hour < 11 ? "Günaydın" : hour < 18 ? "İyi günler" : "İyi akşamlar"
+  const greeting = hour < 11 ? "GÃ¼naydÄ±n" : hour < 18 ? "Ä°yi gÃ¼nler" : "Ä°yi akÅŸamlar"
   const personId = getId(person)
   const branchId = getId(branch)
   const todayShift = findTodayMobileShift(shifts, personId, branchId)
@@ -2058,21 +2086,21 @@ function HomeScreen({ person, branch, department, position, shifts, settings, pa
       <MobileHeader person={person} palette={palette} title={greeting} />
       <StatusHero state={presenceState || settings.state} palette={palette} qrStatus={settings.qrStatus} gpsStatus={settings.gpsStatus} lastQrVerifiedAt={settings.lastQrVerifiedAt} lastGpsVerifiedAt={settings.lastGpsVerifiedAt} />
       <MobileCard>
-        <div className="flex items-center justify-between"><span className="text-sm font-bold text-white/60">Bugünkü vardiya</span><CalendarClock className="h-4 w-4 text-white/60" /></div>
-        <div className="mt-2 text-lg font-extrabold text-white">{hasTodayShift ? shiftDisplayName(todayShift) : "Bugün için atanmış vardiya bulunamadı."}</div>
+        <div className="flex items-center justify-between"><span className="text-sm font-bold text-white/60">BugÃ¼nkÃ¼ vardiya</span><CalendarClock className="h-4 w-4 text-white/60" /></div>
+        <div className="mt-2 text-lg font-extrabold text-white">{hasTodayShift ? shiftDisplayName(todayShift) : "BugÃ¼n iÃ§in atanmÄ±ÅŸ vardiya bulunamadÄ±."}</div>
         {hasTodayShift && <p className="text-xs text-white/50">{startTime} - {endTime} - {shiftBranchLabel(todayShift, branch)}</p>}
       </MobileCard>
       <MobileCard className="mt-3 grid grid-cols-2 gap-2">
-        <Info label="Şube" value={branch ? branchName(branch) : "Tanımlı değil"} />
-        <Info label="Departman" value={department ? departmentName(department) : "Tanımlı değil"} />
-        <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "Tanımlı değil")} />
+        <Info label="Åube" value={branch ? branchName(branch) : "TanÄ±mlÄ± deÄŸil"} />
+        <Info label="Departman" value={department ? departmentName(department) : "TanÄ±mlÄ± deÄŸil"} />
+        <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "TanÄ±mlÄ± deÄŸil")} />
       </MobileCard>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <QuickAction actionKey="qr" icon={QrCode} label={isStandaloneApp ? "QR ile Giriş / Çıkış" : "QR ile giriş"} description={isStandaloneApp ? "Mağaza QR kodunu okutarak giriş veya çıkış yap" : undefined} palette={palette} onClick={() => setScreen("QR")} className={isStandaloneApp ? "col-span-2" : undefined} />
-        {!isStandaloneApp && <QuickAction actionKey="gps" icon={LocateFixed} label="GPS ile giriş" palette={palette} onClick={() => setScreen("GPS")} />}
-        <QuickAction actionKey="break" icon={Clock3} label={presenceState === "Molada" ? "Moladasınız" : "Mola"} palette={palette} onClick={() => setScreen("Mola")} />
-        {canCreateLeaveRequests && <QuickAction actionKey="leave" icon={CalendarClock} label="İzin talep et" palette={palette} onClick={() => setScreen("İzin")} />}
-        <QuickAction actionKey="shifts" icon={IdCard} label="Vardiyalarım" palette={palette} onClick={() => setScreen("Vardiya")} />
+        <QuickAction actionKey="qr" icon={QrCode} label={isStandaloneApp ? "QR ile GiriÅŸ / Ã‡Ä±kÄ±ÅŸ" : "QR ile giriÅŸ"} description={isStandaloneApp ? "MaÄŸaza QR kodunu okutarak giriÅŸ veya Ã§Ä±kÄ±ÅŸ yap" : undefined} palette={palette} onClick={() => setScreen("QR")} className={isStandaloneApp ? "col-span-2" : undefined} />
+        {!isStandaloneApp && <QuickAction actionKey="gps" icon={LocateFixed} label="GPS ile giriÅŸ" palette={palette} onClick={() => setScreen("GPS")} />}
+        <QuickAction actionKey="break" icon={Clock3} label={presenceState === "Molada" ? "MoladasÄ±nÄ±z" : "Mola"} palette={palette} onClick={() => setScreen("Mola")} />
+        {canCreateLeaveRequests && <QuickAction actionKey="leave" icon={CalendarClock} label="Ä°zin talep et" palette={palette} onClick={() => setScreen("Ä°zin")} />}
+        <QuickAction actionKey="shifts" icon={IdCard} label="VardiyalarÄ±m" palette={palette} onClick={() => setScreen("Vardiya")} />
         <QuickAction actionKey="notifications" icon={Bell} label="Bildirimler" palette={palette} onClick={() => setScreen("Bildirim")} />
       </div>
     </div>
@@ -2087,21 +2115,21 @@ function CheckScreen({ person, settings, branch, device, kvkk, qrPoints, shifts,
     const timer = window.setInterval(tick, 1000)
     return () => window.clearInterval(timer)
   }, [])
-  const inside = isPersonInside || settings.state === "İçeride" || settings.state === "Molada" || settings.state === "Fazla Mesai"
+  const inside = isPersonInside || settings.state === "Ä°Ã§eride" || settings.state === "Molada" || settings.state === "Fazla Mesai"
   const activeQr = qrPoints.some((point: any) => isActive(point?.status))
   return (
     <div className="pt-4 text-center">
-      <h3 className="text-xl font-extrabold text-white">Giriş / Çıkış</h3>
+      <h3 className="text-xl font-extrabold text-white">GiriÅŸ / Ã‡Ä±kÄ±ÅŸ</h3>
       <p className="mt-1 text-sm font-semibold text-white/50">{time}</p>
       <p className="mt-1 text-xs font-bold text-white/45">{personName(person)}</p>
-      <button data-mobile-action="attendance-toggle" onClick={() => onAttendance(inside ? "Çıkış" : "Giriş")} className={cn("mx-auto mt-7 grid h-40 w-40 place-items-center rounded-full text-white shadow-2xl transition hover:scale-[1.02]", palette.button)}>
-        <div><Fingerprint className="mx-auto mb-2 h-12 w-12" /><span className="text-sm font-black">{inside ? "Çıkış Yap" : "Giriş Yap"}</span></div>
+      <button data-mobile-action="attendance-toggle" onClick={() => onAttendance(inside ? "Ã‡Ä±kÄ±ÅŸ" : "GiriÅŸ")} className={cn("mx-auto mt-7 grid h-40 w-40 place-items-center rounded-full text-white shadow-2xl transition hover:scale-[1.02]", palette.button)}>
+        <div><Fingerprint className="mx-auto mb-2 h-12 w-12" /><span className="text-sm font-black">{inside ? "Ã‡Ä±kÄ±ÅŸ Yap" : "GiriÅŸ Yap"}</span></div>
       </button>
       <div className="mt-7 space-y-3 text-left">
-        <VerifyRow label="Vardiya" value={shifts[0]?.name || "Tanımlı vardiya yok"} />
-        <VerifyRow label="QR doğrulama" value={settings.qrStatus === "Başarılı" ? "Doğrulandı" : activeQr ? "Hazır" : "QR bekleniyor"} danger={!activeQr && settings.qrStatus !== "Başarılı"} />
-        <VerifyRow label="GPS doğrulama" value={settings.state === "GPS dışında" ? "GPS dışında" : hasBranchLocation(branch) ? "Doğrulandı" : "Şube konumu tanımlı değil"} danger={settings.state === "GPS dışında" || !hasBranchLocation(branch)} />
-        <VerifyRow label="Device ID" value={device?.deviceId || device?.id || "Tanımlı değil"} danger={!device} />
+        <VerifyRow label="Vardiya" value={shifts[0]?.name || "TanÄ±mlÄ± vardiya yok"} />
+        <VerifyRow label="QR doÄŸrulama" value={settings.qrStatus === "BaÅŸarÄ±lÄ±" ? "DoÄŸrulandÄ±" : activeQr ? "HazÄ±r" : "QR bekleniyor"} danger={!activeQr && settings.qrStatus !== "BaÅŸarÄ±lÄ±"} />
+        <VerifyRow label="GPS doÄŸrulama" value={settings.state === "GPS dÄ±ÅŸÄ±nda" ? "GPS dÄ±ÅŸÄ±nda" : hasBranchLocation(branch) ? "DoÄŸrulandÄ±" : "Åube konumu tanÄ±mlÄ± deÄŸil"} danger={settings.state === "GPS dÄ±ÅŸÄ±nda" || !hasBranchLocation(branch)} />
+        <VerifyRow label="Device ID" value={device?.deviceId || device?.id || "TanÄ±mlÄ± deÄŸil"} danger={!device} />
         <VerifyRow label="KVKK" value={kvkk?.status || kvkk?.kvkkStatus || kvkk?.consentStatus || "Bekliyor"} danger={!kvkk} />
       </div>
     </div>
@@ -2145,7 +2173,7 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr, isStandaloneApp }
       const existing = document.querySelector<HTMLScriptElement>("script[data-html5-qrcode]")
       if (existing) {
         existing.addEventListener("load", () => resolve(), { once: true })
-        existing.addEventListener("error", () => reject(new Error("QR scanner script yüklenemedi.")), { once: true })
+        existing.addEventListener("error", () => reject(new Error("QR scanner script yÃ¼klenemedi.")), { once: true })
         return
       }
       const script = document.createElement("script")
@@ -2153,21 +2181,21 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr, isStandaloneApp }
       script.async = true
       script.dataset.html5Qrcode = "true"
       script.onload = () => resolve()
-      script.onerror = () => reject(new Error("QR scanner script yüklenemedi. İnternet bağlantısını kontrol edin."))
+      script.onerror = () => reject(new Error("QR scanner script yÃ¼klenemedi. Ä°nternet baÄŸlantÄ±sÄ±nÄ± kontrol edin."))
       document.head.appendChild(script)
     })
-    if (!(window as any).Html5Qrcode) throw new Error("Tarayıcı QR scanner kütüphanesini başlatamadı.")
+    if (!(window as any).Html5Qrcode) throw new Error("TarayÄ±cÄ± QR scanner kÃ¼tÃ¼phanesini baÅŸlatamadÄ±.")
     return (window as any).Html5Qrcode
   }, [])
   const startCameraScan = React.useCallback(async () => {
     setCameraError("")
     try {
       if (!window.isSecureContext && window.location.hostname !== "localhost") {
-        setCameraError("Kamera için HTTPS gerekli.")
+        setCameraError("Kamera iÃ§in HTTPS gerekli.")
         return
       }
       if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError("Tarayıcı kamera erişimini desteklemiyor.")
+        setCameraError("TarayÄ±cÄ± kamera eriÅŸimini desteklemiyor.")
         return
       }
       const Html5Qrcode = await loadHtml5QrCode()
@@ -2181,7 +2209,7 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr, isStandaloneApp }
         () => {}
       )
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Kamera izni alınamadı."
+      const message = error instanceof Error ? error.message : "Kamera izni alÄ±namadÄ±."
       setCameraError(message.includes("Permission") || message.includes("NotAllowed") ? "Kamera izni verilmedi." : message)
       stopScanner()
     }
@@ -2189,7 +2217,7 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr, isStandaloneApp }
   React.useEffect(() => stopScanner, [stopScanner])
   return (
     <div>
-      <MobileHeader person={{ fullName: "QR Okutma" }} palette={palette} title="Güvenli doğrulama" />
+      <MobileHeader person={{ fullName: "QR Okutma" }} palette={palette} title="GÃ¼venli doÄŸrulama" />
       <div className="relative mt-6 grid h-[340px] max-h-[52dvh] min-h-[320px] place-items-center overflow-hidden rounded-[32px] border border-white/15 bg-black/35">
         <Camera className="absolute left-4 top-4 z-10 h-5 w-5 text-white/50" />
         <div id={qrReaderId} className={cn("absolute inset-0 h-full w-full overflow-hidden [&_div]:border-0 [&_img]:hidden [&_video]:absolute [&_video]:inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover", scanning ? "block" : "hidden")} />
@@ -2197,19 +2225,19 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr, isStandaloneApp }
         <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 h-0.5 w-52 -translate-x-1/2 -translate-y-1/2 animate-pulse bg-gradient-to-r from-transparent via-sky-300 to-transparent" />
       </div>
       {cameraError ? <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">{cameraError}</p> : null}
-      <Button data-mobile-action="qr-camera" onClick={scanning ? stopScanner : startCameraScan} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{scanning ? "Taramayı Durdur" : "Kamerayla QR Tara"}</Button>
+      <Button data-mobile-action="qr-camera" onClick={scanning ? stopScanner : startCameraScan} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>{scanning ? "TaramayÄ± Durdur" : "Kamerayla QR Tara"}</Button>
       {!isStandaloneApp && (
-      <Button data-mobile-action="qr-sim" onClick={handleQr} variant="outline" className="mt-2 h-11 w-full rounded-2xl border-white/15 bg-white/10 text-sm font-extrabold text-white hover:bg-white/15">QR Simülasyonu Başlat</Button>
+      <Button data-mobile-action="qr-sim" onClick={handleQr} variant="outline" className="mt-2 h-11 w-full rounded-2xl border-white/15 bg-white/10 text-sm font-extrabold text-white hover:bg-white/15">QR SimÃ¼lasyonu BaÅŸlat</Button>
       )}
       <MobileCard className="mt-4">
-        <p className="text-xs font-bold uppercase tracking-widest text-white/50">Şube QR noktası</p>
-        <h4 className="mt-1 text-lg font-extrabold text-white">{activePoint?.pointName || activePoint?.name || "Bu şubeye ait QR noktası bulunamadı."}</h4>
-        <p className="text-xs text-white/50">{branch ? branchName(branch) : "Şube seçilmedi"} · {activePoint ? "Aktif" : "Pasif/Yok"}</p>
-        <VerifyRow label="QR doğrulama sonucu" value={settings.qrStatus || "QR bekleniyor"} danger={settings.qrStatus === "Başarısız" || !activePoint} />
+        <p className="text-xs font-bold uppercase tracking-widest text-white/50">Åube QR noktasÄ±</p>
+        <h4 className="mt-1 text-lg font-extrabold text-white">{activePoint?.pointName || activePoint?.name || "Bu ÅŸubeye ait QR noktasÄ± bulunamadÄ±."}</h4>
+        <p className="text-xs text-white/50">{branch ? branchName(branch) : "Åube seÃ§ilmedi"} Â· {activePoint ? "Aktif" : "Pasif/Yok"}</p>
+        <VerifyRow label="QR doÄŸrulama sonucu" value={settings.qrStatus || "QR bekleniyor"} danger={settings.qrStatus === "BaÅŸarÄ±sÄ±z" || !activePoint} />
         <div className="mt-3 space-y-2">
           {qrPoints.length ? qrPoints.map((point: any) => (
             <div key={getId(point) || point?.qrCode || point?.pointName} className="flex items-center justify-between rounded-2xl bg-white/10 px-3 py-2 text-xs">
-              <span className="font-bold text-white/70">{point?.pointName || point?.name || "QR noktası"}</span>
+              <span className="font-bold text-white/70">{point?.pointName || point?.name || "QR noktasÄ±"}</span>
               <span className={cn("font-black", isActive(point?.status) ? "text-emerald-300" : "text-rose-300")}>{isActive(point?.status) ? "Aktif" : "Pasif"}</span>
             </div>
           )) : null}
@@ -2220,31 +2248,31 @@ function QrScreen({ qrPoints, branch, settings, palette, onQr, isStandaloneApp }
 }
 
 function GpsScreen({ branch, person, settings, palette, onGps }: any) {
-  const outside = settings.state === "GPS dışında"
+  const outside = settings.state === "GPS dÄ±ÅŸÄ±nda"
   const hasLocation = hasBranchLocation(branch)
   const branchCoordinates = getCoordinates(branch)
   const userCoordinates = getCoordinates(settings) || getCoordinates(person)
   const debugDistance = branchCoordinates && userCoordinates ? distanceMeters(userCoordinates, branchCoordinates) : null
   return (
     <div>
-      <MobileHeader person={{ fullName: "GPS Konum" }} palette={palette} title="Konum doğrulama" />
+      <MobileHeader person={{ fullName: "GPS Konum" }} palette={palette} title="Konum doÄŸrulama" />
       <div className="relative h-80 overflow-hidden rounded-[32px] border border-white/15 bg-sky-950/35">
         <div className="absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(255,255,255,.4)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.4)_1px,transparent_1px)] [background-size:28px_28px]" />
         <div className="absolute left-1/2 top-1/2 grid h-28 w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-sky-300/30 bg-sky-400/10">
           <MapPin className={cn("h-10 w-10", outside || !hasLocation ? "text-rose-300" : "text-emerald-300")} />
         </div>
       </div>
-      <Button data-mobile-action="gps-sim" onClick={onGps} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>GPS ile giriş</Button>
+      <Button data-mobile-action="gps-sim" onClick={onGps} className={cn("mt-4 h-11 w-full rounded-2xl text-sm font-extrabold text-white", palette.button)}>GPS ile giriÅŸ</Button>
       <MobileCard className="mt-4">
         <div className="mb-3 rounded-2xl bg-white/10 p-3 font-mono text-[10px] leading-5 text-white/60">
           <div>branch lat/lng: {branchCoordinates ? `${branchCoordinates.latitude}, ${branchCoordinates.longitude}` : "-"}</div>
           <div>user lat/lng: {userCoordinates ? `${userCoordinates.latitude}, ${userCoordinates.longitude}` : "-"}</div>
           <div>calculated distance: {debugDistance === null ? "-" : `${Math.round(debugDistance)} m`}</div>
         </div>
-        <VerifyRow label="Şube lokasyonu" value={hasLocation ? branchName(branch) : "Şube konumu tanımlı değil"} danger={!hasLocation} />
-        <VerifyRow label="Personel konumu" value={outside ? "Şube dışında" : hasLocation ? "Şube alanında" : "Simülasyon bekliyor"} danger={outside || !hasLocation} />
+        <VerifyRow label="Åube lokasyonu" value={hasLocation ? branchName(branch) : "Åube konumu tanÄ±mlÄ± deÄŸil"} danger={!hasLocation} />
+        <VerifyRow label="Personel konumu" value={outside ? "Åube dÄ±ÅŸÄ±nda" : hasLocation ? "Åube alanÄ±nda" : "SimÃ¼lasyon bekliyor"} danger={outside || !hasLocation} />
         <VerifyRow label="Mesafe" value={outside ? "850 m" : hasLocation ? "42 m" : "-"} danger={outside || !hasLocation} />
-        <VerifyRow label="Sonuç" value={settings.gpsStatus || "Bekleniyor"} danger={outside || settings.gpsStatus !== "Doğrulandı"} />
+        <VerifyRow label="SonuÃ§" value={settings.gpsStatus || "Bekleniyor"} danger={outside || settings.gpsStatus !== "DoÄŸrulandÄ±"} />
       </MobileCard>
     </div>
   )
@@ -2253,17 +2281,17 @@ function GpsScreen({ branch, person, settings, palette, onGps }: any) {
 function ShiftScreen({ shifts, branch, palette }: any) {
   const cards = shifts.slice(0, 7).map((shift: any) => ({
     title: shift.name || "Vardiya",
-    detail: `${formatDateTR(shift.startDate) || "Tarih yok"} · ${shift.startTime || shift.entryTime || "--:--"} - ${shift.endTime || shift.exitTime || "--:--"}`,
-    badge: shift.shiftType || shift.type || "Planlı",
-    meta: `${branch ? branchName(branch) : "Şube yok"} · Mola: ${shift.breakMinutes || shift.breakTime || "Tanımlı değil"}`,
+    detail: `${formatDateTR(shift.startDate) || "Tarih yok"} Â· ${shift.startTime || shift.entryTime || "--:--"} - ${shift.endTime || shift.exitTime || "--:--"}`,
+    badge: shift.shiftType || shift.type || "PlanlÄ±",
+    meta: `${branch ? branchName(branch) : "Åube yok"} Â· Mola: ${shift.breakMinutes || shift.breakTime || "TanÄ±mlÄ± deÄŸil"}`,
   }))
-  return <ListScreen title="Vardiyalarım" icon={CalendarClock} empty="Bu personele atanmış vardiya bulunamadı." items={cards} palette={palette} />
+  return <ListScreen title="VardiyalarÄ±m" icon={CalendarClock} empty="Bu personele atanmÄ±ÅŸ vardiya bulunamadÄ±." items={cards} palette={palette} />
 }
 
 function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, personnel = [], person, branch }: any) {
   const [open, setOpen] = React.useState(false)
   const [selectedPersonnelId, setSelectedPersonnelId] = React.useState("")
-  const [form, setForm] = React.useState({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
+  const [form, setForm] = React.useState({ type: "YÄ±llÄ±k Ä°zin", startDate: "", endDate: "", description: "" })
   const [startDay, setStartDay] = React.useState("")
   const [startMonth, setStartMonth] = React.useState("")
   const [startYear, setStartYear] = React.useState("")
@@ -2301,11 +2329,11 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, p
     setError("")
     if (!canCreateLeaveRequests) {
       setOpen(false)
-      setError("İzin talebi oluşturma yetkiniz yok.")
+      setError("Ä°zin talebi oluÅŸturma yetkiniz yok.")
       return
     }
     if (!selectedPersonnelId) {
-      setError("Personel seçimi zorunlu.")
+      setError("Personel seÃ§imi zorunlu.")
       return
     }
     if (!form.type.trim()) {
@@ -2340,7 +2368,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, p
       return
     }
     setOpen(false)
-    setForm({ type: "Yıllık İzin", startDate: "", endDate: "", description: "" })
+    setForm({ type: "YÄ±llÄ±k Ä°zin", startDate: "", endDate: "", description: "" })
     setStartDay("")
     setStartMonth("")
     setStartYear("")
@@ -2351,20 +2379,20 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, p
     setSelectedPersonnelId("")
   }
   const items = leaves.slice(0, 8).map((leave: any) => ({
-    title: leave.type || leave.leaveType || "İzin",
+    title: leave.type || leave.leaveType || "Ä°zin",
     detail: `${formatDateTR(leave.startDate)} / ${formatDateTR(leave.endDate)}`,
     badge: normalizeStatus(leave.status),
     meta: leave.description || "",
   }))
   return (
     <div>
-      <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">İzin Taleplerim</h3><CalendarClock className="h-5 w-5 text-white/60" /></div>
+      <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">Ä°zin Taleplerim</h3><CalendarClock className="h-5 w-5 text-white/60" /></div>
       {canCreateLeaveRequests && <Button
         data-mobile-action="leave-new"
         onClick={() => {
           if (!canCreateLeaveRequests) {
             setOpen(false)
-            setError("İzin talebi oluşturma yetkiniz yok.")
+            setError("Ä°zin talebi oluÅŸturma yetkiniz yok.")
             return
           }
           setError("")
@@ -2378,13 +2406,13 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, p
       {open && (
         <form onSubmit={submit} className="mb-4 space-y-3 rounded-[26px] border border-white/10 bg-white/10 p-4 shadow-xl backdrop-blur-xl">
           <div className="space-y-2">
-            <p className="text-[11px] font-black uppercase tracking-widest text-white/45">Personel Seç</p>
+            <p className="text-[11px] font-black uppercase tracking-widest text-white/45">Personel SeÃ§</p>
             <select
               value={selectedPersonnelId}
               onChange={(event) => setSelectedPersonnelId(event.target.value)}
               className="h-10 w-full rounded-2xl border border-white/10 bg-white/10 px-3 text-xs font-bold text-white"
             >
-              <option value="">Personel seçin</option>
+              <option value="">Personel seÃ§in</option>
               {selectablePersonnel.map((item: any) => (
                 <option key={getId(item)} value={getId(item)}>
                   {personName(item)}
@@ -2409,7 +2437,7 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, p
               <select value={endYear} onChange={(e) => setEndYear(e.target.value)} className="h-10 rounded-2xl border border-white/10 bg-white/10 px-2 text-xs font-bold text-white"><option value="">Yil</option>{yearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select>
             </div>
           </div>
-          <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Açıklama" className="min-h-16 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
+          <Textarea value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="AÃ§Ä±klama" className="min-h-16 rounded-2xl border-white/10 bg-white/10 text-white placeholder:text-white/40" />
           <div className="space-y-2">
             <p className="text-[11px] font-black uppercase tracking-widest text-white/45">Ek dosya</p>
             <label className="block cursor-pointer rounded-2xl border border-dashed border-white/20 bg-white/10 px-3 py-3 text-xs font-bold text-white/75 transition hover:bg-white/15">
@@ -2425,15 +2453,15 @@ function LeaveScreen({ leaves, palette, onLeaveCreate, canCreateLeaveRequests, p
                   else setError("")
                 }}
               />
-              {attachmentFile ? `${attachmentFile.name} · ${(attachmentFile.size / 1024 / 1024).toFixed(2)} MB` : "Görsel veya PDF yükle"}
+              {attachmentFile ? `${attachmentFile.name} Â· ${(attachmentFile.size / 1024 / 1024).toFixed(2)} MB` : "GÃ¶rsel veya PDF yÃ¼kle"}
             </label>
-            <p className="text-[10px] font-semibold text-white/40">JPG, PNG veya PDF · Maksimum 5 MB</p>
+            <p className="text-[10px] font-semibold text-white/40">JPG, PNG veya PDF Â· Maksimum 5 MB</p>
           </div>
           {error ? <p className="rounded-2xl border border-red-300/20 bg-red-500/15 px-3 py-2 text-xs font-bold text-red-100">{error}</p> : null}
           <Button data-mobile-action="leave-save" type="submit" disabled={saving} className="h-10 w-full rounded-2xl bg-white text-slate-950 hover:bg-white/90">{saving ? "Kaydediliyor..." : "Kaydet"}</Button>
         </form>
       )}
-      <ListItems items={items} empty="İzin talebi bulunamadı." />
+      <ListItems items={items} empty="Ä°zin talebi bulunamadÄ±." />
     </div>
   )
 }
@@ -2454,26 +2482,26 @@ function BreakScreen({ breaks, settings, palette, onBreak, isPersonInside }: any
     if (Number.isNaN(start) || Number.isNaN(end)) return total
     return total + Math.max(1, Math.round((end - start) / 60000))
   }, 0)
-  const items = todayBreaks.slice(0, 6).map((item: any) => ({ title: item.endTime || item.breakEnd ? "Mola tamamlandı" : "Aktif mola", detail: `${item.date || ""} · ${formatTimeTR(item.startTime || item.breakStart)} - ${item.endTime || item.breakEnd ? formatTimeTR(item.endTime || item.breakEnd) : "Devam ediyor"}`, badge: item.durationMinutes ? `${item.durationMinutes} dk` : settings.state }))
+  const items = todayBreaks.slice(0, 6).map((item: any) => ({ title: item.endTime || item.breakEnd ? "Mola tamamlandÄ±" : "Aktif mola", detail: `${item.date || ""} Â· ${formatTimeTR(item.startTime || item.breakStart)} - ${item.endTime || item.breakEnd ? formatTimeTR(item.endTime || item.breakEnd) : "Devam ediyor"}`, badge: item.durationMinutes ? `${item.durationMinutes} dk` : settings.state }))
   return (
     <div>
       <div className="mb-5 flex items-center justify-between"><h3 className="text-xl font-extrabold text-white">Mola</h3><Clock3 className="h-5 w-5 text-white/60" /></div>
       <MobileCard className="mb-4 space-y-3">
-        <Info label="Mevcut durum" value={active ? "Molada" : "Molada değil"} />
-        <Info label="Bugünkü toplam mola" value={`${totalTodayMinutes} dk`} />
-        <Info label="Aktif mola başlangıcı" value={active ? formatTimeTR(active.breakStart || active.startTime) : "-"} />
-        {!isPersonInside && <p className="rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">Mola başlatmak için önce giriş yapmalısınız.</p>}
+        <Info label="Mevcut durum" value={active ? "Molada" : "Molada deÄŸil"} />
+        <Info label="BugÃ¼nkÃ¼ toplam mola" value={`${totalTodayMinutes} dk`} />
+        <Info label="Aktif mola baÅŸlangÄ±cÄ±" value={active ? formatTimeTR(active.breakStart || active.startTime) : "-"} />
+        {!isPersonInside && <p className="rounded-2xl border border-amber-300/20 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-100">Mola baÅŸlatmak iÃ§in Ã¶nce giriÅŸ yapmalÄ±sÄ±nÄ±z.</p>}
       </MobileCard>
       <div className="mb-4 grid grid-cols-2 gap-3">
         {!active && (
-          <Button data-mobile-action="break-start" disabled={!isPersonInside} onClick={onBreak} className={cn("h-12 rounded-2xl text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-45", palette.button)}>Mola Başlat</Button>
+          <Button data-mobile-action="break-start" disabled={!isPersonInside} onClick={onBreak} className={cn("h-12 rounded-2xl text-sm font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-45", palette.button)}>Mola BaÅŸlat</Button>
         )}
         {active && (
-          <Button data-mobile-action="break-end" onClick={onBreak} className={cn("col-span-2 h-12 rounded-2xl text-sm font-extrabold text-white", palette.button)}>Molayı Bitir</Button>
+          <Button data-mobile-action="break-end" onClick={onBreak} className={cn("col-span-2 h-12 rounded-2xl text-sm font-extrabold text-white", palette.button)}>MolayÄ± Bitir</Button>
         )}
       </div>
-      <div className="mb-3 text-xs font-black uppercase tracking-widest text-white/45">Bugünkü mola geçmişi</div>
-      <ListItems items={items} empty="Bugün mola kaydı bulunamadı." />
+      <div className="mb-3 text-xs font-black uppercase tracking-widest text-white/45">BugÃ¼nkÃ¼ mola geÃ§miÅŸi</div>
+      <ListItems items={items} empty="BugÃ¼n mola kaydÄ± bulunamadÄ±." />
     </div>
   )
 }
@@ -2482,11 +2510,11 @@ function NotificationScreen({ leaves, shifts, settings, notificationSettings, pa
   const now = new Date().toLocaleString("tr-TR")
   const notificationsEnabled = Boolean(person?.oneSignalSubscribed)
   const items = [
-    ...leaves.slice(0, 3).map((leave: any) => ({ title: "İzin durumu", detail: `${formatDateTR(leave.startDate)} · ${normalizeStatus(leave.status)}`, badge: "İzin", time: leave.createdAt || now, unread: normalizeStatus(leave.status) === "Bekliyor" })),
-    ...shifts.slice(0, 3).map((shift: any) => ({ title: "Vardiya hatırlatması", detail: `${shift.name || "Vardiya"} ${shift.startTime || "--:--"}`, badge: "Vardiya", time: shift.startDate || now })),
-    ...(settings.qrStatus === "Başarısız" ? [{ title: "QR güvenlik uyarısı", detail: "Aktif QR noktası bulunamadı.", badge: "QR", time: now, unread: true }] : []),
-    ...(settings.state === "GPS dışında" ? [{ title: "GPS güvenlik uyarısı", detail: "Personel şube lokasyonu dışında.", badge: "GPS", time: now, unread: true }] : []),
-    ...(notificationSettings?.global?.push === false ? [{ title: "Mobil push kapalı", detail: "Bildirim ayarlarında mobil push pasif.", badge: "Ayar", time: now }] : []),
+    ...leaves.slice(0, 3).map((leave: any) => ({ title: "Ä°zin durumu", detail: `${formatDateTR(leave.startDate)} Â· ${normalizeStatus(leave.status)}`, badge: "Ä°zin", time: leave.createdAt || now, unread: normalizeStatus(leave.status) === "Bekliyor" })),
+    ...shifts.slice(0, 3).map((shift: any) => ({ title: "Vardiya hatÄ±rlatmasÄ±", detail: `${shift.name || "Vardiya"} ${shift.startTime || "--:--"}`, badge: "Vardiya", time: shift.startDate || now })),
+    ...(settings.qrStatus === "BaÅŸarÄ±sÄ±z" ? [{ title: "QR gÃ¼venlik uyarÄ±sÄ±", detail: "Aktif QR noktasÄ± bulunamadÄ±.", badge: "QR", time: now, unread: true }] : []),
+    ...(settings.state === "GPS dÄ±ÅŸÄ±nda" ? [{ title: "GPS gÃ¼venlik uyarÄ±sÄ±", detail: "Personel ÅŸube lokasyonu dÄ±ÅŸÄ±nda.", badge: "GPS", time: now, unread: true }] : []),
+    ...(notificationSettings?.global?.push === false ? [{ title: "Mobil push kapalÄ±", detail: "Bildirim ayarlarÄ±nda mobil push pasif.", badge: "Ayar", time: now }] : []),
   ]
   return (
     <div>
@@ -2495,20 +2523,20 @@ function NotificationScreen({ leaves, shifts, settings, notificationSettings, pa
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-extrabold text-white">Mobil bildirimler</div>
-            <p className="mt-1 text-xs font-semibold text-white/50">{notificationsEnabled ? "Bildirim aboneliğiniz aktif." : "Vardiya ve onay bildirimleri için izin verin."}</p>
+            <p className="mt-1 text-xs font-semibold text-white/50">{notificationsEnabled ? "Bildirim aboneliÄŸiniz aktif." : "Vardiya ve onay bildirimleri iÃ§in izin verin."}</p>
           </div>
           <Button onClick={onEnableNotifications} className={cn("h-9 rounded-2xl px-4 text-xs font-extrabold text-white", palette.button)}>
             {notificationsEnabled ? "Yenile" : "Bildirimleri Aktif Et"}
           </Button>
         </div>
       </MobileCard>
-      <ListItems items={items} empty="Bildirim kaydı bulunmuyor." />
+      <ListItems items={items} empty="Bildirim kaydÄ± bulunmuyor." />
     </div>
   )
 }
 
 function ProfileScreen({ person, branch, department, position, device, kvkk, palette, leaves = [], shifts = [], setScreen, onEnableNotifications, onArchiveAudit }: any) {
-  const maskedTckn = person?.tckn ? `${String(person.tckn).slice(0, 2)}*******${String(person.tckn).slice(-2)}` : "Tanımlı değil"
+  const maskedTckn = person?.tckn ? `${String(person.tckn).slice(0, 2)}*******${String(person.tckn).slice(-2)}` : "TanÄ±mlÄ± deÄŸil"
   const archiveItems = Array.isArray(person?.digitalArchive) ? person.digitalArchive : []
   const leaveItems = Array.isArray(leaves) ? leaves : []
   const kvkkAcceptedAt = person?.kvkkAcceptedAt?.toDate?.()?.toISOString?.() || person?.kvkkAcceptedAt || ""
@@ -2538,29 +2566,29 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
       <MobileCard className="mt-6 space-y-3">
         <Info label="TCKN" value={maskedTckn} />
         <Info label="Telefon" value={valueText(person?.phone || person?.gsm, "Telefon yok")} />
-        <Info label="Şube" value={branch ? branchName(branch) : "Tanımlı değil"} />
-        <Info label="Departman" value={department ? departmentName(department) : "Tanımlı değil"} />
-        <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "Tanımlı değil")} />
+        <Info label="Åube" value={branch ? branchName(branch) : "TanÄ±mlÄ± deÄŸil"} />
+        <Info label="Departman" value={department ? departmentName(department) : "TanÄ±mlÄ± deÄŸil"} />
+        <Info label="Pozisyon" value={position ? positionName(position) : valueText(person?.position, "TanÄ±mlÄ± deÄŸil")} />
         <Info label="Role" value={valueText(person?.role || person?.roleId, "Rol yok")} />
-        <Info label="Device ID" value={device?.deviceId || device?.id || "Tanımlı değil"} />
+        <Info label="Device ID" value={device?.deviceId || device?.id || "TanÄ±mlÄ± deÄŸil"} />
         <Info label="KVKK" value={person?.kvkkAccepted ? "Kabul edildi" : kvkk?.status || kvkk?.kvkkStatus || kvkk?.consentStatus || "Bekliyor"} />
         <Info label="Kabul tarihi" value={person?.kvkkAccepted ? formatDateTR(kvkkAcceptedAt) : "-"} />
         <Info label="KVKK versiyonu" value={person?.kvkkVersion || "-"} />
-        <Info label="İşe giriş" value={formatDateTR(person?.startDate || person?.hireDate || person?.employmentStartDate)} />
+        <Info label="Ä°ÅŸe giriÅŸ" value={formatDateTR(person?.startDate || person?.hireDate || person?.employmentStartDate)} />
       </MobileCard>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <QuickAction actionKey="profile-archive" icon={IdCard} label="Dijital Arşiv" palette={palette} onClick={() => document.getElementById("mobile-digital-archive")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
-        <QuickAction actionKey="profile-leaves" icon={CalendarClock} label="İzinlerim" palette={palette} onClick={() => document.getElementById("mobile-profile-leaves")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
-        <QuickAction actionKey="profile-shifts" icon={Clock3} label="Vardiyalarım" palette={palette} onClick={() => setScreen?.("Vardiya")} />
-        <QuickAction actionKey="profile-logout" icon={LogOut} label="Çıkış Yap" palette={palette} onClick={handleLogout} />
+        <QuickAction actionKey="profile-archive" icon={IdCard} label="Dijital ArÅŸiv" palette={palette} onClick={() => document.getElementById("mobile-digital-archive")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
+        <QuickAction actionKey="profile-leaves" icon={CalendarClock} label="Ä°zinlerim" palette={palette} onClick={() => document.getElementById("mobile-profile-leaves")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
+        <QuickAction actionKey="profile-shifts" icon={Clock3} label="VardiyalarÄ±m" palette={palette} onClick={() => setScreen?.("Vardiya")} />
+        <QuickAction actionKey="profile-logout" icon={LogOut} label="Ã‡Ä±kÄ±ÅŸ Yap" palette={palette} onClick={handleLogout} />
       </div>
 
       <MobileCard className="mt-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h4 className="font-extrabold text-white">Bildirimler</h4>
-            <p className="mt-1 text-xs font-semibold text-white/50">{notificationsEnabled ? "Mobil bildirimler aktif." : "Bildirim almak için izin verin."}</p>
+            <p className="mt-1 text-xs font-semibold text-white/50">{notificationsEnabled ? "Mobil bildirimler aktif." : "Bildirim almak iÃ§in izin verin."}</p>
           </div>
           <Button onClick={onEnableNotifications} className={cn("h-9 rounded-2xl px-4 text-xs font-extrabold text-white", palette.button)}>
             {notificationsEnabled ? "Yenile" : "Bildirimleri Aktif Et"}
@@ -2588,28 +2616,28 @@ function ProfileScreen({ person, branch, department, position, device, kvkk, pal
       </MobileCard>
 
       <MobileCard id="mobile-digital-archive" className="mt-4 space-y-3">
-        <div className="flex items-center justify-between"><h4 className="font-extrabold text-white">Dijital Arşiv</h4><Badge className="bg-white/15 text-white hover:bg-white/15">{archiveItems.length}</Badge></div>
+        <div className="flex items-center justify-between"><h4 className="font-extrabold text-white">Dijital ArÅŸiv</h4><Badge className="bg-white/15 text-white hover:bg-white/15">{archiveItems.length}</Badge></div>
         {archiveItems.length ? archiveItems.map((item: any) => (
           <div key={item?.id || item?.fileUrl || item?.publicId} className="rounded-2xl border border-white/10 bg-white/10 p-3">
             <div className="font-extrabold text-white">{item?.title || item?.name || item?.fileName || "Dosya"}</div>
-            <div className="mt-1 text-xs font-semibold text-white/50">{item?.category || "Diğer"}</div>
+            <div className="mt-1 text-xs font-semibold text-white/50">{item?.category || "DiÄŸer"}</div>
             <div className="mt-3 flex gap-2">
-              {item?.fileUrl && <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15"><a href={item.fileUrl} target="_blank" rel="noopener noreferrer" onClick={() => onArchiveAudit?.("file_view", item)}>Görüntüle</a></Button>}
-              {item?.fileUrl && <Button size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15" onClick={() => { onArchiveAudit?.("file_download", item); void downloadArchiveFile(item.fileUrl, item?.fileName || item?.title || "dosya") }}>İndir</Button>}
+              {item?.fileUrl && <Button asChild size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15"><a href={item.fileUrl} target="_blank" rel="noopener noreferrer" onClick={() => onArchiveAudit?.("file_view", item)}>GÃ¶rÃ¼ntÃ¼le</a></Button>}
+              {item?.fileUrl && <Button size="sm" variant="outline" className="h-8 rounded-xl border-white/15 bg-white/10 text-xs font-extrabold text-white hover:bg-white/15" onClick={() => { onArchiveAudit?.("file_download", item); void downloadArchiveFile(item.fileUrl, item?.fileName || item?.title || "dosya") }}>Ä°ndir</Button>}
             </div>
           </div>
-        )) : <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-center text-sm font-semibold text-white/55">Henüz dosya yok</div>}
+        )) : <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-center text-sm font-semibold text-white/55">HenÃ¼z dosya yok</div>}
       </MobileCard>
 
       <MobileCard id="mobile-profile-leaves" className="mt-4 space-y-3">
-        <div className="flex items-center justify-between"><h4 className="font-extrabold text-white">İzinlerim</h4><Badge className="bg-white/15 text-white hover:bg-white/15">{leaveItems.length}</Badge></div>
+        <div className="flex items-center justify-between"><h4 className="font-extrabold text-white">Ä°zinlerim</h4><Badge className="bg-white/15 text-white hover:bg-white/15">{leaveItems.length}</Badge></div>
         {leaveItems.length ? leaveItems.map((leave: any) => (
           <div key={leave?.id || `${leave?.startDate}-${leave?.endDate}-${leave?.type}`} className="rounded-2xl border border-white/10 bg-white/10 p-3">
-            <div className="font-extrabold text-white">{leave?.leaveType || leave?.type || "İzin"}</div>
+            <div className="font-extrabold text-white">{leave?.leaveType || leave?.type || "Ä°zin"}</div>
             <div className="mt-1 text-xs font-semibold text-white/50">{formatDateTR(leave?.startDate)} - {formatDateTR(leave?.endDate || leave?.startDate)}</div>
             <Badge className="mt-3 bg-white/15 text-white hover:bg-white/15">{normalizeStatus(leave?.status)}</Badge>
           </div>
-        )) : <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-center text-sm font-semibold text-white/55">Henüz izin talebiniz yok</div>}
+        )) : <div className="rounded-2xl border border-dashed border-white/15 bg-white/5 p-4 text-center text-sm font-semibold text-white/55">HenÃ¼z izin talebiniz yok</div>}
       </MobileCard>
     </div>
   )
@@ -2650,7 +2678,7 @@ function BottomNav({ palette, active, setScreen, isStandaloneApp }: any) {
     ["Profil", "profile", UserRound],
   ] : [
     ["Ana", "home", Home],
-    ["Giriş", "check", Fingerprint],
+    ["GiriÅŸ", "check", Fingerprint],
     ["QR", "qr", QrCode],
     ["Profil", "profile", UserRound],
   ])
@@ -2667,9 +2695,9 @@ function BottomNav({ palette, active, setScreen, isStandaloneApp }: any) {
 }
 
 function StatusHero({ state, palette, qrStatus, gpsStatus, lastQrVerifiedAt, lastGpsVerifiedAt }: any) {
-  const danger = state === "Geç kaldı" || state === "GPS dışında" || state === "QR bekleniyor"
-  const qrText = lastQrVerifiedAt || qrStatus === "Başarılı" ? "QR doğrulandı" : qrStatus || "Bekleniyor"
-  const gpsText = lastGpsVerifiedAt || gpsStatus === "GPS başarılı" || gpsStatus === "Doğrulandı" ? "GPS doğrulandı" : gpsStatus
+  const danger = state === "GeÃ§ kaldÄ±" || state === "GPS dÄ±ÅŸÄ±nda" || state === "QR bekleniyor"
+  const qrText = lastQrVerifiedAt || qrStatus === "BaÅŸarÄ±lÄ±" ? "QR doÄŸrulandÄ±" : qrStatus || "Bekleniyor"
+  const gpsText = lastGpsVerifiedAt || gpsStatus === "GPS baÅŸarÄ±lÄ±" || gpsStatus === "DoÄŸrulandÄ±" ? "GPS doÄŸrulandÄ±" : gpsStatus
   const showGps = Boolean(gpsText && gpsText !== "Bekleniyor")
   return (
     <div className={cn("mb-4 rounded-[30px] p-5 text-white shadow-xl", danger ? "bg-gradient-to-br from-rose-500 to-orange-700" : palette.button)}>
@@ -2678,7 +2706,7 @@ function StatusHero({ state, palette, qrStatus, gpsStatus, lastQrVerifiedAt, las
         <span className="text-2xl font-black">{state}</span>
         {danger ? <XCircle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
       </div>
-      <p className="mt-2 text-xs font-semibold text-white/75">QR: {qrText}{showGps ? ` · GPS: ${gpsText}` : ""}</p>
+      <p className="mt-2 text-xs font-semibold text-white/75">QR: {qrText}{showGps ? ` Â· GPS: ${gpsText}` : ""}</p>
     </div>
   )
 }
@@ -2707,7 +2735,7 @@ function Info({ label, value }: any) {
 
 function getTheme(theme: string) {
   if (theme === "Koyu Premium") return { shell: "bg-slate-950", button: "bg-gradient-to-br from-slate-700 to-slate-950", nav: "bg-white/15", text: "text-slate-200" }
-  if (theme === "Evyapar Kırmızı") return { shell: "bg-gradient-to-br from-slate-950 via-red-950 to-slate-950", button: "bg-gradient-to-br from-red-500 to-red-900", nav: "bg-red-500/40", text: "text-red-200" }
-  if (theme === "Açık Kurumsal") return { shell: "bg-gradient-to-br from-slate-100 via-sky-700 to-slate-950", button: "bg-gradient-to-br from-sky-500 to-indigo-700", nav: "bg-sky-500/35", text: "text-sky-200" }
+  if (theme === "Evyapar KÄ±rmÄ±zÄ±") return { shell: "bg-gradient-to-br from-slate-950 via-red-950 to-slate-950", button: "bg-gradient-to-br from-red-500 to-red-900", nav: "bg-red-500/40", text: "text-red-200" }
+  if (theme === "AÃ§Ä±k Kurumsal") return { shell: "bg-gradient-to-br from-slate-100 via-sky-700 to-slate-950", button: "bg-gradient-to-br from-sky-500 to-indigo-700", nav: "bg-sky-500/35", text: "text-sky-200" }
   return { shell: "bg-gradient-to-br from-slate-950 via-indigo-950 to-sky-950", button: "bg-gradient-to-br from-indigo-500 via-violet-600 to-sky-500", nav: "bg-indigo-500/40", text: "text-sky-200" }
 }

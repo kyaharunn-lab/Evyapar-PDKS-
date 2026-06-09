@@ -89,30 +89,30 @@ const DEVICES_KEY = "app_device_ids"
 const ALL = "__all__"
 
 const DOCUMENT_TEMPLATES = [
-  { id: "kvkk-open-consent", title: "KVKK AÃ§Ä±k RÄ±za Metni", required: true },
-  { id: "camera-monitoring", title: "Kamera Ä°zleme OnayÄ±", required: false },
-  { id: "gps-tracking", title: "GPS Takip OnayÄ±", required: false },
-  { id: "device-tracking", title: "Device Tracking OnayÄ±", required: false },
-  { id: "biometric-consent", title: "Biyometrik Veri OnayÄ±", required: false },
-  { id: "attendance-contract", title: "Mesai Takip SÃ¶zleÅŸmesi", required: true },
+  { id: "kvkk-open-consent", title: "KVKK Açık Rıza Metni", required: true },
+  { id: "camera-monitoring", title: "Kamera İzleme Onayı", required: false },
+  { id: "gps-tracking", title: "GPS Takip Onayı", required: false },
+  { id: "device-tracking", title: "Device Tracking Onayı", required: false },
+  { id: "biometric-consent", title: "Biyometrik Veri Onayı", required: false },
+  { id: "attendance-contract", title: "Mesai Takip Sözleşmesi", required: true },
 ]
 
 const PROCESSING_ROWS = [
-  { id: "location", name: "Konum Verisi", dataType: "KiÅŸisel veri", department: "Ä°nsan KaynaklarÄ±", retention: "12 ay", risk: "YÃ¼ksek" },
-  { id: "camera", name: "Kamera Verisi", dataType: "GÃ¶rsel kayÄ±t", department: "GÃ¼venlik", retention: "30 gÃ¼n", risk: "Orta" },
-  { id: "attendance", name: "GiriÅŸ/Ã‡Ä±kÄ±ÅŸ Verisi", dataType: "PDKS kaydÄ±", department: "Ä°nsan KaynaklarÄ±", retention: "10 yÄ±l", risk: "Orta" },
-  { id: "device", name: "Device ID", dataType: "Teknik tanÄ±mlayÄ±cÄ±", department: "Bilgi Teknolojileri", retention: "24 ay", risk: "Orta" },
-  { id: "ip", name: "IP LoglarÄ±", dataType: "EriÅŸim logu", department: "Bilgi Teknolojileri", retention: "24 ay", risk: "DÃ¼ÅŸÃ¼k" },
-  { id: "overtime", name: "Fazla Mesai Verileri", dataType: "Ã‡alÄ±ÅŸma kaydÄ±", department: "Ä°nsan KaynaklarÄ±", retention: "10 yÄ±l", risk: "DÃ¼ÅŸÃ¼k" },
-  { id: "biometric", name: "Biyometrik Veriler", dataType: "Ã–zel nitelikli veri", department: "Uyum", retention: "RÄ±za sÃ¼resince", risk: "Kritik" },
+  { id: "location", name: "Konum Verisi", dataType: "Kişisel veri", department: "İnsan Kaynakları", retention: "12 ay", risk: "Yüksek" },
+  { id: "camera", name: "Kamera Verisi", dataType: "Görsel kayıt", department: "Güvenlik", retention: "30 gün", risk: "Orta" },
+  { id: "attendance", name: "Giriş/Çıkış Verisi", dataType: "PDKS kaydı", department: "İnsan Kaynakları", retention: "10 yıl", risk: "Orta" },
+  { id: "device", name: "Device ID", dataType: "Teknik tanımlayıcı", department: "Bilgi Teknolojileri", retention: "24 ay", risk: "Orta" },
+  { id: "ip", name: "IP Logları", dataType: "Erişim logu", department: "Bilgi Teknolojileri", retention: "24 ay", risk: "Düşük" },
+  { id: "overtime", name: "Fazla Mesai Verileri", dataType: "Çalışma kaydı", department: "İnsan Kaynakları", retention: "10 yıl", risk: "Düşük" },
+  { id: "biometric", name: "Biyometrik Veriler", dataType: "Özel nitelikli veri", department: "Uyum", retention: "Rıza süresince", risk: "Kritik" },
 ]
 
 const RETENTION_ROWS = [
-  { id: "personnel", dataType: "Personel Ã¶zlÃ¼k verileri", duration: "10 yÄ±l", autoDelete: false, archive: "Åifreli arÅŸiv", legal: "Ä°ÅŸ Kanunu / KVKK m.5", owner: "Ä°nsan KaynaklarÄ±" },
-  { id: "attendance", dataType: "PDKS giriÅŸ/Ã§Ä±kÄ±ÅŸ verileri", duration: "10 yÄ±l", autoDelete: false, archive: "YÄ±llÄ±k arÅŸiv", legal: "Ä°ÅŸ Kanunu", owner: "Ä°nsan KaynaklarÄ±" },
-  { id: "gps", dataType: "GPS konum verileri", duration: "12 ay", autoDelete: true, archive: "KÄ±sÄ±tlÄ± eriÅŸim", legal: "AÃ§Ä±k rÄ±za", owner: "Uyum" },
-  { id: "camera", dataType: "Kamera kayÄ±tlarÄ±", duration: "30 gÃ¼n", autoDelete: true, archive: "GÃ¼venlik kasasÄ±", legal: "MeÅŸru menfaat", owner: "GÃ¼venlik" },
-  { id: "biometric", dataType: "Biyometrik doÄŸrulama verileri", duration: "RÄ±za sÃ¼resince", autoDelete: true, archive: "AyrÄ±ÅŸtÄ±rÄ±lmÄ±ÅŸ kasa", legal: "AÃ§Ä±k rÄ±za", owner: "Uyum" },
+  { id: "personnel", dataType: "Personel özlük verileri", duration: "10 yıl", autoDelete: false, archive: "Şifreli arşiv", legal: "İş Kanunu / KVKK m.5", owner: "İnsan Kaynakları" },
+  { id: "attendance", dataType: "PDKS giriş/çıkış verileri", duration: "10 yıl", autoDelete: false, archive: "Yıllık arşiv", legal: "İş Kanunu", owner: "İnsan Kaynakları" },
+  { id: "gps", dataType: "GPS konum verileri", duration: "12 ay", autoDelete: true, archive: "Kısıtlı erişim", legal: "Açık rıza", owner: "Uyum" },
+  { id: "camera", dataType: "Kamera kayıtları", duration: "30 gün", autoDelete: true, archive: "Güvenlik kasası", legal: "Meşru menfaat", owner: "Güvenlik" },
+  { id: "biometric", dataType: "Biyometrik doğrulama verileri", duration: "Rıza süresince", autoDelete: true, archive: "Ayrıştırılmış kasa", legal: "Açık rıza", owner: "Uyum" },
 ]
 
 const emptyState = {
@@ -153,7 +153,7 @@ const getPersonnelName = (person: any) => (
   "Personel"
 ).toString()
 const getBranchId = (branch: any) => (branch?.id || branch?.branchCode || branch?.code || "").toString()
-const getBranchName = (branch: any) => (branch?.branchName || branch?.name || branch?.branchCode || "Åube").toString()
+const getBranchName = (branch: any) => (branch?.branchName || branch?.name || branch?.branchCode || "Şube").toString()
 const getDepartmentId = (department: any) => (department?.id || department?.departmentCode || department?.code || "").toString()
 const getDepartmentName = (department: any) => (department?.departmentName || department?.name || department?.departmentCode || "Departman").toString()
 
@@ -234,9 +234,9 @@ const normalizeAuditLog = (log: any) => ({
 })
 
 const getStatusLabel = (status: string) => {
-  if (status === "Approved") return "OnaylandÄ±"
+  if (status === "Approved") return "Onaylandı"
   if (status === "Rejected") return "Reddedildi"
-  if (status === "Expired") return "SÃ¼resi Doldu"
+  if (status === "Expired") return "Süresi Doldu"
   return "Bekliyor"
 }
 
@@ -400,13 +400,13 @@ export default function KvkkPage() {
       ...kvkkState,
       consents,
       auditLogs: [
-        createAudit("KVKK gÃ¼ncelleme", "Ä°K YÃ¶neticisi", getPersonnelName(selectedRow.person), `${getStatusLabel(consentForm.status)} durumuna alÄ±ndÄ±.`),
+        createAudit("KVKK güncelleme", "İK Yöneticisi", getPersonnelName(selectedRow.person), `${getStatusLabel(consentForm.status)} durumuna alındı.`),
         ...(kvkkState.auditLogs || []),
       ],
     }
     persistKvkk(next)
     setIsConsentOpen(false)
-    toast({ title: "BaÅŸarÄ±lÄ±", description: "KVKK onayÄ± gÃ¼ncellendi." })
+    toast({ title: "Başarılı", description: "KVKK onayı güncellendi." })
   }
 
   const openConsentEdit = (row: any) => {
@@ -429,17 +429,17 @@ export default function KvkkPage() {
     const next = {
       ...kvkkState,
       auditLogs: [
-        createAudit("Yeniden onay gÃ¶nderildi", "Ä°K YÃ¶neticisi", getPersonnelName(row.person), "KVKK onay yenileme bildirimi hazÄ±rlandÄ±."),
+        createAudit("Yeniden onay gönderildi", "İK Yöneticisi", getPersonnelName(row.person), "KVKK onay yenileme bildirimi hazırlandı."),
         ...(kvkkState.auditLogs || []),
       ],
     }
     persistKvkk(next)
-    toast({ title: "BaÅŸarÄ±lÄ±", description: "Yeniden onay gÃ¶nderme iÅŸlemi kaydedildi." })
+    toast({ title: "Başarılı", description: "Yeniden onay gönderme işlemi kaydedildi." })
   }
 
   const saveDocument = () => {
     if (!documentForm.title.trim()) {
-      toast({ variant: "destructive", title: "Hata", description: "Belge adÄ± zorunludur." })
+      toast({ variant: "destructive", title: "Hata", description: "Belge adı zorunludur." })
       return
     }
     const now = Date.now()
@@ -454,14 +454,14 @@ export default function KvkkPage() {
       ...kvkkState,
       documents: [document, ...(kvkkState.documents || [])],
       auditLogs: [
-        createAudit("Belge oluÅŸturuldu", "Ä°K YÃ¶neticisi", document.title, `${document.version} versiyonu yayÄ±nlandÄ±.`),
+        createAudit("Belge oluşturuldu", "İK Yöneticisi", document.title, `${document.version} versiyonu yayınlandı.`),
         ...(kvkkState.auditLogs || []),
       ],
     }
     persistKvkk(next)
     setIsDocumentOpen(false)
     setDocumentForm({ title: "", description: "", content: "", version: "1.0", required: true, active: true })
-    toast({ title: "BaÅŸarÄ±lÄ±", description: "Belge oluÅŸturuldu." })
+    toast({ title: "Başarılı", description: "Belge oluşturuldu." })
   }
 
   const exportKvkk = () => {
@@ -505,10 +505,10 @@ export default function KvkkPage() {
             </div>
             <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
               <Fingerprint className="h-8 w-8 text-sky-300" />
-              KVKK YÃ¶netim Merkezi
+              KVKK Yönetim Merkezi
             </h2>
             <p className="mt-2 max-w-3xl text-sm font-medium text-slate-300">
-              KiÅŸisel veri iÅŸleme izinleri, aÃ§Ä±k rÄ±za sÃ¼reÃ§leri, konum ve biyometrik onaylarÄ± merkezi olarak yÃ¶netin.
+              Kişisel veri işleme izinleri, açık rıza süreçleri, konum ve biyometrik onayları merkezi olarak yönetin.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -528,22 +528,22 @@ export default function KvkkPage() {
         <ComplianceKpi title="Toplam Personel" value={stats.total} icon={Users} gradient="from-slate-900 to-blue-900" />
         <ComplianceKpi title="KVKK Onaylayan" value={stats.approved} icon={BadgeCheck} gradient="from-emerald-600 to-teal-900" />
         <ComplianceKpi title="Onay Bekleyen" value={stats.pending} icon={Clock3} gradient="from-amber-500 to-orange-900" />
-        <ComplianceKpi title="GPS Ä°zni Veren" value={stats.gps} icon={MapPin} gradient="from-sky-500 to-blue-950" />
-        <ComplianceKpi title="Kamera/YÃ¼z DoÄŸrulama OnayÄ±" value={stats.camera} icon={ScanFace} gradient="from-purple-500 to-fuchsia-950" />
-        <ComplianceKpi title="Device Tracking OnayÄ±" value={stats.device} icon={Smartphone} gradient="from-indigo-500 to-slate-950" />
-        <ComplianceKpi title="SÃ¼resi Dolan Onaylar" value={stats.expired} icon={TimerReset} gradient="from-rose-500 to-slate-950" />
+        <ComplianceKpi title="GPS İzni Veren" value={stats.gps} icon={MapPin} gradient="from-sky-500 to-blue-950" />
+        <ComplianceKpi title="Kamera/Yüz Doğrulama Onayı" value={stats.camera} icon={ScanFace} gradient="from-purple-500 to-fuchsia-950" />
+        <ComplianceKpi title="Device Tracking Onayı" value={stats.device} icon={Smartphone} gradient="from-indigo-500 to-slate-950" />
+        <ComplianceKpi title="Süresi Dolan Onaylar" value={stats.expired} icon={TimerReset} gradient="from-rose-500 to-slate-950" />
       </div>
 
       <Tabs defaultValue="consents" className="space-y-6">
         <div className="overflow-x-auto pb-1">
           <TabsList className="h-auto min-w-max rounded-2xl border border-white/70 bg-white/70 p-1.5 shadow-xl shadow-slate-200/60 backdrop-blur-xl">
-            <KvkkTab value="consents" icon={UserCheck} label="KVKK OnaylarÄ±" />
-            <KvkkTab value="documents" icon={FileLock2} label="AÃ§Ä±k RÄ±za Belgeleri" />
-            <KvkkTab value="processing" icon={Database} label="Veri Ä°ÅŸleme Ä°zinleri" />
-            <KvkkTab value="gps" icon={MapPin} label="GPS & Konum OnaylarÄ±" />
-            <KvkkTab value="camera" icon={Camera} label="Kamera / YÃ¼z TanÄ±ma" />
-            <KvkkTab value="retention" icon={Layers3} label="Veri Saklama PolitikasÄ±" />
-            <KvkkTab value="audit" icon={History} label="Denetim LoglarÄ±" />
+            <KvkkTab value="consents" icon={UserCheck} label="KVKK Onayları" />
+            <KvkkTab value="documents" icon={FileLock2} label="Açık Rıza Belgeleri" />
+            <KvkkTab value="processing" icon={Database} label="Veri İşleme İzinleri" />
+            <KvkkTab value="gps" icon={MapPin} label="GPS & Konum Onayları" />
+            <KvkkTab value="camera" icon={Camera} label="Kamera / Yüz Tanıma" />
+            <KvkkTab value="retention" icon={Layers3} label="Veri Saklama Politikası" />
+            <KvkkTab value="audit" icon={History} label="Denetim Logları" />
           </TabsList>
         </div>
 
@@ -551,7 +551,7 @@ export default function KvkkPage() {
           <Card className="premium-card overflow-hidden">
             <CardHeader className="border-b bg-slate-50/40">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Personel KVKK OnaylarÄ±</CardTitle>
+                <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Personel KVKK Onayları</CardTitle>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <div className="relative sm:w-72">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -562,11 +562,11 @@ export default function KvkkPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL}>TÃ¼m Durumlar</SelectItem>
-                      <SelectItem value="Approved">OnaylandÄ±</SelectItem>
+                      <SelectItem value={ALL}>Tüm Durumlar</SelectItem>
+                      <SelectItem value="Approved">Onaylandı</SelectItem>
                       <SelectItem value="Pending">Bekliyor</SelectItem>
                       <SelectItem value="Rejected">Reddedildi</SelectItem>
-                      <SelectItem value="Expired">SÃ¼resi Doldu</SelectItem>
+                      <SelectItem value="Expired">Süresi Doldu</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button variant="outline" className="h-10 rounded-xl border-slate-200" onClick={exportKvkk}>
@@ -582,21 +582,21 @@ export default function KvkkPage() {
                   <TableRow>
                     <TableHead className="pl-6">Personel</TableHead>
                     <TableHead>Sicil No</TableHead>
-                    <TableHead>Åube</TableHead>
+                    <TableHead>Şube</TableHead>
                     <TableHead>Pozisyon</TableHead>
                     <TableHead>KVKK Durumu</TableHead>
                     <TableHead>Onay Tarihi</TableHead>
                     <TableHead>IP Adresi</TableHead>
                     <TableHead>Device ID</TableHead>
-                    <TableHead>Dijital Ä°mza</TableHead>
-                    <TableHead>Son GÃ¼ncelleme</TableHead>
-                    <TableHead className="text-right pr-6">Ä°ÅŸlemler</TableHead>
+                    <TableHead>Dijital İmza</TableHead>
+                    <TableHead>Son Güncelleme</TableHead>
+                    <TableHead className="text-right pr-6">İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {consentRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="h-72 text-center text-muted-foreground">Kriterlere uygun personel veya KVKK kaydÄ± bulunmuyor.</TableCell>
+                      <TableCell colSpan={11} className="h-72 text-center text-muted-foreground">Kriterlere uygun personel veya KVKK kaydı bulunmuyor.</TableCell>
                     </TableRow>
                   ) : consentRows.map((row) => (
                     <TableRow key={row.personnelId} className="group hover:bg-slate-50/80 transition-all">
@@ -624,11 +624,11 @@ export default function KvkkPage() {
                             <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl"><MoreHorizontal className="h-5 w-5 text-slate-500" /></Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-xl">
-                            <DropdownMenuLabel>Ä°ÅŸlemler</DropdownMenuLabel>
+                            <DropdownMenuLabel>İşlemler</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(row)}><Eye className="mr-3 h-4 w-4 text-slate-400" />Detay ModalÄ±</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => openConsentAfterMenuClose(row)}><Edit2 className="mr-3 h-4 w-4 text-slate-400" />DÃ¼zenle</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => sendRenewal(row)}><RefreshCw className="mr-3 h-4 w-4 text-slate-400" />Yeniden Onay GÃ¶nder</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openDetailAfterMenuClose(row)}><Eye className="mr-3 h-4 w-4 text-slate-400" />Detay Modalı</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => openConsentAfterMenuClose(row)}><Edit2 className="mr-3 h-4 w-4 text-slate-400" />Düzenle</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => sendRenewal(row)}><RefreshCw className="mr-3 h-4 w-4 text-slate-400" />Yeniden Onay Gönder</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -644,7 +644,7 @@ export default function KvkkPage() {
           <div className="flex justify-end">
             <Button className="h-11 rounded-2xl bg-accent hover:bg-accent/90 shadow-xl shadow-accent/20" onClick={() => setIsDocumentOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Yeni Belge OluÅŸtur
+              Yeni Belge Oluştur
             </Button>
           </div>
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -678,19 +678,19 @@ export default function KvkkPage() {
       <Dialog open={Boolean(selectedRow) && !isConsentOpen} onOpenChange={(open) => !open && setSelectedRow(null)}>
         <DialogContent className="sm:max-w-[620px] rounded-[32px] p-0 overflow-hidden border-none">
           <DialogHeader className="p-8 bg-primary text-white">
-            <DialogTitle className="text-2xl font-bold">KVKK DetayÄ±</DialogTitle>
-            <DialogDescription className="text-white/80">Personel aÃ§Ä±k rÄ±za ve veri iÅŸleme onay Ã¶zeti.</DialogDescription>
+            <DialogTitle className="text-2xl font-bold">KVKK Detayı</DialogTitle>
+            <DialogDescription className="text-white/80">Personel açık rıza ve veri işleme onay özeti.</DialogDescription>
           </DialogHeader>
           {selectedRow && (
             <div className="p-8 space-y-4">
               <InfoRow label="Personel" value={getPersonnelName(selectedRow.person)} />
               <InfoRow label="KVKK Durumu" value={getStatusLabel(selectedRow.status)} />
-              <InfoRow label="GPS Ä°zni" value={selectedRow.consent?.gpsConsent ? "Verildi" : "Yok"} />
-              <InfoRow label="Kamera Ä°zni" value={selectedRow.consent?.cameraConsent ? "Verildi" : "Yok"} />
-              <InfoRow label="YÃ¼z DoÄŸrulama" value={selectedRow.consent?.faceConsent ? "Aktif" : "Pasif"} />
-              <InfoRow label="Device Tracking" value={selectedRow.consent?.deviceTrackingConsent ? "OnaylÄ±" : "Yok"} />
+              <InfoRow label="GPS İzni" value={selectedRow.consent?.gpsConsent ? "Verildi" : "Yok"} />
+              <InfoRow label="Kamera İzni" value={selectedRow.consent?.cameraConsent ? "Verildi" : "Yok"} />
+              <InfoRow label="Yüz Doğrulama" value={selectedRow.consent?.faceConsent ? "Aktif" : "Pasif"} />
+              <InfoRow label="Device Tracking" value={selectedRow.consent?.deviceTrackingConsent ? "Onaylı" : "Yok"} />
               <InfoRow label="IP Adresi" value={selectedRow.consent?.ipAddress || "-"} />
-              <InfoRow label="Dijital Ä°mza" value={selectedRow.consent?.digitalSignature || "-"} />
+              <InfoRow label="Dijital İmza" value={selectedRow.consent?.digitalSignature || "-"} />
             </div>
           )}
         </DialogContent>
@@ -699,31 +699,31 @@ export default function KvkkPage() {
       <Dialog open={isConsentOpen} onOpenChange={setIsConsentOpen}>
         <DialogContent className="sm:max-w-[680px] rounded-[32px] p-0 overflow-hidden border-none">
           <DialogHeader className="p-8 bg-primary text-white">
-            <DialogTitle className="text-2xl font-bold">KVKK OnayÄ± DÃ¼zenle</DialogTitle>
-            <DialogDescription className="text-white/80">Personel rÄ±za ve veri iÅŸleme izinlerini gÃ¼ncelleyin.</DialogDescription>
+            <DialogTitle className="text-2xl font-bold">KVKK Onayı Düzenle</DialogTitle>
+            <DialogDescription className="text-white/80">Personel rıza ve veri işleme izinlerini güncelleyin.</DialogDescription>
           </DialogHeader>
           <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
             <FormSelect label="Durum" value={consentForm.status} onChange={(value) => setConsentForm((prev) => ({ ...prev, status: value }))}>
-              <SelectItem value="Approved">OnaylandÄ±</SelectItem>
+              <SelectItem value="Approved">Onaylandı</SelectItem>
               <SelectItem value="Pending">Bekliyor</SelectItem>
               <SelectItem value="Rejected">Reddedildi</SelectItem>
-              <SelectItem value="Expired">SÃ¼resi Doldu</SelectItem>
+              <SelectItem value="Expired">Süresi Doldu</SelectItem>
             </FormSelect>
             <FormInput label="IP Adresi" value={consentForm.ipAddress} onChange={(value) => setConsentForm((prev) => ({ ...prev, ipAddress: value }))} />
             <FormInput label="Device ID" value={consentForm.deviceId} onChange={(value) => setConsentForm((prev) => ({ ...prev, deviceId: value }))} />
-            <FormInput label="GeÃ§erlilik BitiÅŸi" type="date" value={consentForm.expiresAt} onChange={(value) => setConsentForm((prev) => ({ ...prev, expiresAt: value }))} />
+            <FormInput label="Geçerlilik Bitişi" type="date" value={consentForm.expiresAt} onChange={(value) => setConsentForm((prev) => ({ ...prev, expiresAt: value }))} />
             <div className="md:col-span-2">
-              <FormInput label="Dijital Ä°mza" value={consentForm.digitalSignature} onChange={(value) => setConsentForm((prev) => ({ ...prev, digitalSignature: value }))} />
+              <FormInput label="Dijital İmza" value={consentForm.digitalSignature} onChange={(value) => setConsentForm((prev) => ({ ...prev, digitalSignature: value }))} />
             </div>
             <div className="md:col-span-2 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
-              <ToggleRow title="GPS & Konum OnayÄ±" checked={consentForm.gpsConsent} onCheckedChange={(checked) => setConsentForm((prev) => ({ ...prev, gpsConsent: checked }))} />
-              <ToggleRow title="Kamera Ä°zleme OnayÄ±" checked={consentForm.cameraConsent} onCheckedChange={(checked) => setConsentForm((prev) => ({ ...prev, cameraConsent: checked }))} />
-              <ToggleRow title="Kamera/YÃ¼z DoÄŸrulama OnayÄ±" checked={consentForm.faceConsent} onCheckedChange={(checked) => setConsentForm((prev) => ({ ...prev, faceConsent: checked }))} />
-              <ToggleRow title="Device Tracking OnayÄ±" checked={consentForm.deviceTrackingConsent} onCheckedChange={(checked) => setConsentForm((prev) => ({ ...prev, deviceTrackingConsent: checked }))} />
+              <ToggleRow title="GPS & Konum Onayı" checked={consentForm.gpsConsent} onCheckedChange={(checked) => setConsentForm((prev) => ({ ...prev, gpsConsent: checked }))} />
+              <ToggleRow title="Kamera İzleme Onayı" checked={consentForm.cameraConsent} onCheckedChange={(checked) => setConsentForm((prev) => ({ ...prev, cameraConsent: checked }))} />
+              <ToggleRow title="Kamera/Yüz Doğrulama Onayı" checked={consentForm.faceConsent} onCheckedChange={(checked) => setConsentForm((prev) => ({ ...prev, faceConsent: checked }))} />
+              <ToggleRow title="Device Tracking Onayı" checked={consentForm.deviceTrackingConsent} onCheckedChange={(checked) => setConsentForm((prev) => ({ ...prev, deviceTrackingConsent: checked }))} />
             </div>
           </div>
           <DialogFooter className="p-8 pt-0 flex gap-3">
-            <Button variant="ghost" className="rounded-xl" onClick={() => setIsConsentOpen(false)}>VazgeÃ§</Button>
+            <Button variant="ghost" className="rounded-xl" onClick={() => setIsConsentOpen(false)}>Vazgeç</Button>
             <Button className="rounded-xl bg-primary hover:bg-primary/90" onClick={upsertConsent}>Kaydet</Button>
           </DialogFooter>
         </DialogContent>
@@ -732,25 +732,25 @@ export default function KvkkPage() {
       <Dialog open={isDocumentOpen} onOpenChange={setIsDocumentOpen}>
         <DialogContent className="sm:max-w-[760px] rounded-[32px] p-0 overflow-hidden border-none">
           <DialogHeader className="p-8 bg-primary text-white">
-            <DialogTitle className="text-2xl font-bold">Yeni Belge OluÅŸtur</DialogTitle>
-            <DialogDescription className="text-white/80">AÃ§Ä±k rÄ±za belgesi ve versiyon bilgisini yayÄ±nlayÄ±n.</DialogDescription>
+            <DialogTitle className="text-2xl font-bold">Yeni Belge Oluştur</DialogTitle>
+            <DialogDescription className="text-white/80">Açık rıza belgesi ve versiyon bilgisini yayınlayın.</DialogDescription>
           </DialogHeader>
           <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-5">
-            <FormInput label="Belge adÄ±" value={documentForm.title} onChange={(value) => setDocumentForm((prev) => ({ ...prev, title: value }))} />
+            <FormInput label="Belge adı" value={documentForm.title} onChange={(value) => setDocumentForm((prev) => ({ ...prev, title: value }))} />
             <FormInput label="Versiyon no" value={documentForm.version} onChange={(value) => setDocumentForm((prev) => ({ ...prev, version: value }))} />
             <div className="md:col-span-2">
-              <FormInput label="AÃ§Ä±klama" value={documentForm.description} onChange={(value) => setDocumentForm((prev) => ({ ...prev, description: value }))} />
+              <FormInput label="Açıklama" value={documentForm.description} onChange={(value) => setDocumentForm((prev) => ({ ...prev, description: value }))} />
             </div>
             <div className="space-y-1.5 md:col-span-2">
-              <Label className="text-[11px] font-bold text-slate-500 uppercase">Ä°Ã§erik editorÃ¼</Label>
+              <Label className="text-[11px] font-bold text-slate-500 uppercase">İçerik editorü</Label>
               <Textarea value={documentForm.content} onChange={(event) => setDocumentForm((prev) => ({ ...prev, content: event.target.value }))} className="min-h-[180px] rounded-2xl border-slate-200" />
             </div>
             <ToggleRow title="Zorunlu mu" checked={documentForm.required} onCheckedChange={(checked) => setDocumentForm((prev) => ({ ...prev, required: checked }))} />
             <ToggleRow title="Aktif/Pasif" checked={documentForm.active} onCheckedChange={(checked) => setDocumentForm((prev) => ({ ...prev, active: checked }))} />
           </div>
           <DialogFooter className="p-8 pt-0 flex gap-3">
-            <Button variant="ghost" className="rounded-xl" onClick={() => setIsDocumentOpen(false)}>VazgeÃ§</Button>
-            <Button className="rounded-xl bg-primary hover:bg-primary/90" onClick={saveDocument}>YayÄ±nla</Button>
+            <Button variant="ghost" className="rounded-xl" onClick={() => setIsDocumentOpen(false)}>Vazgeç</Button>
+            <Button className="rounded-xl bg-primary hover:bg-primary/90" onClick={saveDocument}>Yayınla</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -813,12 +813,12 @@ function DocumentCard({ document, approvedCount }: { document: any; approvedCoun
         </div>
       </CardHeader>
       <CardContent className="p-5 space-y-5">
-        <InfoCompact label="YayÄ±n tarihi" value={document.publishedAt ? formatDateTimeTR(document.publishedAt) : "-"} />
+        <InfoCompact label="Yayın tarihi" value={document.publishedAt ? formatDateTimeTR(document.publishedAt) : "-"} />
         <InfoCompact label="Onaylayan personel" value={approvedCount.toString()} />
         <div className="grid grid-cols-3 gap-2">
-          <Button variant="outline" className="rounded-xl">PDF gÃ¶rÃ¼ntÃ¼le</Button>
-          <Button variant="outline" className="rounded-xl">DÃ¼zenle</Button>
-          <Button variant="outline" className="rounded-xl">Yeni versiyon yayÄ±nla</Button>
+          <Button variant="outline" className="rounded-xl">PDF görüntüle</Button>
+          <Button variant="outline" className="rounded-xl">Düzenle</Button>
+          <Button variant="outline" className="rounded-xl">Yeni versiyon yayınla</Button>
         </div>
       </CardContent>
     </Card>
@@ -831,10 +831,10 @@ function ProcessingMatrix({ rows, kvkkState, persistKvkk }: any) {
   }
   return (
     <Card className="premium-card overflow-hidden">
-      <CardHeader className="border-b bg-slate-50/40"><CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Veri Ä°ÅŸleme Yetki Matrisi</CardTitle></CardHeader>
+      <CardHeader className="border-b bg-slate-50/40"><CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Veri İşleme Yetki Matrisi</CardTitle></CardHeader>
       <CardContent className="p-0">
         <Table>
-          <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">Veri BaÅŸlÄ±ÄŸÄ±</TableHead><TableHead>Ä°ÅŸleniyor mu</TableHead><TableHead>Saklama SÃ¼resi</TableHead><TableHead>Yetkili Departman</TableHead><TableHead>Veri TÃ¼rÃ¼</TableHead><TableHead>Risk Seviyesi</TableHead></TableRow></TableHeader>
+          <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">Veri Başlığı</TableHead><TableHead>İşleniyor mu</TableHead><TableHead>Saklama Süresi</TableHead><TableHead>Yetkili Departman</TableHead><TableHead>Veri Türü</TableHead><TableHead>Risk Seviyesi</TableHead></TableRow></TableHeader>
           <TableBody>
             {rows.map((row: any) => (
               <TableRow key={row.id}>
@@ -858,7 +858,7 @@ function GpsPanel({ rows }: any) {
   return (
     <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
       <Card className="overflow-hidden rounded-2xl border border-white/70 bg-white/75 shadow-xl backdrop-blur-xl">
-        <CardHeader className="border-b bg-slate-50/40"><CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">GPS & Konum OnaylarÄ±</CardTitle></CardHeader>
+        <CardHeader className="border-b bg-slate-50/40"><CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">GPS & Konum Onayları</CardTitle></CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">Personel</TableHead><TableHead>Şube</TableHead><TableHead>Konum izni durumu</TableHead><TableHead>Onay tarihi</TableHead><TableHead>Son konum doğrulama tarihi</TableHead></TableRow></TableHeader>
@@ -880,8 +880,8 @@ function GpsPanel({ rows }: any) {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(56,189,248,0.28),transparent_16rem),radial-gradient(circle_at_70%_70%,rgba(124,58,237,0.22),transparent_18rem)]" />
         <div className="absolute inset-6 rounded-[28px] border border-cyan-300/20 bg-white/5 backdrop-blur-sm" />
         <div className="relative z-10 p-8 text-white">
-          <div className="flex items-center gap-3"><Radar className="h-7 w-7 text-cyan-300" /><h3 className="text-xl font-extrabold">Konum Uyumluluk HaritasÄ±</h3></div>
-          <p className="mt-2 text-sm text-slate-300">Aktif GPS rÄ±zasÄ± bulunan personel: {gpsRows.length}</p>
+          <div className="flex items-center gap-3"><Radar className="h-7 w-7 text-cyan-300" /><h3 className="text-xl font-extrabold">Konum Uyumluluk Haritası</h3></div>
+          <p className="mt-2 text-sm text-slate-300">Aktif GPS rızası bulunan personel: {gpsRows.length}</p>
           <div className="mt-14 grid grid-cols-3 gap-4">
             {[0, 1, 2, 3, 4, 5].map((item) => <div key={item} className="h-20 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 shadow-lg shadow-cyan-500/10" />)}
           </div>
@@ -901,15 +901,15 @@ function CameraPanel({ rows }: any) {
     <div className="space-y-5">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <SecurityCard title="Kamera izni verenler" value={camera.length} icon={Camera} />
-        <SecurityCard title="YÃ¼z doÄŸrulama aktif kullanÄ±cÄ±lar" value={face.length} icon={ScanFace} />
+        <SecurityCard title="Yüz doğrulama aktif kullanıcılar" value={face.length} icon={ScanFace} />
         <SecurityCard title="Biyometrik veri izinleri" value={biometric.length} icon={Fingerprint} />
-        <SecurityCard title="ÅÃ¼pheli reddetmeler" value={rejected.length} icon={ShieldAlert} />
+        <SecurityCard title="Şüpheli reddetmeler" value={rejected.length} icon={ShieldAlert} />
         <SecurityCard title="Expired permissions" value={expired.length} icon={TimerReset} />
       </div>
       <Card className="overflow-hidden rounded-2xl border border-red-200/40 bg-[#130817] shadow-2xl">
         <CardContent className="relative p-8 text-white">
           <div className="absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.05),transparent)] animate-pulse" />
-          <div className="relative z-10 flex items-center gap-4"><Activity className="h-8 w-8 text-fuchsia-300" /><div><h3 className="text-xl font-extrabold">AI Security Consent Monitor</h3><p className="text-sm text-slate-300">Kamera ve biyometrik izinleri yÃ¼ksek hassasiyetli veri sÄ±nÄ±fÄ±nda izlenir.</p></div></div>
+          <div className="relative z-10 flex items-center gap-4"><Activity className="h-8 w-8 text-fuchsia-300" /><div><h3 className="text-xl font-extrabold">AI Security Consent Monitor</h3><p className="text-sm text-slate-300">Kamera ve biyometrik izinleri yüksek hassasiyetli veri sınıfında izlenir.</p></div></div>
         </CardContent>
       </Card>
     </div>
@@ -922,10 +922,10 @@ function RetentionPolicy({ rows, kvkkState, persistKvkk }: any) {
   }
   return (
     <Card className="premium-card overflow-hidden">
-      <CardHeader className="border-b bg-slate-50/40"><CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Veri Saklama PolitikasÄ±</CardTitle></CardHeader>
+      <CardHeader className="border-b bg-slate-50/40"><CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Veri Saklama Politikası</CardTitle></CardHeader>
       <CardContent className="p-0">
         <Table>
-          <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">Veri tipi</TableHead><TableHead>Saklama sÃ¼resi</TableHead><TableHead>Otomatik silme</TableHead><TableHead>ArÅŸiv politikasÄ±</TableHead><TableHead>Yasal dayanak</TableHead><TableHead>Sorumlu departman</TableHead></TableRow></TableHeader>
+          <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">Veri tipi</TableHead><TableHead>Saklama süresi</TableHead><TableHead>Otomatik silme</TableHead><TableHead>Arşiv politikası</TableHead><TableHead>Yasal dayanak</TableHead><TableHead>Sorumlu departman</TableHead></TableRow></TableHeader>
           <TableBody>{rows.map((row: any) => <TableRow key={row.id}><TableCell className="pl-6 font-bold text-primary">{row.dataType}</TableCell><TableCell>{row.duration}</TableCell><TableCell><Switch checked={kvkkState.retention?.[row.id]?.autoDelete ?? row.autoDelete} onCheckedChange={(checked) => toggleRetention(row.id, checked)} /></TableCell><TableCell>{row.archive}</TableCell><TableCell>{row.legal}</TableCell><TableCell>{row.owner}</TableCell></TableRow>)}</TableBody>
         </Table>
       </CardContent>
@@ -957,25 +957,25 @@ function AuditLogs({ logs }: { logs: any[] }) {
           <CardTitle className="text-sm font-bold text-slate-500 uppercase tracking-widest">Enterprise Audit Log</CardTitle>
           <div className="grid gap-3 md:grid-cols-4">
             <Input {...DATE_INPUT_PROPS} value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="h-10 rounded-xl border-slate-200 bg-white" />
-            <Input value={userFilter} onChange={(event) => setUserFilter(event.target.value)} placeholder="KullanÄ±cÄ± ara..." className="h-10 rounded-xl border-slate-200 bg-white" />
+            <Input value={userFilter} onChange={(event) => setUserFilter(event.target.value)} placeholder="Kullanıcı ara..." className="h-10 rounded-xl border-slate-200 bg-white" />
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="h-10 rounded-xl border-slate-200 bg-white">
-                <SelectValue placeholder="Ä°ÅŸlem tÃ¼rÃ¼" />
+                <SelectValue placeholder="İşlem türü" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>TÃ¼m Ä°ÅŸlemler</SelectItem>
+                <SelectItem value={ALL}>Tüm İşlemler</SelectItem>
                 {types.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} placeholder="Åube filtresi..." className="h-10 rounded-xl border-slate-200 bg-white" />
+            <Input value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} placeholder="Şube filtresi..." className="h-10 rounded-xl border-slate-200 bg-white" />
           </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
         <Table>
-          <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">Ä°ÅŸlem Tipi</TableHead><TableHead>KullanÄ±cÄ±</TableHead><TableHead>Hedef</TableHead><TableHead>IP Adresi</TableHead><TableHead>Device ID</TableHead><TableHead>Tarih/Saat</TableHead><TableHead>Detay</TableHead></TableRow></TableHeader>
+          <TableHeader className="enterprise-table-header"><TableRow><TableHead className="pl-6">İşlem Tipi</TableHead><TableHead>Kullanıcı</TableHead><TableHead>Hedef</TableHead><TableHead>IP Adresi</TableHead><TableHead>Device ID</TableHead><TableHead>Tarih/Saat</TableHead><TableHead>Detay</TableHead></TableRow></TableHeader>
           <TableBody>
-            {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="h-72 text-center text-muted-foreground">HenÃ¼z denetim logu bulunmuyor.</TableCell></TableRow> : filteredLogs.map((log) => <TableRow key={log.id}><TableCell className="pl-6 font-bold text-primary">{log.type}</TableCell><TableCell>{log.actor}</TableCell><TableCell>{log.target}</TableCell><TableCell className="font-mono text-xs">{log.ipAddress}</TableCell><TableCell className="font-mono text-xs">{log.deviceId}</TableCell><TableCell>{formatDateTimeTR(log.createdAt)}</TableCell><TableCell>{log.detail}</TableCell></TableRow>)}
+            {filteredLogs.length === 0 ? <TableRow><TableCell colSpan={7} className="h-72 text-center text-muted-foreground">Henüz denetim logu bulunmuyor.</TableCell></TableRow> : filteredLogs.map((log) => <TableRow key={log.id}><TableCell className="pl-6 font-bold text-primary">{log.type}</TableCell><TableCell>{log.actor}</TableCell><TableCell>{log.target}</TableCell><TableCell className="font-mono text-xs">{log.ipAddress}</TableCell><TableCell className="font-mono text-xs">{log.deviceId}</TableCell><TableCell>{formatDateTimeTR(log.createdAt)}</TableCell><TableCell>{log.detail}</TableCell></TableRow>)}
           </TableBody>
         </Table>
       </CardContent>
@@ -997,7 +997,7 @@ function SecurityCard({ title, value, icon: Icon }: any) {
 }
 
 function RiskBadge({ risk }: { risk: string }) {
-  const style = risk === "Kritik" ? "bg-red-50 text-accent" : risk === "YÃ¼ksek" ? "bg-orange-50 text-orange-700" : risk === "Orta" ? "bg-yellow-50 text-yellow-700" : "bg-green-50 text-green-700"
+  const style = risk === "Kritik" ? "bg-red-50 text-accent" : risk === "Yüksek" ? "bg-orange-50 text-orange-700" : risk === "Orta" ? "bg-yellow-50 text-yellow-700" : "bg-green-50 text-green-700"
   return <Badge className={cn("font-bold", style)}>{risk}</Badge>
 }
 
@@ -1021,3 +1021,4 @@ function InfoCompact({ label, value }: { label: string; value: string }) {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return <div className="flex items-center justify-between gap-4 border border-slate-100 bg-white rounded-xl px-4 py-3"><span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{label}</span><span className="text-sm font-semibold text-slate-700 text-right break-all">{value}</span></div>
 }
+
